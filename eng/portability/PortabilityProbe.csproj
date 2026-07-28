@@ -1,0 +1,121 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PORTABILITY PROBE — produces no shipping artefact.
+
+    Its only job is to fail the build when code that should be platform-neutral acquires a
+    Windows-only dependency. It SOURCE-INCLUDES the portable layers rather than referencing their
+    projects, because those projects target net10.0-windows with UseWindowsForms=true.
+
+    HOW TO READ THIS FILE
+      - The Include list is the SCOPE: which projects are claimed portable. It only ever WIDENS.
+      - The Remove list is the DEBT: files not yet portable. It only ever SHRINKS.
+      - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
+
+    SCOPE ROADMAP (see cross-platform-plan.md, M0/M1)
+      1. GitExtensions.Extensibility   : current scope; no internal project dependencies
+      2. GitExtUtils                   : add after M1.7 (split portable vs WinForms halves)
+      3. GitCommands                   : add after M1.4/M1.5 (AppSettings font + app paths)
+
+    Widening scope before those milestones land does not work. The layers are entangled at type
+    level, so removing a leaf file cascades into every file that used its types. Probing all four
+    projects at once needed 185 of 402 files (46%) excluded to reach green — of which only ~63 had a
+    direct Windows dependency and the remaining ~122 were pure cascade. Hence incremental scope.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!-- Diagnostics only: we want compiler errors about portability, not style noise. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableStyleCopAnalyzers>false</EnableStyleCopAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1416;NU1701</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AdysTech.CredentialManager" />
+    <PackageReference Include="StrongOf" />
+  </ItemGroup>
+
+  <!--
+    System.Drawing.Primitives (Color, Point, Rectangle, Size, KnownColor) IS cross-platform and in
+    the box; UseWindowsForms=false merely drops the implicit global using, so restore it.
+
+    Note what this deliberately does NOT do: reference System.Drawing.Common. That leaves Font,
+    Image, Bitmap, Brush, Graphics and Icon unresolved — exactly the boundary we want the compiler
+    to police. See cross-platform-plan.md section 8.
+  -->
+  <ItemGroup>
+    <Using Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ===== SCOPE (widens) ===== -->
+    <ProbeSource Include="$(RepoRoot)src\app\GitExtensions.Extensibility\**\*.cs" />
+
+    <ProbeSource Remove="$(RepoRoot)**\obj\**" />
+    <ProbeSource Remove="$(RepoRoot)**\bin\**" />
+
+    <!-- ===== DEBT: 39 of 114 files (shrinks) ===== -->
+
+    <!-- M3: the 93-method god-interface and its IWin32Window surface -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitUICommands.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\MessageBoxes.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\IBrowseRepo.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIEventArgs.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIPostActionEventArgs.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitModuleEventArgs.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitModule.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitRef.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitRevision.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IFilteredGitRefsProvider.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\FilteredGitRefsProvider.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPlugin.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginForRepository.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginSettingsContainer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IRepositoryHostPlugin.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\GitPluginBase.cs" />
+
+    <!-- M1.8: setting-control bindings are WinForms Control-typed -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISettingControlBinding.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\SettingControlBinding.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\BoolSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ChoiceSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\NumberSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PasswordSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\StringSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PseudoSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\CredentialsSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.Designer.cs" />
+
+    <!-- M1.4: Font on the settings surface -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\SettingsSource.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\FontParser.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Extensions\UIExtensions.cs" />
+
+    <!-- M7: translation extraction reflects over WinForms control trees -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationBody.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationCategory.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationFile.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationSerializer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\TranslationUtils.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Translator.cs" />
+
+    <!-- Cascade only: no direct Windows dependency of its own -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\DebugHelpers.cs" />
+
+    <Compile Include="@(ProbeSource)" />
+  </ItemGroup>
+
+</Project>
