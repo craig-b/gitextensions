@@ -68,6 +68,25 @@ public static class ControlThreadingExtensions
     }
 #pragma warning restore VSTHRD004 // Await SwitchToMainThreadAsync
 
+    /// <summary>
+    /// Asynchronously run <paramref name="asyncAction"/> on the UI thread and forward all exceptions to
+    /// <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// </summary>
+    /// <remarks>
+    /// Moved here from <see cref="ThreadHelper"/>: these two overloads were the only members of that type
+    /// requiring System.Windows.Forms, and keeping them there made an otherwise platform-neutral helper
+    /// Windows-only. GitCommands depends on <see cref="ThreadHelper"/> in nine files.
+    /// </remarks>
+    public static void InvokeAndForget(this Control control, Func<Task> asyncAction, TaskManager? taskManager = null, CancellationToken cancellationToken = default)
+        => (taskManager ?? ThreadHelper.AmbientTaskManager).InvokeAndForget(control, asyncAction, cancellationToken);
+
+    /// <summary>
+    /// Asynchronously run <paramref name="action"/> on the UI thread and forward all exceptions to
+    /// <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// </summary>
+    public static void InvokeAndForget(this Control control, Action action, TaskManager? taskManager = null, CancellationToken cancellationToken = default)
+        => InvokeAndForget(control, TaskManager.AsyncAction(action), taskManager, cancellationToken);
+
     public readonly struct ControlMainThreadAwaitable
     {
         private readonly JoinableTaskFactory.MainThreadAwaitable _awaitable;
