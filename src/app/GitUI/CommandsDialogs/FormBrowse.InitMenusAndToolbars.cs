@@ -34,7 +34,7 @@ partial class FormBrowse
         {
             recoverLostObjectsToolStripMenuItem, // Repository->Git maintenance->Recover lost objects
             branchSelect, // main toolbar
-        }.ForEach(ColorHelper.AdaptImageLightness);
+        }.ForEach(ThemeWinFormsExtensions.AdaptImageLightness);
 
         pullToolStripMenuItem1.Tag = GitPullAction.None;
         mergeToolStripMenuItem.Tag = GitPullAction.Merge;

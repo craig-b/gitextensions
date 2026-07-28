@@ -30,9 +30,6 @@ public static class ColorHelper
         return Color.FromArgb(color.A, r, g, b);
     }
 
-    public static void SetForeColorForBackColor(this Control control)
-        => control.ForeColor = control.ForeColor.AdaptForeColor(control.BackColor);
-
     public static Color GetTextColor(this Color backColor)
         => ThemeSettings.Theme.GetNonEmptyColor(KnownColor.WindowText).AdaptForeColor(backColor);
 
@@ -91,23 +88,9 @@ public static class ColorHelper
     public static Color MakeDarkerBy(this Color color, double amount) =>
         color.TransformHsl(l: l => l - amount);
 
-    public static void AdaptImageLightness(this ToolStripItem item) =>
-        item.Image = ((Bitmap?)item.Image)?.AdaptLightness();
-
-    public static void AdaptImageLightness(this ButtonBase button) =>
-        button.Image = ((Bitmap?)button.Image)?.AdaptLightness();
-
-    public static Bitmap AdaptLightness(this Bitmap original)
-    {
-        if (IsDefaultTheme)
-        {
-            return original;
-        }
-
-        Bitmap clone = (Bitmap)original.Clone();
-        new LightnessCorrection(clone).Execute();
-        return clone;
-    }
+    // Note: SetForeColorForBackColor, AdaptImageLightness and AdaptLightness live in
+    // ThemeWinFormsExtensions, because they were the only members of this type that required
+    // System.Windows.Forms or System.Drawing.Common.
 
     /// <summary>
     /// Transform the invariant color to be related to the known colors
@@ -275,7 +258,10 @@ public static class ColorHelper
     /// Note that the theme is parsed, so ThemeSettings.DefaultLight is another instance.
     /// </summary>
     /// <returns><see langword="true"/> if the theme is default; otherwise <see langword="false"/>.</returns>
-    private static bool IsDefaultTheme => ThemeSettings.Theme.Id == ThemeId.DefaultLight;
+    /// <summary>
+    ///  Exposed for <c>ThemeWinFormsExtensions</c>, which owns the members that need a WinForms type.
+    /// </summary>
+    internal static bool IsDefaultTheme => ThemeSettings.Theme.Id == ThemeId.DefaultLight;
 
     public static Color Lerp(Color colour, Color to, float amount)
     {

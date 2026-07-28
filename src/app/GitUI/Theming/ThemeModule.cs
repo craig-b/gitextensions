@@ -14,7 +14,7 @@ public static class ThemeModule
     public static void Load()
     {
         Settings = LoadThemeSettings(Repository);
-        Application.SetColorMode(Settings.Theme.SystemColorMode);
+        Application.SetColorMode(Settings.Theme.ToSystemColorMode());
         UpdateEditorSettings();
         ColorHelper.ThemeSettings = Settings;
         ThemeFix.ThemeSettings = Settings;
@@ -70,7 +70,7 @@ public static class ThemeModule
         {
             // fix systemVisualStyle for WindowsAppColorModeId mode (always for DefaultLight)
             // This is also how it is presented in Settings
-            themeId = ThemeId.ColorModeThemeId;
+            themeId = ThemeWinFormsExtensions.ColorModeThemeId;
             systemVisualStyle = themeId == ThemeId.DefaultLight;
         }
 

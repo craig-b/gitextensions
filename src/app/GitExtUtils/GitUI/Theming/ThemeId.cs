@@ -19,13 +19,8 @@ public readonly struct ThemeId
     public string Name { get; }
     public bool IsBuiltin { get; }
 
-    /// <summary>
-    /// Get the default ThemeId for the current Windows SystemColorMode
-    /// </summary>
-    public static ThemeId ColorModeThemeId
-        => Application.SystemColorMode == SystemColorMode.Dark
-            ? ThemeId.DefaultDark
-            : ThemeId.DefaultLight;
+    // Note: ColorModeThemeId lives in ThemeWinFormsExtensions. Reading the OS colour mode is a
+    // platform capability, not something this identifier type can know.
 
     public ThemeId(string name, bool isBuiltin = false)
     {
