@@ -1507,31 +1507,41 @@ public static partial class AppSettings
 
     #region Fonts
 
-    public static Font FixedWidthFont
+    /// <summary>
+    ///  The platform's default UI font, used where no font has been configured.
+    /// </summary>
+    /// <remarks>
+    ///  These defaults were <c>SystemFonts.MessageBoxFont</c>, which is Windows-only and throws
+    ///  elsewhere. The host supplies the real value at startup (see GitExtensions.Program); the
+    ///  fallback here only applies to tests and non-UI hosts.
+    /// </remarks>
+    public static FontDescriptor DefaultUiFont { get; set; } = new("Segoe UI", 9f);
+
+    public static FontDescriptor FixedWidthFont
     {
-        get => GetFont("difffont", new Font("Consolas", 10));
+        get => GetFont("difffont", new FontDescriptor("Consolas", 10f));
         set => SetFont("difffont", value);
     }
 
-    public static Font CommitFont
+    public static FontDescriptor CommitFont
     {
-        get => GetFont("commitfont", SystemFonts.MessageBoxFont!);
+        get => GetFont("commitfont", DefaultUiFont);
         set => SetFont("commitfont", value);
     }
 
-    public static Font MonospaceFont
+    public static FontDescriptor MonospaceFont
     {
-        get => GetFont("monospacefont", new Font("Consolas", 9));
+        get => GetFont("monospacefont", new FontDescriptor("Consolas", 9f));
         set => SetFont("monospacefont", value);
     }
 
-    public static Font Font
+    public static FontDescriptor Font
     {
-        get => GetFont("font", SystemFonts.MessageBoxFont!);
+        get => GetFont("font", DefaultUiFont);
         set => SetFont("font", value);
     }
 
-    public static Font? ConEmuConsoleFont
+    public static FontDescriptor? ConEmuConsoleFont
     {
         get => GetFont("conemuconsolefont", null);
         set => SetFont("conemuconsolefont", value);
@@ -2167,8 +2177,8 @@ public static partial class AppSettings
 
     // Font
     [return: NotNullIfNotNull("defaultValue")]
-    public static Font? GetFont(string name, Font? defaultValue) => SettingsContainer.GetFont(name, defaultValue);
-    public static void SetFont(string name, Font? value) => SettingsContainer.SetFont(name, value);
+    public static FontDescriptor? GetFont(string name, FontDescriptor? defaultValue) => SettingsContainer.GetFont(name, defaultValue);
+    public static void SetFont(string name, FontDescriptor? value) => SettingsContainer.SetFont(name, value);
 
     [Obsolete("AppSettings is no longer responsible for colors, ThemeModule is. Only used by ThemeMigration.")]
     public static Color GetColor(AppColor name)

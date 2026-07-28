@@ -914,7 +914,7 @@ public partial class FileViewer : GitModuleControl
 
         ReloadHotkeys();
 
-        Font = AppSettings.FixedWidthFont;
+        Font = AppFonts.FixedWidth;
 
         string[] encodings = [.. AppSettings.AvailableEncodings.Values.Select(e => e.EncodingName)];
         encodingToolStripComboBox.Items.AddRange(encodings);

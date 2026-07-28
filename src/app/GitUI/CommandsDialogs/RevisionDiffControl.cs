@@ -360,7 +360,7 @@ public partial class RevisionDiffControl : GitModuleControl, IRevisionGridFileUp
         base.OnRuntimeLoad();
 
         DiffText.SetFileLoader(GetNextPatchFile);
-        DiffText.Font = AppSettings.FixedWidthFont;
+        DiffText.Font = AppFonts.FixedWidth;
 
         ReloadHotkeys();
         LoadCustomDifftools();

@@ -8,6 +8,7 @@ using GitExtUtils;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Theming;
 using Microsoft;
+using ResourceManager;
 using Timer = System.Windows.Forms.Timer;
 
 namespace GitUI.ConsoleEmulation.PlainText;
@@ -34,7 +35,7 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
             BackColor = Application.IsDarkModeEnabled ? AppColor.EditorBackground.GetThemeColor() : SystemColors.Info,
             BorderStyle = BorderStyle.FixedSingle,
             Dock = DockStyle.Fill,
-            Font = AppSettings.MonospaceFont,
+            Font = AppFonts.Monospace,
             ReadOnly = true
         };
         _editbox.LinkClicked += editbox_LinkClicked;

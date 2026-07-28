@@ -67,7 +67,7 @@ internal sealed class GitExtensionsControlInitialiser
 
         _initialiseCompleteCalled = true;
 
-        ((Control)_translate).Font = AppSettings.Font;
+        ((Control)_translate).Font = AppFonts.App;
         Translator.Translate(_translate, AppSettings.CurrentTranslation);
     }
 

@@ -14,6 +14,7 @@ using GitUI.NBugReports;
 using GitUI.Theming;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using ResourceManager;
 using MessageBoxes = GitUI.MessageBoxes;
 
 namespace GitExtensions;
@@ -108,6 +109,10 @@ internal static class Program
             // Store the shared JoinableTaskContext
             ThreadHelper.JoinableTaskContext = new JoinableTaskContext();
         }
+
+        // AppSettings stores fonts as FontDescriptor and cannot reference SystemFonts, so the host
+        // supplies the platform UI font that the Font/CommitFont defaults fall back to.
+        AppSettings.DefaultUiFont = (SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont).ToDescriptor();
 
         // TaskManager is platform-neutral, so it cannot reference Application directly. Route its
         // fire-and-forget exceptions to the WinForms handler wired above, which reaches BugReportInvoker.

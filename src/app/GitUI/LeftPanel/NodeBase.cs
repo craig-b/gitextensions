@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using ResourceManager;
 
 namespace GitUI.LeftPanel;
 
@@ -70,7 +71,7 @@ internal abstract class NodeBase
             }
 
             // If non-null, our font is already valid, otherwise create a new one
-            TreeViewNode.NodeFont ??= new Font(AppSettings.Font, style);
+            TreeViewNode.NodeFont ??= new Font(AppFonts.App, style);
         }
     }
 

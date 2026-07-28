@@ -4,6 +4,7 @@ using GitExtensions.Extensibility.Settings;
 using GitExtUtils.GitUI;
 using GitUI.Properties;
 using GitUI.UserControls;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog;
 
@@ -21,7 +22,7 @@ public sealed partial class SettingsTreeViewUserControl : UserControl
     {
         InitializeComponent();
 
-        Font = AppSettings.Font;
+        Font = AppFonts.App;
 
         textBoxFind.PlaceholderText = TranslatedStrings.SettingsTypeToFind;
 

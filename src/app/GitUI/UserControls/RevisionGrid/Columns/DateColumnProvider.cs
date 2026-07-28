@@ -15,7 +15,7 @@ internal sealed class DateColumnProvider : ColumnProvider
     {
         _grid = grid;
 
-        int initialWidth = AppSettings.RelativeDate ? DpiUtil.Scale(130) : TextRenderer.MeasureText(DateTime.Now.ToString("G"), AppSettings.Font).Width;
+        int initialWidth = AppSettings.RelativeDate ? DpiUtil.Scale(130) : TextRenderer.MeasureText(DateTime.Now.ToString("G"), AppFonts.App).Width;
 
         Column = new DataGridViewTextBoxColumn
         {

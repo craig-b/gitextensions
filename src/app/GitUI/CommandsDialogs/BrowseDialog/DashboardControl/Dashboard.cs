@@ -97,7 +97,7 @@ public partial class Dashboard : GitModuleControl
                     panel =>
                     {
                         panel.Controls.Add(lblContribute);
-                        lblContribute.Font = new Font(AppSettings.Font.FontFamily, AppSettings.Font.SizeInPoints + 5.5f);
+                        lblContribute.Font = new Font(AppFonts.App.FontFamily, AppFonts.App.SizeInPoints + 5.5f);
 
                         CreateLink(panel, _develop.Text, Images.Develop.AdaptLightness(), GitHubItem_Click);
                         CreateLink(panel, _donate.Text, Images.DollarSign, DonateItem_Click);
@@ -161,7 +161,7 @@ public partial class Dashboard : GitModuleControl
                 {
                     AutoSize = true,
                     AutoEllipsis = true,
-                    Font = AppSettings.Font,
+                    Font = AppFonts.App,
                     Image = DpiUtil.Scale(icon),
                     ImageAlign = ContentAlignment.MiddleLeft,
                     LinkBehavior = LinkBehavior.NeverUnderline,

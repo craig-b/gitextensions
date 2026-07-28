@@ -20,14 +20,14 @@ public sealed class TabbedHeaderRenderStyleProvider : IHeaderRenderStyleProvider
         ];
 
         int tabStop = strings
-            .Select(s => TextRenderer.MeasureText(s + "  ", AppSettings.Font).Width)
+            .Select(s => TextRenderer.MeasureText(s + "  ", AppFonts.App).Width)
             .Max();
 
         // simulate a two column layout even when there's more then one tab used
         _tabStops = new[] { tabStop, tabStop + 1, tabStop + 2, tabStop + 3 };
     }
 
-    public Font GetFont(Graphics g) => AppSettings.Font;
+    public Font GetFont(Graphics g) => AppFonts.App;
 
     public int GetMaxWidth() => 16;
 

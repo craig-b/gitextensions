@@ -108,8 +108,8 @@ public partial class CommitInfo : GitModuleControl
         pnlCommitMessage.BackColor = messageBackground;
         rtbxCommitMessage.BackColor = messageBackground;
 
-        rtbxCommitMessage.Font = AppSettings.CommitFont;
-        RevisionInfo.Font = AppSettings.Font;
+        rtbxCommitMessage.Font = AppFonts.Commit;
+        RevisionInfo.Font = AppFonts.App;
         addNoteToolStripMenuItem.ShortcutKeyDisplayString = GetShortcutKeyDisplayString(FormBrowse.Command.AddNotes);
 
         _commitMessageResizedSubscription = subscribeToContentsResized(rtbxCommitMessage, CommitMessage_ContentsResized);

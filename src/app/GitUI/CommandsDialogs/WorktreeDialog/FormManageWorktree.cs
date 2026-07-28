@@ -3,6 +3,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitExtUtils.GitUI;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs.WorktreeDialog;
 
@@ -25,7 +26,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
         Branch.DataPropertyName = nameof(GitWorktree.Branch);
         Sha1.DataPropertyName = nameof(GitWorktree.Sha1);
 
-        Worktrees.Columns[3].DefaultCellStyle.Font = AppSettings.MonospaceFont;
+        Worktrees.Columns[3].DefaultCellStyle.Font = AppFonts.Monospace;
         Worktrees.Columns[3].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         Worktrees.Select();
 

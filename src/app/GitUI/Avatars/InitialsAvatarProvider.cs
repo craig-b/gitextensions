@@ -4,6 +4,7 @@ using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtUtils.GitUI.Theming;
 using Microsoft;
+using ResourceManager;
 
 namespace GitUI.Avatars;
 
@@ -198,7 +199,7 @@ public class InitialsAvatarProvider : IAvatarProvider
     public void UpdateFontsSettings()
     {
         Font? oldFont = _estimationFont;
-        _fontFamily = AppSettings.Font.FontFamily;
+        _fontFamily = AppFonts.App.FontFamily;
         _estimationFont = new(_fontFamily, _fontSizeEstimation);
         oldFont?.Dispose();
     }

@@ -3,6 +3,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI;
 using GitUIPluginInterfaces;
+using ResourceManager;
 
 namespace GitUI.UserControls.RevisionGrid.Columns;
 
@@ -11,7 +12,7 @@ internal sealed class CommitIdColumnProvider : ColumnProvider
     private readonly Dictionary<Font, int[]> _widthByLengthByFont = new(capacity: 4);
     private readonly RevisionGridControl _grid;
     private int? _charCount = null;
-    private readonly int _maxWidth = TextRenderer.MeasureText(GitRevision.WorkTreeGuid, AppSettings.MonospaceFont).Width;
+    private readonly int _maxWidth = TextRenderer.MeasureText(GitRevision.WorkTreeGuid, AppFonts.Monospace).Width;
 
     public CommitIdColumnProvider(RevisionGridControl grid)
         : base("Commit ID")
@@ -38,7 +39,7 @@ internal sealed class CommitIdColumnProvider : ColumnProvider
 
     private int GetCharLengthForColumnWidth(int width)
     {
-        Font monospaceFont = AppSettings.MonospaceFont;
+        Font monospaceFont = AppFonts.Monospace;
         if (!_widthByLengthByFont.TryGetValue(monospaceFont, out int[]? widthByLength))
         {
             widthByLength = [.. Enumerable.Range(0, ObjectId.Sha1CharCount + 1).Select(c => TextRenderer.MeasureText(new string('8', c), monospaceFont).Width)];

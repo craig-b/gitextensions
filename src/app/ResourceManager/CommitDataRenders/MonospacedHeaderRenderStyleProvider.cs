@@ -28,12 +28,12 @@ public sealed class MonospacedHeaderRenderStyleProvider : IHeaderRenderStyleProv
 
     public Font GetFont(Graphics g)
     {
-        if (!AppSettings.Font.IsFixedWidth(g))
+        if (!AppFonts.App.IsFixedWidth(g))
         {
-            return new Font(FontFamily.GenericMonospace, AppSettings.Font.Size);
+            return new Font(FontFamily.GenericMonospace, AppFonts.App.Size);
         }
 
-        return AppSettings.Font;
+        return AppFonts.App;
     }
 
     public int GetMaxWidth() => _maxLength;

@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitCommands.UserRepositoryHistory;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs.BrowseDialog.DashboardControl;
 
@@ -72,7 +73,7 @@ public sealed class UserRepositoriesListController : IUserRepositoriesListContro
 
         RecentRepoSplitter splitter = new()
         {
-            MeasureFont = AppSettings.Font,
+            MeasureFont = AppFonts.App,
 
             MaxTopRepositories = AppSettings.MaxTopRepositories,
             RecentReposComboMinWidth = AppSettings.RecentReposComboMinWidth,

@@ -903,7 +903,7 @@ public sealed partial class FormCommit : GitModuleForm
 
             UpdateMergeHead();
 
-            Message.TextBoxFont = AppSettings.CommitFont;
+            Message.TextBoxFont = AppFonts.Commit;
         }
 
         void UpdateMergeHead()
