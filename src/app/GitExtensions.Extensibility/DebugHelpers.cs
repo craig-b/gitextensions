@@ -53,6 +53,10 @@ public static class DebugHelpers
         }
     }
 
+    // Environment.ProcessPath rather than Application.ExecutablePath: this type is otherwise
+    // platform-neutral, and detecting a test host does not need WinForms. Matching on the filename
+    // without extension also covers the non-Windows "testhost" with no .exe suffix.
     private static bool IsTestRunning
-        => Application.ExecutablePath.EndsWith("testhost.exe");
+        => Path.GetFileNameWithoutExtension(Environment.ProcessPath)
+               ?.Equals("testhost", StringComparison.OrdinalIgnoreCase) is true;
 }

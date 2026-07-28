@@ -13,14 +13,20 @@
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
     SCOPE ROADMAP (see cross-platform-plan.md, M0/M1)
-      1. GitExtensions.Extensibility   : current scope; no internal project dependencies
-      2. GitExtUtils                   : add after M1.7 (split portable vs WinForms halves)
+      1. GitExtensions.Extensibility   : IN SCOPE (76 of 114 files)
+      2. GitExtUtils                   : IN SCOPE (39 of 67 files) — added by M1.7
       3. GitCommands                   : add after M1.4/M1.5 (AppSettings font + app paths)
 
-    Widening scope before those milestones land does not work. The layers are entangled at type
-    level, so removing a leaf file cascades into every file that used its types. Probing all four
-    projects at once needed 185 of 402 files (46%) excluded to reach green — of which only ~63 had a
-    direct Windows dependency and the remaining ~122 were pure cascade. Hence incremental scope.
+    Widening scope before the corresponding milestone lands does not work. The layers are entangled
+    at type level, so removing a leaf file cascades into every file that used its types. Probing all
+    four projects at once needed 185 of 402 files (46%) excluded to reach green — of which only ~63
+    had a direct Windows dependency and the remaining ~122 were pure cascade.
+
+    Note on maintaining the Remove list: derive it from files with a DIRECT error, never by
+    iteratively excluding everything the compiler complains about. The latter over-excludes badly —
+    it produced a 31-file GitExtUtils list where 28 was correct, because excluding a type drags its
+    consumers down with it. csc also truncates its error list, so a single pass under-reports;
+    cross-check anything that looks like cascade by building with no exclusions at all.
   -->
 
   <PropertyGroup>
@@ -43,6 +49,8 @@
   <ItemGroup>
     <PackageReference Include="AdysTech.CredentialManager" />
     <PackageReference Include="StrongOf" />
+    <PackageReference Include="Ben.Demystifier" />
+    <PackageReference Include="JetBrains.Annotations" />
   </ItemGroup>
 
   <!--
@@ -60,11 +68,12 @@
   <ItemGroup>
     <!-- ===== SCOPE (widens) ===== -->
     <ProbeSource Include="$(RepoRoot)src\app\GitExtensions.Extensibility\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\app\GitExtUtils\**\*.cs" />
 
     <ProbeSource Remove="$(RepoRoot)**\obj\**" />
     <ProbeSource Remove="$(RepoRoot)**\bin\**" />
 
-    <!-- ===== DEBT: 39 of 114 files (shrinks) ===== -->
+    <!-- ===== DEBT: Extensibility, 38 of 114 files (shrinks) ===== -->
 
     <!-- M3: the 93-method god-interface and its IWin32Window surface -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitUICommands.cs" />
@@ -112,8 +121,50 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\TranslationUtils.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Translator.cs" />
 
-    <!-- Cascade only: no direct Windows dependency of its own -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\DebugHelpers.cs" />
+
+    <!-- ===== DEBT: GitExtUtils, 28 of 67 files (shrinks) ===== -->
+
+    <!-- M1.7: Control and widget extension methods -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ComboBoxExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlDpiExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlHotkeyExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlTagExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlThreadingExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\DpiUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\HighDpiMouseCursors.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ImageListExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\IMenuItemBackgroundFilter.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ListViewExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\PropertyGridExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\TableLayoutPanelExtensions.cs" />
+
+    <!-- M1.7: ToolStrip helpers and renderers -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExProfessionalRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExSystemRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripUtil.cs" />
+
+    <!-- M1.7: the theming RENDER layer. The colour model beside it is portable: see ColorHelper,
+         Theme, ThemeId, HslColor, AppColor -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BmpTransformation.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BrushScope.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\LightnessCorrection.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\TabControlPaintContext.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\TabControlRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\ThemeFix.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\ThemeWinFormsExtensions.cs" />
+
+    <!-- Win32 interop: belongs in the WinForms half by definition -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\COMBOBOXINFO.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\User32\GetComboBoxInfo.cs" />
+
+    <!-- Needs a host-supplied abstraction, not a move:
+         ClipboardUtil : Clipboard
+         OtherColors   : Application.IsDarkModeEnabled (an OS query; deliberately NOT swapped
+                             for Theme.IsDark, which is the app theme and not the same thing) -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\ClipboardUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
     <Compile Include="@(ProbeSource)" />
   </ItemGroup>
