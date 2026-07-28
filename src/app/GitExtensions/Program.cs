@@ -109,6 +109,11 @@ internal static class Program
             ThreadHelper.JoinableTaskContext = new JoinableTaskContext();
         }
 
+        // TaskManager is platform-neutral, so it cannot reference Application directly. Route its
+        // fire-and-forget exceptions to the WinForms handler wired above, which reaches BugReportInvoker.
+        // Without this they would only be traced.
+        TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
+
         ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath);
 
         AppSettings.LoadSettings();

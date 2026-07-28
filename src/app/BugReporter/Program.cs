@@ -23,6 +23,9 @@ internal static class Program
             ThreadHelper.JoinableTaskContext = new JoinableTaskContext();
         }
 
+        // See GitExtensions.Program: TaskManager is platform-neutral and needs the host to supply this.
+        TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
+
         // If an error happens before we had a chance to init the environment information
         // the call to GetInformation() from BugReporter.ShowNBug() will fail.
         // There's no perf hit calling Initialise() multiple times.
