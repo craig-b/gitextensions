@@ -1,0 +1,52 @@
+{
+  "name": "Git Extensions",
+
+  // Ubuntu base plus features, rather than a custom Dockerfile: the toolchain here is just
+  // the .NET SDK, so there is nothing a Dockerfile would add.
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+
+  "features": {
+    // Must satisfy global.json: sdk 10.0, rollForward feature.
+    "ghcr.io/devcontainers/features/dotnet:2": {
+      "version": "10.0"
+    },
+
+    // Required by the claude-code feature below. It tries to install Node itself if missing, but
+    // that fails on this base image, so declare it explicitly as the feature's own error advises.
+    "ghcr.io/devcontainers/features/node:1": {},
+
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+
+  "containerEnv": {
+    // Everything in this repo targets net10.0-windows. MSBuild reads environment variables as
+    // properties, so setting this here means builds work without passing
+    // -p:EnableWindowsTargeting=true every time. It permits *compiling* Windows-targeted
+    // projects on Linux; it does not let them run. See .devcontainer/README.md.
+    "EnableWindowsTargeting": "true",
+
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
+
+  // Keep Claude Code's auth and session history across rebuilds. Scoped per devcontainer so
+  // this repo does not share credentials with other projects on the same machine.
+  "mounts": [
+    "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume"
+  ],
+
+  "postCreateCommand": ".devcontainer/post-create.sh",
+
+  // Non-root. Required if you ever intend to pass --dangerously-skip-permissions, which the
+  // CLI refuses to run as root.
+  "remoteUser": "vscode",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "editorconfig.editorconfig"
+      ]
+    }
+  }
+}
