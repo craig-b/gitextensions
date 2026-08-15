@@ -7,7 +7,7 @@ using GitExtensions.Extensibility;
 
 namespace System;
 
-public static class StringExtensions
+public static partial class StringExtensions
 {
     // NOTE ordinal string comparison is the default as most string comparison in GE is against static ASCII output from git.exe
 

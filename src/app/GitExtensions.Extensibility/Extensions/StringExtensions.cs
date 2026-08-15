@@ -4,7 +4,7 @@ using GitExtensions.Extensibility;
 // ReSharper disable once CheckNamespace
 namespace System;
 
-public static class StringExtensions
+public static partial class StringExtensions
 {
     /// <summary>
     ///  Returns the index of the first line-ending character at or after <paramref name="startIndex"/>,

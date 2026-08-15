@@ -12,21 +12,31 @@
       - The Remove list is the DEBT: files not yet portable. It only ever SHRINKS.
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
-    SCOPE ROADMAP (see cross-platform-plan.md, M0/M1)
-      1. GitExtensions.Extensibility   : IN SCOPE (76 of 114 files)
-      2. GitExtUtils                   : IN SCOPE (39 of 67 files) — added by M1.7
-      3. GitCommands                   : add after M1.4/M1.5 (AppSettings font + app paths)
+    SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
+      1. GitExtensions.Extensibility   :  94 of 117 files — 23 debt
+      2. GitExtUtils                   :  39 of  67 files — 28 debt, added by M1.7
+      3. GitCommands                   : 189 of 201 files — 12 debt, added after M1.4/M1.5
+      4. GitUIPluginInterfaces         :  18 of  21 files —  3 debt, entangled with GitCommands
+                                          at type level so it joined in the same step
 
-    Widening scope before the corresponding milestone lands does not work. The layers are entangled
-    at type level, so removing a leaf file cascades into every file that used its types. Probing all
-    four projects at once needed 185 of 402 files (46%) excluded to reach green — of which only ~63
-    had a direct Windows dependency and the remaining ~122 were pure cascade.
+    An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
+    (fonts), M1.5 (application paths), M1.7's splits and the UserNotification seam, the same scope
+    needs 66 — of which 58 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
+    with its root), and 2 are compilation artefacts, see below.
 
-    Note on maintaining the Remove list: derive it from files with a DIRECT error, never by
-    iteratively excluding everything the compiler complains about. The latter over-excludes badly —
-    it produced a 31-file GitExtUtils list where 28 was correct, because excluding a type drags its
-    consumers down with it. csc also truncates its error list, so a single pass under-reports;
-    cross-check anything that looks like cascade by building with no exclusions at all.
+    Notes on maintaining the Remove list:
+      - Derive it from files with a DIRECT error, never by iteratively excluding everything the
+        compiler complains about. The latter over-excludes badly: excluding a type drags its
+        consumers down with it, and one hub file can cascade through dozens (GitVersion alone
+        would have taken AppSettings and ~40 dependants with it).
+      - csc reports in two phases: declaration errors first, and while any exist it reports NO
+        method-body errors at all. A file whose only Windows use is inside a method body
+        (PatchManager's Application.ProductName) shows zero errors until every declaration-level
+        error in the whole compilation is resolved. So iterate to a fixpoint; a single pass
+        under-reports, and cross-check candidates by building with no exclusions at all.
+      - "artefact" entries are not debt: assembly-attribute files duplicate CommonAssemblyInfo.cs
+        (injected by Directory.Build.props) when several projects merge into one compilation.
+        They stay excluded for as long as the probe exists.
   -->
 
   <PropertyGroup>
@@ -46,11 +56,21 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!--
+    System.Configuration.ConfigurationManager and both Composition packages are in the box for
+    net10.0-windows but must be explicit references on plain net10.0; all three compile and run
+    cross-platform. The rest are packages the probed projects reference directly.
+  -->
   <ItemGroup>
     <PackageReference Include="AdysTech.CredentialManager" />
     <PackageReference Include="StrongOf" />
     <PackageReference Include="Ben.Demystifier" />
     <PackageReference Include="JetBrains.Annotations" />
+    <PackageReference Include="System.IO.Abstractions" />
+    <PackageReference Include="System.Reactive.Linq" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+    <PackageReference Include="System.ComponentModel.Composition" />
+    <PackageReference Include="Microsoft.VisualStudio.Composition" />
   </ItemGroup>
 
   <!--
@@ -69,62 +89,53 @@
     <!-- ===== SCOPE (widens) ===== -->
     <ProbeSource Include="$(RepoRoot)src\app\GitExtensions.Extensibility\**\*.cs" />
     <ProbeSource Include="$(RepoRoot)src\app\GitExtUtils\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\app\GitCommands\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\plugins\GitUIPluginInterfaces\**\*.cs" />
 
     <ProbeSource Remove="$(RepoRoot)**\obj\**" />
     <ProbeSource Remove="$(RepoRoot)**\bin\**" />
 
-    <!-- ===== DEBT: Extensibility, 38 of 114 files (shrinks) ===== -->
+    <!-- ===== DEBT: Extensibility, 23 of 117 files (shrinks) ===== -->
 
-    <!-- M3: the 93-method god-interface and its IWin32Window surface -->
+    <!-- M3: the 93-method god-interface and its IWin32Window/Image surface -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitUICommands.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\MessageBoxes.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\IBrowseRepo.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIEventArgs.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIPostActionEventArgs.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitModuleEventArgs.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitModule.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitRef.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitRevision.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IFilteredGitRefsProvider.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\FilteredGitRefsProvider.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPlugin.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginForRepository.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginSettingsContainer.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IRepositoryHostPlugin.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\GitPluginBase.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IRepositoryHostPlugin.cs" />
+    <!-- cascade of M3: IGitPluginForRepository only extends IGitPlugin -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginForRepository.cs" />
 
     <!-- M1.8: setting-control bindings are WinForms Control-typed -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISettingControlBinding.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\SettingControlBinding.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\BoolSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ChoiceSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\NumberSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PasswordSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\StringSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PseudoSetting.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\StringSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\CredentialsSetting.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.Designer.cs" />
+    <!-- cascade of M1.8: ISetting only references ISettingControlBinding -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISetting.cs" />
 
-    <!-- M1.4: Font on the settings surface -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\SettingsSource.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\FontParser.cs" />
+    <!-- M1.4 residue: IsFixedWidth(Font, Graphics) is inherently a rendering concern; move to GitUI -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Extensions\UIExtensions.cs" />
 
-    <!-- M7: translation extraction reflects over WinForms control trees -->
+    <!-- M7: translation extraction reflects over WinForms control trees. Only TranslationUtil is
+         Windows-bound now; the rest of the Xliff types came off this list with M1.4. -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationUtil.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationBody.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationCategory.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationFile.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationSerializer.cs" />
+    <!-- cascade of M7: forwards to TranslationUtil -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\TranslationUtils.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Translator.cs" />
 
 
     <!-- ===== DEBT: GitExtUtils, 28 of 67 files (shrinks) ===== -->
 
-    <!-- M1.7: Control and widget extension methods -->
+    <!-- Stage 3 split (was M1.7): Control and widget extension methods -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ComboBoxExtensions.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlDpiExtensions.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlHotkeyExtensions.cs" />
@@ -139,14 +150,14 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\PropertyGridExtensions.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\TableLayoutPanelExtensions.cs" />
 
-    <!-- M1.7: ToolStrip helpers and renderers -->
+    <!-- Stage 3 split (was M1.7): ToolStrip helpers and renderers -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExProfessionalRenderer.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExSystemRenderer.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExtensions.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripUtil.cs" />
 
-    <!-- M1.7: the theming RENDER layer. The colour model beside it is portable: see ColorHelper,
-         Theme, ThemeId, HslColor, AppColor -->
+    <!-- Stage 3 split (was M1.7): the theming RENDER layer. The colour model beside it is
+         portable: see ColorHelper, Theme, ThemeId, HslColor, AppColor -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BmpTransformation.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BrushScope.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\LightnessCorrection.cs" />
@@ -165,6 +176,53 @@
                              for Theme.IsDark, which is the app theme and not the same thing) -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\ClipboardUtil.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
+
+
+    <!-- ===== DEBT: GitCommands, 12 of 201 files (shrinks) ===== -->
+
+    <!-- M1.1: Application.ProductName in the patch footer (method-body only — invisible to a
+         single-pass build, see the two-phase note above) -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Patches\PatchManager.cs" />
+
+    <!-- M1.2: the folder picker (IWin32Window) does not belong in the engine -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\OsShellUtil.cs" />
+
+    <!-- M1.3: Control _owner; replace with a narrow IUserInteraction/IThreadSwitcher -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CommitMessageManager.cs" />
+
+    <!-- M1.6: Font used to measure recent-repo captions -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\UserRepositoryHistory\RecentRepoInfo.cs" />
+
+    <!-- M3: drives a UI flow through IGitUICommands and IWin32Window -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\Tag\GitTagController.cs" />
+
+    <!-- Found by scope step 3, not previously in the plan: Image/Icon/menu types inside the
+         engine. Rendering concerns; want the same treatment as M1.6/M1.7. -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CommitTemplateItem.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CommitTemplateManager.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CustomDiffMergeTool.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\FileAssociatedIconProvider.cs" />
+
+    <!-- cascade of M1.8: built from the Extensibility setting-binding types -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Settings\BuildServerSettings.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Settings\DetailedSettings.cs" />
+
+    <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Properties\AssemblyInfo.cs" />
+
+
+    <!-- ===== DEBT: GitUIPluginInterfaces, 3 of 21 files (shrinks) ===== -->
+
+    <!-- Application.ExecutablePath for the default plugins directory. The host already calls
+         Initialise(userPluginsPath: ...); supplying the default path the same way, or using
+         AppPaths once this project references Extensibility, deletes this entry. -->
+    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\ManagedExtensibility.cs" />
+
+    <!-- cascade of M3: extends IGitPluginForRepository -->
+    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\IGitPluginForCommit.cs" />
+
+    <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
+    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\Properties\AssemblyInfo.cs" />
 
     <Compile Include="@(ProbeSource)" />
   </ItemGroup>
