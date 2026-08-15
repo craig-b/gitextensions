@@ -33,6 +33,9 @@ internal static class Program
         // See GitExtensions.Program: TaskManager is platform-neutral and needs the host to supply this.
         TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
 
+        // See GitExtensions.Program: engine errors raised outside any UI flow go to a message box.
+        UserNotification.ShowError = static (text, caption) => GitExtensions.Extensibility.MessageBoxes.ShowError(owner: null, text, caption);
+
         // If an error happens before we had a chance to init the environment information
         // the call to GetInformation() from BugReporter.ShowNBug() will fail.
         // There's no perf hit calling Initialise() multiple times.

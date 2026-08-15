@@ -13,14 +13,9 @@ public static class ExceptionUtils
 
     public static void ShowException(Exception e, string info, bool canIgnore = true)
     {
-        ShowException(null, e, info, canIgnore);
-    }
-
-    public static void ShowException(IWin32Window? owner, Exception e, string info, bool canIgnore)
-    {
         if (!(canIgnore && IsIgnorable(e)))
         {
-            MessageBoxes.ShowError(owner, string.Join(Environment.NewLine + Environment.NewLine, info, e.ToStringWithData()));
+            UserNotification.ShowError(string.Join(Environment.NewLine + Environment.NewLine, info, e.ToStringWithData()), null);
         }
     }
 

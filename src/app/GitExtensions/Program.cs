@@ -127,6 +127,10 @@ internal static class Program
         // Without this they would only be traced.
         TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
 
+        // The engine surfaces the occasional error outside any UI flow (see UserNotification);
+        // route those to a message box. Without this they would only be traced.
+        UserNotification.ShowError = static (text, caption) => GitExtensions.Extensibility.MessageBoxes.ShowError(owner: null, text, caption);
+
         ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath);
 
         AppSettings.LoadSettings();
