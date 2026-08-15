@@ -1,5 +1,6 @@
 using System.Text;
 using BugReporter.Serialization;
+using GitExtensions.Extensibility;
 using GitUI;
 using Microsoft.VisualStudio.Threading;
 
@@ -13,6 +14,12 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // See GitExtensions.Program: AppSettings is platform-neutral and needs the host to supply
+        // these before anything touches it.
+        AppPaths.ProductVersion = Application.ProductVersion;
+        AppPaths.ApplicationExecutablePath = Application.ExecutablePath;
+        AppPaths.GetUserAppDataPath = static () => Application.UserAppDataPath;
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 

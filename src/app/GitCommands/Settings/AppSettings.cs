@@ -21,12 +21,12 @@ public static partial class AppSettings
 {
     // semi-constants
     public static Version AppVersion => Assembly.GetCallingAssembly().GetName().Version!;
-    public static string ProductVersion => Application.ProductVersion;
+    public static string ProductVersion => AppPaths.ProductVersion;
     public static readonly string ApplicationName = "Git Extensions";
     public static readonly string ApplicationId = ApplicationName.Replace(" ", "");
     public static readonly string SettingsFileName = ApplicationId + ".settings";
     public static readonly string UserPluginsDirectoryName = "UserPlugins";
-    private static string _applicationExecutablePath = Application.ExecutablePath;
+    private static string _applicationExecutablePath = AppPaths.ApplicationExecutablePath;
     private static string? _documentationBaseUrl;
 
     public static Lazy<string?> ApplicationDataPath { get; private set; }
@@ -66,7 +66,7 @@ public static partial class AppSettings
             }
 
             // Make ApplicationDataPath version independent
-            return Application.UserAppDataPath.Replace(Application.ProductVersion, string.Empty)
+            return AppPaths.GetUserAppDataPath().Replace(AppPaths.ProductVersion, string.Empty)
                                               .Replace(ApplicationName, ApplicationId); // 'GitExtensions' has been changed to 'Git Extensions' in v3.0
         });
 

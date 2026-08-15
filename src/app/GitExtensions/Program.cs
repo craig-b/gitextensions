@@ -32,6 +32,14 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // AppSettings is platform-neutral and cannot read Application.* itself. Supply the WinForms
+        // values before anything can touch AppSettings, whose static constructor latches the paths.
+        // GetUserAppDataPath stays a delegate: evaluating it creates the directory, which portable
+        // installations must never do.
+        AppPaths.ProductVersion = Application.ProductVersion;
+        AppPaths.ApplicationExecutablePath = Application.ExecutablePath;
+        AppPaths.GetUserAppDataPath = static () => Application.UserAppDataPath;
+
         // If you want to suppress the BugReportInvoker when debugging and exit quickly, uncomment the condition:
         ////if (!Debugger.IsAttached)
         {
