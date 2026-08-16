@@ -143,7 +143,7 @@ internal sealed class RepositoryHistoryUIService : IRepositoryHistoryUIService
 
         RecentRepoSplitter splitter = new()
         {
-            MeasureFont = container.Font,
+            MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, container.Font).Width,
         };
 
         splitter.SplitRecentRepos(repositoryHistory, pinnedRepos, allRecentRepos);
@@ -199,7 +199,7 @@ internal sealed class RepositoryHistoryUIService : IRepositoryHistoryUIService
 
         RecentRepoSplitter splitter = new()
         {
-            MeasureFont = container.Font,
+            MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, container.Font).Width,
         };
 
         splitter.SplitRecentRepos(repositoryHistory, pinnedRepos, allRecentRepos);

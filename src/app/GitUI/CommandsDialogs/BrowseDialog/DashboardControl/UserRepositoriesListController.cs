@@ -73,7 +73,7 @@ public sealed class UserRepositoriesListController : IUserRepositoriesListContro
 
         RecentRepoSplitter splitter = new()
         {
-            MeasureFont = AppFonts.App,
+            MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, AppFonts.App).Width,
 
             MaxTopRepositories = AppSettings.MaxTopRepositories,
             RecentReposComboMinWidth = AppSettings.RecentReposComboMinWidth,

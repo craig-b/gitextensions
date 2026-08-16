@@ -237,7 +237,7 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
             using Graphics graphics = graphicsForm.CreateGraphics();
             RecentRepoSplitter splitter = new()
             {
-                MeasureFont = button.Font,
+                MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, button.Font).Width,
             };
 
             splitter.SplitRecentRepos(recentRepositoryHistory, pinnedRepos, pinnedRepos);

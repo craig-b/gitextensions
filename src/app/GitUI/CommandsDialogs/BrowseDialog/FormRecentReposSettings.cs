@@ -122,7 +122,7 @@ public partial class FormRecentReposSettings : GitExtensionsForm
                 SortRecentRepos = sortRecentRepos.Checked,
                 SortTopRepos = sortTopRepos.Checked,
                 RecentReposComboMinWidth = (int)comboMinWidthEdit.Value,
-                MeasureFont = TopLB.Font,
+                MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, TopLB.Font).Width,
             };
 
             splitter.SplitRecentRepos(_repositoryHistory, topRepos, recentRepos);
