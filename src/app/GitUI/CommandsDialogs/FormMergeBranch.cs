@@ -28,7 +28,7 @@ public partial class FormMergeBranch : GitModuleForm
         helpImageDisplayUserControl1.Image2 = Properties.Images.HelpCommandMergeFastForward.AdaptLightness();
         InitializeComplete();
 
-        _commitMessageManager = new CommitMessageManager(this, Module.WorkingDirGitDir, Module.CommitEncoding);
+        _commitMessageManager = new CommitMessageManager(new ControlUserInteraction(this), Module.WorkingDirGitDir, Module.CommitEncoding);
 
         currentBranchLabel.Font = new Font(currentBranchLabel.Font, FontStyle.Bold);
         noCommit.Checked = AppSettings.DontCommitMerge;

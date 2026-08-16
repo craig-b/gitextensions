@@ -132,7 +132,7 @@ public partial class FormRevertCommit : GitExtensionsDialog
             }
         }
 
-        CommitMessageManager commitMessageManager = new(this, Module.WorkingDirGitDir, Module.CommitEncoding);
+        CommitMessageManager commitMessageManager = new(new ControlUserInteraction(this), Module.WorkingDirGitDir, Module.CommitEncoding);
 
         string existingCommitMessage = ThreadHelper.JoinableTaskFactory.Run(() => commitMessageManager.GetMergeOrCommitMessageAsync());
 

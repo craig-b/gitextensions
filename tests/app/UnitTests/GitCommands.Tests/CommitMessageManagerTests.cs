@@ -3,6 +3,7 @@ using System.IO.Abstractions;
 using System.Text;
 using CommonTestUtils;
 using GitCommands;
+using GitExtensions.Extensibility;
 using NSubstitute;
 
 namespace GitCommandsTests;
@@ -29,8 +30,8 @@ public class CommitMessageManagerTests
     private IFileSystem _fileSystem = null!;
     private CommitMessageManager _manager = null!;
 
-    // We don't expect any failures so that we won't be switching to the main thread or showing messages
-    private readonly Control _owner = ReferenceRepository.DummyOwner;
+    // We don't expect any failures so that no messages will be shown
+    private readonly IUserInteraction _userInteraction = Substitute.For<IUserInteraction>();
 
     public CommitMessageManagerTests()
     {
@@ -64,7 +65,7 @@ public class CommitMessageManagerTests
         _fileSystem.Directory.Returns(_directory);
         _fileSystem.Path.Returns(path);
 
-        _manager = new CommitMessageManager(_owner, _workingDirGitDir, _encoding, _fileSystem, overriddenCommitMessage: null);
+        _manager = new CommitMessageManager(_userInteraction, _workingDirGitDir, _encoding, _fileSystem, overriddenCommitMessage: null);
     }
 
     [TearDown]
@@ -77,13 +78,13 @@ public class CommitMessageManagerTests
 
     public void SetupExtra(string overriddenCommitMessage)
     {
-        _manager = new CommitMessageManager(_owner, _workingDirGitDir, _encoding, _fileSystem, overriddenCommitMessage);
+        _manager = new CommitMessageManager(_userInteraction, _workingDirGitDir, _encoding, _fileSystem, overriddenCommitMessage);
     }
 
     [TestCase(null)]
     public void Constructor_should_throw(string? workingDirGitDir)
     {
-        ((Action)(() => new CommitMessageManager(_owner, workingDirGitDir!, _encoding))).Should().Throw<ArgumentNullException>();
+        ((Action)(() => new CommitMessageManager(_userInteraction, workingDirGitDir!, _encoding))).Should().Throw<ArgumentNullException>();
     }
 
     [TestCase("")]
@@ -91,7 +92,7 @@ public class CommitMessageManagerTests
     [TestCase("::")]
     public void Constructor_should_not_throw(string? workingDirGitDir)
     {
-        new CommitMessageManager(_owner, workingDirGitDir!, _encoding).Should().NotBeNull();
+        new CommitMessageManager(_userInteraction, workingDirGitDir!, _encoding).Should().NotBeNull();
     }
 
     [Test]
@@ -204,7 +205,7 @@ public class CommitMessageManagerTests
     [Test]
     public async Task WriteCommitMessageToFileAsync_should_write_COMMITMESSAGE()
     {
-        CommitMessageManager manager = new(_owner, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding, overriddenCommitMessage: null);
+        CommitMessageManager manager = new(_userInteraction, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding, overriddenCommitMessage: null);
 
         File.Exists(manager.CommitMessagePath).Should().BeFalse();
 
@@ -223,7 +224,7 @@ public class CommitMessageManagerTests
         GitModule module = _referenceRepository.Module;
         module.SetSetting("i18n.commitencoding", encodingName);
         module.CommitEncoding.Preamble.Length.Should().Be(0);
-        CommitMessageManager manager = new(_owner, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding);
+        CommitMessageManager manager = new(_userInteraction, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding);
 
         File.Exists(manager.CommitMessagePath).Should().BeFalse();
 
@@ -237,7 +238,7 @@ public class CommitMessageManagerTests
     [Test]
     public async Task WriteCommitMessageToFileAsync_should_write_MERGE_MSG()
     {
-        CommitMessageManager manager = new(_owner, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding, overriddenCommitMessage: null);
+        CommitMessageManager manager = new(_userInteraction, _referenceRepository.Module.WorkingDir, _referenceRepository.Module.CommitEncoding, overriddenCommitMessage: null);
 
         File.Exists(manager.MergeMessagePath).Should().BeFalse();
 

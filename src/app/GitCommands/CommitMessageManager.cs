@@ -1,7 +1,6 @@
 ﻿using System.IO.Abstractions;
 using System.Text;
 using GitExtensions.Extensibility;
-using GitUI;
 using Microsoft.VisualStudio.Threading;
 
 namespace GitCommands;
@@ -71,7 +70,7 @@ public sealed class CommitMessageManager : ICommitMessageManager
     private readonly string _amendSaveStatePath;
 
     private readonly IFileSystem _fileSystem;
-    private readonly Control _owner;
+    private readonly IUserInteraction _userInteraction;
 
     // Commit messages are UTF-8 by default unless otherwise in the config file.
     // The git manual states:
@@ -83,17 +82,17 @@ public sealed class CommitMessageManager : ICommitMessageManager
 
     private string? _overriddenCommitMessage;
 
-    public CommitMessageManager(Control owner, string workingDirGitDir, Encoding commitEncoding, string? overriddenCommitMessage = null)
-        : this(owner, workingDirGitDir, commitEncoding, new FileSystem(), overriddenCommitMessage)
+    public CommitMessageManager(IUserInteraction userInteraction, string workingDirGitDir, Encoding commitEncoding, string? overriddenCommitMessage = null)
+        : this(userInteraction, workingDirGitDir, commitEncoding, new FileSystem(), overriddenCommitMessage)
     {
     }
 
-    internal CommitMessageManager(Control owner, string workingDirGitDir, Encoding commitEncoding, IFileSystem fileSystem, string? overriddenCommitMessage = null)
+    internal CommitMessageManager(IUserInteraction userInteraction, string workingDirGitDir, Encoding commitEncoding, IFileSystem fileSystem, string? overriddenCommitMessage = null)
     {
-        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(userInteraction);
         ArgumentNullException.ThrowIfNull(workingDirGitDir);
 
-        _owner = owner;
+        _userInteraction = userInteraction;
         _fileSystem = fileSystem;
         _commitEncoding = commitEncoding;
         _amendSaveStatePath = GetFilePath(workingDirGitDir, "GitExtensions.amend");
@@ -231,8 +230,7 @@ public sealed class CommitMessageManager : ICommitMessageManager
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or ObjectDisposedException))
         {
-            await _owner.SwitchToMainThreadAsync(cancellationToken: cancellationToken);
-            MessageBoxes.Show(_owner, string.Format(CannotAccessFile, ex.Message, filePath), errorTitle, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            await _userInteraction.ShowErrorAsync(string.Format(CannotAccessFile, ex.Message, filePath), errorTitle, cancellationToken);
             return string.Empty;
         }
     }
@@ -253,10 +251,8 @@ public sealed class CommitMessageManager : ICommitMessageManager
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or ObjectDisposedException))
         {
-            await _owner.SwitchToMainThreadAsync(cancellationToken: cancellationToken);
-
             // No need to cancel the other operations in FormCommit - just let the user know that something went wrong
-            MessageBoxes.Show(_owner, string.Format(CannotAccessFile, ex.Message, filePath), errorTitle, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            await _userInteraction.ShowErrorAsync(string.Format(CannotAccessFile, ex.Message, filePath), errorTitle, cancellationToken);
         }
     }
 }
