@@ -2441,7 +2441,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         SetEnabled(openPullRequestPageStripMenuItem, !string.IsNullOrWhiteSpace(revision.BuildStatus?.PullRequestUrl));
 
-        mainContextMenu.AddUserScripts(runScriptToolStripMenuItem, ExecuteCommand, script => script.AddToRevisionGridContextMenu, UICommands);
+        mainContextMenu.AddUserScripts(runScriptToolStripMenuItem, ExecuteCommand, script => script.AddToRevisionGridContextMenu, (IServiceProvider)UICommands);
 
         UpdateSeparators();
 

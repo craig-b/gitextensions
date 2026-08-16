@@ -281,7 +281,7 @@ partial class RepoObjectsTree : IMenuItemFactory
 
         if (hasSingleSelection && selectedLocalBranch?.Visible == true)
         {
-            contextMenu.AddUserScripts(runScriptToolStripMenuItem, ExecuteCommand, script => script.AddToRevisionGridContextMenu, UICommands);
+            contextMenu.AddUserScripts(runScriptToolStripMenuItem, ExecuteCommand, script => script.AddToRevisionGridContextMenu, (IServiceProvider)UICommands);
         }
         else
         {

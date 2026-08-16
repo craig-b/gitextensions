@@ -21,7 +21,7 @@ public class ScriptsManagerScriptRunnerTests
         _module = Substitute.For<IGitModule>();
         _scriptOptionsProvider = Substitute.For<IScriptOptionsProvider>();
 
-        _commands = Substitute.For<IGitUICommands>();
+        _commands = Substitute.For<IGitUICommands, IServiceProvider>();
         _commands.Module.Returns(_module);
     }
 
@@ -40,7 +40,7 @@ public class ScriptsManagerScriptRunnerTests
     [Test]
     public void Parse_should_parse_distincts_userInput()
     {
-        _commands.GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "value", "foo1"), ("input label2", "value2", "bar1"), (null!, string.Empty, "foo2")));
+        ((IServiceProvider)_commands).GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "value", "foo1"), ("input label2", "value2", "bar1"), (null!, string.Empty, "foo2")));
         (string? arguments, bool abort, bool cancel) result = ScriptRunner.ParseUserInputs("script_name", "{UserInput:input label1=value}_{{UserInput:input label2=value2}}_{UserInput}_{{UserInput}}", _commands,
             owner: null!, scriptOptionsProvider: _scriptOptionsProvider);
 
@@ -52,7 +52,7 @@ public class ScriptsManagerScriptRunnerTests
     [Test]
     public void Parse_should_parse_customized_userInput_without_default_value_specified()
     {
-        _commands.GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", string.Empty, "foo1")));
+        ((IServiceProvider)_commands).GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", string.Empty, "foo1")));
         (string? arguments, bool abort, bool cancel) result = ScriptRunner.ParseUserInputs("script_name", "{UserInput:input label1}", _commands,
             owner: null!, scriptOptionsProvider: _scriptOptionsProvider);
 
@@ -64,7 +64,7 @@ public class ScriptsManagerScriptRunnerTests
     [Test]
     public void Parse_should_parse_customized_userInputs_and_replace_all_with_same_label()
     {
-        _commands.GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "value", "foo1")));
+        ((IServiceProvider)_commands).GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "value", "foo1")));
         (string? arguments, bool abort, bool cancel) result = ScriptRunner.ParseUserInputs("script_name", "{UserInput:input label1=value}_{UserInput:input label1}_{{UserInput:input label1}}", _commands,
             owner: null!, scriptOptionsProvider: _scriptOptionsProvider);
 
@@ -77,7 +77,7 @@ public class ScriptsManagerScriptRunnerTests
     public void Parse_should_parse_userInput_with_default_value_as_expression_containing_arguments_inside()
     {
         _module.GetRevision(default, Arg.Any<bool>(), Arg.Any<bool>()).Returns(new GitRevision(ObjectId.Parse("79b9792ca4db3d01d7c0f2cd95419dd53665ec41")));
-        _commands.GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "file_79b9792ca4db3d01d7c0f2cd95419dd53665ec41.bak", "file_foo.bak")));
+        ((IServiceProvider)_commands).GetService<ISimplePromptCreator>().Returns(new SimplePromptCreatorForTest(("input label1", "file_79b9792ca4db3d01d7c0f2cd95419dd53665ec41.bak", "file_foo.bak")));
         (string? arguments, bool abort, bool cancel) result = ScriptRunner.ParseUserInputs("script_name", "{UserInput:input label1=file_{HEAD}.bak}", _commands,
             owner: null!, scriptOptionsProvider: _scriptOptionsProvider);
 
@@ -134,7 +134,7 @@ public class ScriptsManagerScriptRunnerTests
     [Test]
     public void Parse_should_parse_userFiles()
     {
-        _commands.GetService<IFilePromptCreator>().Returns(new FilePromptCreatorForTest(@"C:\a_file_path\file.txt"));
+        ((IServiceProvider)_commands).GetService<IFilePromptCreator>().Returns(new FilePromptCreatorForTest(@"C:\a_file_path\file.txt"));
         (string? arguments, bool abort, bool cancel) result = ScriptRunner.ParseUserInputs("script_name", "unquoted path:{UserFiles} - quoted path:{{UserFiles}}", _commands,
             owner: null!, scriptOptionsProvider: _scriptOptionsProvider);
 

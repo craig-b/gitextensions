@@ -55,7 +55,7 @@ public class ScriptRunnerTests
         _module.GetCurrentRemote().ReturnsForAnyArgs("origin");
         _module.GetCurrentCheckout().ReturnsForAnyArgs(ObjectId.WorkTreeId);
 
-        _commands = Substitute.For<IGitUICommands>();
+        _commands = Substitute.For<IGitUICommands, IServiceProvider>();
         _commands.Module.Returns(_module);
 
         _mockForm = new(_commands);

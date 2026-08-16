@@ -1269,7 +1269,7 @@ partial class FileStatusList
             tsmiBlame.Checked = false;
         }
 
-        sepScripts.Visible = ItemContextMenu.AddUserScripts(tsmiRunScript, ExecuteCommand, script => script.OnEvent == ScriptEvent.ShowInFileList, UICommands);
+        sepScripts.Visible = ItemContextMenu.AddUserScripts(tsmiRunScript, ExecuteCommand, script => script.OnEvent == ScriptEvent.ShowInFileList, (IServiceProvider)UICommands);
 
         tsmiShowFindInCommitFilesGitGrep.Checked = FindInCommitFilesGitGrepVisible;
 

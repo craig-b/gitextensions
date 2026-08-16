@@ -27,7 +27,7 @@ public class ScriptOptionsParserTests
         _module = Substitute.For<IGitModule>();
         _scriptOptionsProvider = Substitute.For<IScriptOptionsProvider>();
 
-        _commands = Substitute.For<IGitUICommands>();
+        _commands = Substitute.For<IGitUICommands, IServiceProvider>();
         _commands.Module.Returns(_module);
     }
 
@@ -427,7 +427,7 @@ public class ScriptOptionsParserTests
         _scriptOptionsProvider.GetValues(option1).Returns([value1a, value1b]);
         _scriptOptionsProvider.GetValues(option2).Returns([value2]);
 
-        (string? arguments, bool abort) = ScriptOptionsParser.Parse("foo {{" + option1 + "}} bar {" + option2 + "}", Substitute.For<IGitUICommands>(), owner: null!, _scriptOptionsProvider);
+        (string? arguments, bool abort) = ScriptOptionsParser.Parse("foo {{" + option1 + "}} bar {" + option2 + "}", Substitute.For<IGitUICommands, IServiceProvider>(), owner: null!, _scriptOptionsProvider);
 
         arguments.Should().Be($"foo \"{value1a}\" \"{value1b}\" bar {value2}");
         abort.Should().BeFalse();

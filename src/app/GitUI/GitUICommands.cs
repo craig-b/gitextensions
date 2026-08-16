@@ -22,7 +22,7 @@ using UICmd = GitExtensions.Extensibility.Git.UICommands;
 namespace GitUI;
 
 /// <summary>Contains methods to invoke GitEx forms, dialogs, etc.</summary>
-public sealed partial class GitUICommands : IGitUICommands
+public sealed partial class GitUICommands : IGitUICommands, IServiceProvider
 {
     internal const string BlameHistoryCommand = "blamehistory";
     internal const string FileHistoryCommand = "filehistory";

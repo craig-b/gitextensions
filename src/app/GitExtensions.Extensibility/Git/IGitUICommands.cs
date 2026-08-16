@@ -6,7 +6,7 @@ using GitUIPluginInterfaces;
 
 namespace GitExtensions.Extensibility.Git;
 
-public interface IGitUICommands : IServiceProvider, IUICommandBus
+public interface IGitUICommands : IUICommandBus
 {
     event EventHandler<GitUIEventArgs>? PostBrowseInitialize;
     event EventHandler<GitUIPostActionEventArgs>? PostCheckoutBranch;
