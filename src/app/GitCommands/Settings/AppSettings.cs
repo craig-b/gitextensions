@@ -259,8 +259,18 @@ public static partial class AppSettings
 
     #region Registry helpers
 
+    // The registry stores a handful of legacy/installer-shared values. Off Windows there is no
+    // registry: reads return the default, writes are dropped. Guarding here rather than at each
+    // caller keeps every consumer platform-safe, including the static constructor
+    // (MigrateSshSettings and ImportFromRegistry both end up in these helpers).
+
     private static bool ReadBoolRegKey(string key, bool defaultValue)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return defaultValue;
+        }
+
         object? obj = VersionIndependentRegKey.GetValue(key);
         if (obj is not string)
         {
@@ -277,18 +287,29 @@ public static partial class AppSettings
 
     private static void WriteBoolRegKey(string key, bool value)
     {
-        VersionIndependentRegKey.SetValue(key, value ? "true" : "false");
+        if (OperatingSystem.IsWindows())
+        {
+            VersionIndependentRegKey.SetValue(key, value ? "true" : "false");
+        }
     }
 
     [return: NotNullIfNotNull(nameof(defaultValue))]
     private static string? ReadStringRegValue(string key, string? defaultValue)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return defaultValue;
+        }
+
         return (string?)VersionIndependentRegKey.GetValue(key, defaultValue);
     }
 
     private static void WriteStringRegValue(string key, string value)
     {
-        VersionIndependentRegKey.SetValue(key, value);
+        if (OperatingSystem.IsWindows())
+        {
+            VersionIndependentRegKey.SetValue(key, value);
+        }
     }
 
     #endregion
@@ -2127,6 +2148,11 @@ public static partial class AppSettings
 
     private static IEnumerable<(string name, string? value)> GetSettingsFromRegistry()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            yield break;
+        }
+
         RegistryKey? oldSettings = VersionIndependentRegKey.OpenSubKey("GitExtensions");
 
         if (oldSettings is null)
