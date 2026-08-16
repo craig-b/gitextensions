@@ -23,6 +23,13 @@ public static class AppPaths
     public static string ProductVersion { get; set; } = GetDefaultProductVersion();
 
     /// <summary>
+    ///  The application's product name. WinForms takes the entry assembly's
+    ///  <see cref="AssemblyProductAttribute"/>, then falls back to the Win32 ProductName
+    ///  resource, then the entry point's namespace.
+    /// </summary>
+    public static string ProductName { get; set; } = GetDefaultProductName() ?? string.Empty;
+
+    /// <summary>
     ///  Full path of the executable that started the process. <see cref="Environment.ProcessPath"/>
     ///  and WinForms' <c>Application.ExecutablePath</c> are the same Win32 call
     ///  (<c>GetModuleFileName(null)</c>), so the default is already byte-identical on Windows.

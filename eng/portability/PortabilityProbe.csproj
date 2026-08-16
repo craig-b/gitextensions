@@ -15,13 +15,13 @@
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
       1. GitExtensions.Extensibility   :  94 of 117 files — 23 debt
       2. GitExtUtils                   :  39 of  67 files — 28 debt, added by M1.7
-      3. GitCommands                   : 189 of 201 files — 12 debt, added after M1.4/M1.5
+      3. GitCommands                   : 190 of 201 files — 11 debt, added after M1.4/M1.5
       4. GitUIPluginInterfaces         :  18 of  21 files —  3 debt, entangled with GitCommands
                                           at type level so it joined in the same step
 
     An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
     (fonts), M1.5 (application paths), M1.7's splits and the UserNotification seam, the same scope
-    needs 66 — of which 58 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
+    needs 65 — of which 57 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
     with its root), and 2 are compilation artefacts, see below.
 
     Notes on maintaining the Remove list:
@@ -178,11 +178,7 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
 
-    <!-- ===== DEBT: GitCommands, 12 of 201 files (shrinks) ===== -->
-
-    <!-- M1.1: Application.ProductName in the patch footer (method-body only — invisible to a
-         single-pass build, see the two-phase note above) -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Patches\PatchManager.cs" />
+    <!-- ===== DEBT: GitCommands, 11 of 201 files (shrinks) ===== -->
 
     <!-- M1.2: the folder picker (IWin32Window) does not belong in the engine -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\OsShellUtil.cs" />

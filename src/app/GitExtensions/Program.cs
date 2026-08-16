@@ -37,6 +37,7 @@ internal static class Program
         // GetUserAppDataPath stays a delegate: evaluating it creates the directory, which portable
         // installations must never do.
         AppPaths.ProductVersion = Application.ProductVersion;
+        AppPaths.ProductName = Application.ProductName ?? string.Empty;
         AppPaths.ApplicationExecutablePath = Application.ExecutablePath;
         AppPaths.GetUserAppDataPath = static () => Application.UserAppDataPath;
 
