@@ -1692,8 +1692,7 @@ public static partial class AppSettings
         {
             SettingsContainer.LockedAction(() =>
             {
-                // prepend "Global\" in order to be safe in preparation for non-Windows OS, too
-                _globalMutex ??= new Mutex(initiallyOwned: false, name: @$"Global\Mutex{SettingsFilePath.ToPosixPath()}");
+                _globalMutex ??= new Mutex(initiallyOwned: false, name: GetSettingsMutexName());
 
                 try
                 {
@@ -1708,9 +1707,24 @@ public static partial class AppSettings
 
             Saved?.Invoke();
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceError("Failed to save settings: {0}", ex);
         }
+    }
+
+    private static string GetSettingsMutexName()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Must not change: concurrently running app versions synchronize on this exact name.
+            return @$"Global\Mutex{SettingsFilePath.ToPosixPath()}";
+        }
+
+        // Unix named mutexes map to file names, so path separators (and the Global\ prefix) are
+        // invalid there; derive a flat name that is still unique per settings file.
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(SettingsFilePath));
+        return $"GitExtensions-Settings-{Convert.ToHexString(hash)}";
     }
 
     public static void LoadSettings()
