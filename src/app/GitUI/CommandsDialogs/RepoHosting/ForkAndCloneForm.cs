@@ -293,7 +293,7 @@ public partial class ForkAndCloneForm : GitExtensionsForm
     {
         string initialDir = destinationTB.Text.Length > 0 ? destinationTB.Text : "C:\\";
 
-        string? userSelectedPath = OsShellUtil.PickFolder(this, initialDir);
+        string? userSelectedPath = FolderPicker.PickFolder(this, initialDir);
 
         if (userSelectedPath is not null)
         {

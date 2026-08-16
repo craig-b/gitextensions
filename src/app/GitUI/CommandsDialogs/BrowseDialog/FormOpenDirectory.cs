@@ -109,7 +109,7 @@ public partial class FormOpenDirectory : GitExtensionsForm
 
     private void folderBrowserButton_Click(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this, _NO_TRANSLATE_Directory.Text);
+        string? userSelectedPath = FolderPicker.PickFolder(this, _NO_TRANSLATE_Directory.Text);
         if (!string.IsNullOrEmpty(userSelectedPath))
         {
             _NO_TRANSLATE_Directory.Text = userSelectedPath;

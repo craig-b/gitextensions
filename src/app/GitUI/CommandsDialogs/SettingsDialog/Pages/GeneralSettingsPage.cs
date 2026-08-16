@@ -150,7 +150,7 @@ public partial class GeneralSettingsPage : SettingsPageWithHeader
 
     private void DefaultCloneDestinationBrowseClick(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this, cbDefaultCloneDestination.Text);
+        string? userSelectedPath = FolderPicker.PickFolder(this, cbDefaultCloneDestination.Text);
 
         if (userSelectedPath is not null)
         {

@@ -275,7 +275,7 @@ public partial class FormClone : GitExtensionsDialog
 
     private void FromBrowseClick(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this, _NO_TRANSLATE_From.Text);
+        string? userSelectedPath = FolderPicker.PickFolder(this, _NO_TRANSLATE_From.Text);
 
         if (userSelectedPath is not null)
         {
@@ -287,7 +287,7 @@ public partial class FormClone : GitExtensionsDialog
 
     private void ToBrowseClick(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this, _NO_TRANSLATE_To.Text);
+        string? userSelectedPath = FolderPicker.PickFolder(this, _NO_TRANSLATE_To.Text);
 
         if (userSelectedPath is not null)
         {

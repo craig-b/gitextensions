@@ -285,7 +285,7 @@ public partial class FormApplyPatch : GitModuleForm
 
     private void BrowseDir_Click(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this);
+        string? userSelectedPath = FolderPicker.PickFolder(this);
 
         if (userSelectedPath is not null)
         {
