@@ -133,6 +133,56 @@ jobs:
           artifacts\Release\**\*.dgml
         if-no-files-found: ignore
 
+  linux-portability:
+    # Portability ratchet: fails the build the moment platform-neutral code acquires a
+    # Windows-only dependency, when the engine stops compiling on a case-sensitive filesystem,
+    # or when a translation file loses its <source> data. See
+    # eng/portability/PortabilityProbe.csproj for the current debt list.
+    name: Portability (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        # No submodules: the probed projects don't use any. Default (shallow) fetch depth is
+        # enough — nothing here needs git history, only the working tree.
+        submodules: false
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Cache NuGet packages
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
+
+    - name: Build portability probe
+      run: dotnet build eng/portability/PortabilityProbe.csproj --nologo --verbosity q /bl:artifacts/log/portability-probe.binlog
+
+    - name: Build engine projects for the Windows TFM
+      run: dotnet build src/app/GitCommands/GitCommands.csproj -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-engine.binlog
+
+    - name: Verify translation sources
+      run: python3 eng/check_xlf_sources.py
+
+    - name: Upload portability logs on failure
+      if: failure()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: portability-logs
+        path: |
+          artifacts/**/log/**/*.binlog
+        if-no-files-found: ignore
+
   test-report:
     name: Test Report
     runs-on: ubuntu-latest
