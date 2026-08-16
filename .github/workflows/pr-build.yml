@@ -148,9 +148,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
-        # No submodules: the probed projects don't use any. Default (shallow) fetch depth is
-        # enough — nothing here needs git history, only the working tree.
-        submodules: false
+        # Submodules are needed since the job builds the full solution (GitUI references the
+        # vendored externals). Default (shallow) fetch depth is enough — nothing here needs
+        # git history, only the working tree.
+        submodules: recursive
 
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
@@ -168,8 +169,11 @@ jobs:
     - name: Build portability probe
       run: dotnet build eng/portability/PortabilityProbe.csproj --nologo --verbosity q /bl:artifacts/log/portability-probe.binlog
 
-    - name: Build engine projects for the Windows TFM
-      run: dotnet build src/app/GitCommands/GitCommands.csproj -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-engine.binlog
+    - name: Build full solution for the Windows TFM
+      # The whole solution compiles on Linux via EnableWindowsTargeting. This keeps every
+      # project honest about case-sensitive paths (M1.10) and catches cross-project fallout
+      # from portability refactors without a Windows runner.
+      run: dotnet build GitExtensions.slnx -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-solution.binlog
 
     - name: Run portable tests
       run: dotnet test eng/portability/PortabilityProbe.Tests.csproj --nologo --verbosity q --logger:trx /bl:artifacts/log/portability-tests.binlog

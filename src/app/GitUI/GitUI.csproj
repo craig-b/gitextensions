@@ -37,6 +37,7 @@
     <ProjectReference Include="..\..\..\externals\NetSpell.SpellChecker\SpellChecker.csproj" />
     <ProjectReference Include="..\BugReporter\BugReporter.csproj" />
     <ProjectReference Include="..\GitCommands\GitCommands.csproj" />
+    <ProjectReference Include="..\GitExtensions.Extensibility.WinForms\GitExtensions.Extensibility.WinForms.csproj" />
     <ProjectReference Include="..\GitExtUtils\GitExtUtils.csproj" />
     <ProjectReference Include="..\ResourceManager\ResourceManager.csproj" />
     <ProjectReference Include="..\..\plugins\GitUIPluginInterfaces\GitUIPluginInterfaces.csproj" />

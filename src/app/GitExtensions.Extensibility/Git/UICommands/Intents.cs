@@ -12,7 +12,8 @@ namespace GitExtensions.Extensibility.Git.UICommands;
 //  - AddCommitTemplate/RemoveCommitTemplate: Func<string> + Image payload.
 //  - AddUpstreamRemote, StartCloneForkFromHoster, StartCreatePullRequest,
 //    StartPullRequestsDialog, StartSettingsDialog(IGitPlugin): these reference
-//    IRepositoryHostPlugin/IGitPlugin, which are still WinForms-typed (M1.8 debt);
+//    IRepositoryHostPlugin/IGitPlugin, which stay Windows-bound until M3 clears
+//    IGitUICommands/GitUIEventArgs from their signatures (plus IGitPlugin's Image icon);
 //    modelling them now would put this file on the probe's exclusion list.
 
 public sealed record AddFiles(string? Files = null) : IUICommand;

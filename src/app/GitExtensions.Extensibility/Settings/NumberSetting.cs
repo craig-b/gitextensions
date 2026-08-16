@@ -17,7 +17,6 @@ public class NumberSetting<T> : ISetting
     public string Name { get; }
     public string Caption { get; }
     public T DefaultValue { get; }
-    public Control? CustomControl { get; set; }
 
     // TODO: honestly, NumericUpDownBinding might be a better choice than TextBox in general since its internal type is `decimal`.
     //       We would just need to appropriately choose an increment based on NumberSetting's type.

@@ -23,7 +23,6 @@ public class ChoiceSetting : ISetting
     public string Caption { get; }
     public string? DefaultValue { get; }
     public IList<string> Values { get; }
-    public ComboBox? CustomControl { get; set; }
 
     public string? ValueOrDefault(SettingsSource settings)
     {

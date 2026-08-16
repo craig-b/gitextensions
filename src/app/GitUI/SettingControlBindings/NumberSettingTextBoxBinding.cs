@@ -23,7 +23,6 @@ internal class NumberSettingTextBoxBinding<T> : SettingControlBinding<NumberSett
     {
         TextBox textBox = new();
         textBox.TextChanged += OnTextChanged;
-        Setting.CustomControl = textBox;
         return textBox;
     }
 

@@ -12,8 +12,7 @@ internal sealed class BoolSettingControlBinding : SettingControlBinding<BoolSett
 
     public override CheckBox CreateControl()
     {
-        Setting.CustomControl = new CheckBox { ThreeState = true };
-        return Setting.CustomControl;
+        return new CheckBox { ThreeState = true };
     }
 
     public override void LoadSetting(SettingsSource settings, CheckBox control)

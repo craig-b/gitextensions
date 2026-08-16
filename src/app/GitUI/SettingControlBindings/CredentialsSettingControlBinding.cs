@@ -13,8 +13,7 @@ internal sealed class CredentialsSettingControlBinding : SettingControlBinding<C
 
     public override CredentialsControl CreateControl()
     {
-        Setting.CustomControl = new CredentialsControl();
-        return Setting.CustomControl;
+        return new CredentialsControl();
     }
 
     public override void LoadSetting(SettingsSource settings, CredentialsControl control)

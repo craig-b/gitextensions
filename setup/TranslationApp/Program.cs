@@ -5,6 +5,7 @@ using GitExtensions.Extensibility.Translations.Xliff;
 using GitUI;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using ResourceManager;
 
 namespace TranslationApp;
 
@@ -38,7 +39,7 @@ internal static class Program
         // Set the flag that will stop this from happening.
         GitModuleForm.IsUnitTestActive = true;
 
-        AppSettings.Font = SystemFonts.MessageBoxFont!;
+        AppSettings.Font = SystemFonts.MessageBoxFont!.ToDescriptor();
 
         IDictionary<string, List<TranslationItemWithCategory>> neutralItems = TranslationHelpers.LoadNeutralItems();
         string filename = Path.Combine(Translator.GetTranslationDir(), "English.xlf");

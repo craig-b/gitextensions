@@ -95,7 +95,7 @@
     <ProbeSource Remove="$(RepoRoot)**\obj\**" />
     <ProbeSource Remove="$(RepoRoot)**\bin\**" />
 
-    <!-- ===== DEBT: Extensibility, 23 of 117 files (shrinks) ===== -->
+    <!-- ===== DEBT: Extensibility, 11 of 112 files (shrinks) ===== -->
 
     <!-- M3: the 93-method god-interface and its IWin32Window/Image surface -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitUICommands.cs" />
@@ -108,20 +108,9 @@
     <!-- cascade of M3: IGitPluginForRepository only extends IGitPlugin -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginForRepository.cs" />
 
-    <!-- M1.8: setting-control bindings are WinForms Control-typed -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISettingControlBinding.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\SettingControlBinding.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\BoolSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ChoiceSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\NumberSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PasswordSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\PseudoSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\StringSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\CredentialsSetting.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\UserControls\CredentialsControl.Designer.cs" />
-    <!-- cascade of M1.8: ISetting only references ISettingControlBinding -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Settings\ISetting.cs" />
+    <!-- M1.8 DONE: the WinForms-typed binding half (ISettingControlBinding, SettingControlBinding,
+         PseudoSetting, CredentialsControl) moved to GitExtensions.Extensibility.WinForms; the
+         setting models lost their never-assigned CustomControl properties and are portable. -->
 
     <!-- M1.4 residue: IsFixedWidth(Font, Graphics) is inherently a rendering concern; move to GitUI -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Extensions\UIExtensions.cs" />
@@ -178,14 +167,10 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
 
-    <!-- ===== DEBT: GitCommands, 4 of 197 files (shrinks) ===== -->
+    <!-- ===== DEBT: GitCommands, 2 of 197 files (shrinks) ===== -->
 
     <!-- M3: drives a UI flow through IGitUICommands and IWin32Window -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\Tag\GitTagController.cs" />
-
-    <!-- cascade of M1.8: built from the Extensibility setting-binding types -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Settings\BuildServerSettings.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Settings\DetailedSettings.cs" />
 
     <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Properties\AssemblyInfo.cs" />

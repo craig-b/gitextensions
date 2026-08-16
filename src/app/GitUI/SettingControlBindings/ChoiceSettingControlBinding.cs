@@ -11,9 +11,9 @@ internal sealed class ChoiceSettingControlBinding : SettingControlBinding<Choice
 
     public override ComboBox CreateControl()
     {
-        Setting.CustomControl = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        Setting.CustomControl.Items.AddRange(Setting.Values.ToArray());
-        return Setting.CustomControl;
+        ComboBox comboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+        comboBox.Items.AddRange(Setting.Values.ToArray());
+        return comboBox;
     }
 
     public override void LoadSetting(SettingsSource settings, ComboBox control)

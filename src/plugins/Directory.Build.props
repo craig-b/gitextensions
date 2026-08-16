@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="$(RepoRoot)\src\app\GitExtensions.Extensibility\GitExtensions.Extensibility.csproj" />
+    <ProjectReference Include="$(RepoRoot)\src\app\GitExtensions.Extensibility.WinForms\GitExtensions.Extensibility.WinForms.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using GitExtensions.Extensibility.Settings.UserControls;
 
 namespace GitExtensions.Extensibility.Settings;
 
@@ -18,7 +17,6 @@ public class CredentialsSetting : ICredentialsManager, ISetting
 
     public string Name { get; }
     public string Caption { get; }
-    public CredentialsControl? CustomControl { get; set; }
 
     public NetworkCredential GetValueOrDefault(SettingsSource settings)
     {

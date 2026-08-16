@@ -26,8 +26,7 @@ internal class StringSettingControlBinding : SettingControlBinding<StringSetting
 
     public override TextBox CreateControl()
     {
-        Setting.CustomControl = new TextBox();
-        return Setting.CustomControl;
+        return new TextBox();
     }
 
     public override void LoadSetting(SettingsSource settings, TextBox control)

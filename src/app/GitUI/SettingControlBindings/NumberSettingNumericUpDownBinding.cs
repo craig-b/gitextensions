@@ -21,8 +21,7 @@ internal class NumberSettingNumericUpDownBinding : SettingControlBinding<NumberS
             Maximum = int.MaxValue
         };
 
-        Setting.CustomControl = numericUpDown;
-        return (NumericUpDown)Setting.CustomControl;
+        return numericUpDown;
     }
 
     public override void LoadSetting(SettingsSource settings, NumericUpDown control)

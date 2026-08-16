@@ -72,6 +72,7 @@
     <Project Path="src/app/BugReporter/BugReporter.csproj" />
     <Project Path="src/app/GitCommands/GitCommands.csproj" />
     <Project Path="src/app/GitExtensions.Extensibility/GitExtensions.Extensibility.csproj" />
+    <Project Path="src/app/GitExtensions.Extensibility.WinForms/GitExtensions.Extensibility.WinForms.csproj" />
     <Project Path="src/app/GitExtensions/GitExtensions.csproj">
       <BuildDependency Project="externals/conemu-inside/ConEmuWinForms/ConEmuWinForms.csproj" />
       <BuildDependency Project="externals/Git.hub/Git.hub/Git.hub.csproj" />

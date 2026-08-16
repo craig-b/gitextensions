@@ -11,10 +11,4 @@
     <PackageReference Include="StrongOf" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Update="Settings\UserControls\CredentialsControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-  </ItemGroup>
-
 </Project>
