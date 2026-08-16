@@ -1,105 +1,100 @@
-using GitUIPluginInterfaces;
+﻿using GitExtensions.Extensibility.Git;
+using GitExtUtils;
+using GitUI.UICommandHandlers;
 using Intent = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
-// IUICommandBus dispatch: maps each intent record onto the existing Start* method it replaces.
-// This is the M3.1 strangler seam - call sites migrate to Execute(intent) one by one, and the
-// Start* family shrinks as they do. See cross-platform-plan.md section 13.
+// IUICommandBus dispatch: this switch is the composition root for UI command handlers - it
+// constructs each handler with its dependencies and stays exhaustively compile-checked against
+// the intent set. The M3.2 handlers own the dialog logic; the Start* facade methods on
+// GitUICommands are thin shims through Execute(intent, owner) until call sites migrate.
+// See cross-platform-plan.md section 13.
 partial class GitUICommands
 {
-    public bool Execute(Intent.IUICommand command)
-    {
-        // Intents carry no owner; the host resolves it ambiently. Until M3.2 lands a real
-        // resolution (e.g. the active form), the owner is null - every dialog accepts that.
-        IWin32Window? owner = null;
+    /// <summary>
+    ///  The owner window used when an intent arrives through the portable bus, which carries
+    ///  no owner: the active form, matching what call sites pass explicitly today.
+    /// </summary>
+    internal static IWin32Window? AmbientOwner => Form.ActiveForm;
 
+    public bool Execute(Intent.IUICommand command)
+        => Execute(command, AmbientOwner);
+
+    internal bool Execute(Intent.IUICommand command, IWin32Window? owner)
+    {
         return command switch
         {
-            Intent.AddFiles c => StartAddFilesDialog(owner, c.Files),
-            Intent.AddToGitIgnore c => StartAddToGitIgnoreDialog(owner, c.LocalExclude, [.. c.FilePatterns]),
-            Intent.AmendCommit c => StartAmendCommitDialog(owner, c.Revision),
-            Intent.ApplyPatch c => StartApplyPatchDialog(owner, c.PatchFile),
-            Intent.Archive c => StartArchiveDialog(owner, c.Revision, c.Revision2, c.Path),
-            Intent.BatchFileProcess c => Run(() => StartBatchFileProcessDialog(c.BatchFile)),
-            Intent.Browse c => StartBrowseDialog(owner, c.Args),
-            Intent.CheckoutBranch c => StartCheckoutBranch(owner, c.Branch, c.Remote, c.ContainObjectIds),
-            Intent.CheckoutRemoteBranch c => StartCheckoutRemoteBranch(owner, c.Branch),
-            Intent.CheckoutRevision c => StartCheckoutRevisionDialog(owner, c.Revision),
-            Intent.CherryPick c => CherryPick(c),
-            Intent.CleanupRepository c => StartCleanupRepositoryDialog(owner, c.Path),
-            Intent.Clone c => StartCloneDialog(owner, c.Url, c.OpenedFromProtocolHandler, c.GitModuleChanged),
-            Intent.CommandLineProcess c => StartCommandLineProcessDialog(owner, c.Command, c.Arguments),
-            Intent.Commit c => StartCommitDialog(owner, c.CommitMessage, c.ShowOnlyWhenChanges),
-            Intent.CommitDiff c => StartFormCommitDiff(c.ObjectId),
-            Intent.CompareRevisions => StartCompareRevisionsDialog(owner),
-            Intent.ContinueRebase => StartTheContinueRebaseDialog(owner),
-            Intent.CreateBranch c => StartCreateBranchDialog(owner, c.ObjectId, c.NewBranchNamePrefix),
-            Intent.CreateBranchFrom c => StartCreateBranchDialog(owner, c.Branch),
-            Intent.CreateTag c => StartCreateTagDialog(owner, c.Revision),
-            Intent.DeleteBranches c => StartDeleteBranchDialog(owner, c.Branches),
-            Intent.DeleteRemoteBranch c => StartDeleteRemoteBranchDialog(owner, c.RemoteBranch),
-            Intent.DeleteTag c => StartDeleteTagDialog(owner, c.Tag),
-            Intent.EditFile c => StartFileEditorDialog(c.FileName, c.ShowWarning, c.LineNumber),
-            Intent.EditGitAttributes => StartEditGitAttributesDialog(owner),
-            Intent.EditGitIgnore c => StartEditGitIgnoreDialog(owner, c.LocalExcludes),
-            Intent.FileHistory c => Run(() => StartFileHistoryDialog(owner, c.FileName, c.Revision, c.FilterByRevision, c.ShowBlame)),
-            Intent.FixupCommit c => StartFixupCommitDialog(owner, c.Revision),
-            Intent.FormatPatch => StartFormatPatchDialog(owner),
-            Intent.GeneralSettings => StartGeneralSettingsDialog(owner),
-            Intent.GitCommandLineProcess c => StartCommandLineProcessDialog(owner, c.Command),
-            Intent.GitCommandProcess c => StartGitCommandProcessDialog(owner, c.Arguments),
-            Intent.InitializeRepository c => StartInitializeDialog(owner, c.Directory, c.GitModuleChanged),
-            Intent.MailMap => StartMailMapDialog(owner),
-            Intent.MergeBranch c => StartMergeBranchDialog(owner, c.Branch),
-            Intent.OpenSettings c => StartSettingsDialog(owner, c.InitialPage),
-            Intent.OpenWithDifftool c => Run(() => OpenWithDifftool(owner, c.Revisions, c.FileName, c.OldFileName, c.DiffKind, c.IsTracked, c.CustomTool)),
-            Intent.PluginSettings => StartPluginSettingsDialog(owner),
-            Intent.Pull c => StartPullDialog(owner, c.RemoteBranch, c.Remote, c.PullAction),
-            Intent.PullImmediately c => StartPullDialogAndPullImmediately(owner, c.RemoteBranch, c.Remote, c.PullAction),
-            Intent.Push c => StartPushDialog(owner, c.PushOnShow, c.ForceWithLease, out _, c.BranchName),
-            Intent.Rebase c => StartRebaseDialog(owner, c.From, c.To, c.Onto, c.Interactive, c.StartImmediately),
-            Intent.RebaseWithAdvancedOptions c => StartRebaseDialogWithAdvOptions(owner, c.Onto, c.From),
-            Intent.Remotes c => StartRemotesDialog(owner, c.PreselectRemote, c.PreselectLocal),
-            Intent.RenameBranch c => StartRenameDialog(owner, c.Branch),
-            Intent.RepoSettings => StartRepoSettingsDialog(owner),
-            Intent.ResetChanges c => StartResetChangesDialog(owner, c.WorkTreeFiles, c.OnlyWorkTree),
-            Intent.ResetCurrentBranch c => StartResetCurrentBranchDialog(owner, c.Branch),
-            Intent.ResolveConflicts c => StartResolveConflictsDialog(owner, c.OfferCommit),
-            Intent.RevertCommit c => StartRevertCommitDialog(owner, c.Revision),
-            Intent.SparseWorkingCopy => StartSparseWorkingCopyDialog(owner),
-            Intent.SquashCommit c => StartSquashCommitDialog(owner, c.Revision),
-            Intent.Stash c => StartStashDialog(owner, c.ManageStashes, c.InitialStash),
-            Intent.StashApply c => StashApply(owner, c.StashName),
-            Intent.StashDrop c => StashDrop(owner, c.StashName),
-            Intent.StashPop c => StashPop(owner, c.StashName),
-            Intent.StashSave c => StashSave(owner, c.IncludeUntrackedFiles, c.KeepIndex, c.Message, c.SelectedFiles),
-            Intent.StashStaged => StashStaged(owner),
-            Intent.Submodules => StartSubmodulesDialog(owner),
-            Intent.SyncSubmodules => StartSyncSubmodulesDialog(owner),
-            Intent.UpdateSubmodule c => StartUpdateSubmoduleDialog(owner, c.SubmoduleLocalPath, c.SubmoduleParentPath),
-            Intent.UpdateSubmodules => Run(() => UpdateSubmodules(owner)),
-            Intent.UpdateSubmodulesDialog c => StartUpdateSubmodulesDialog(owner, c.SubmoduleLocalPath),
-            Intent.VerifyDatabase => StartVerifyDatabaseDialog(owner),
-            Intent.ViewPatch c => StartViewPatchDialog(owner, c.PatchFile),
-            Intent.WorktreeCreate c => WorktreeCreate(owner, c.MainWorktreePath),
-            Intent.WorktreeDelete c => WorktreeDelete(owner, c.WorktreePath),
-            Intent.WorktreeSwitch c => WorktreeSwitch(owner, c.WorktreePath),
+            Intent.AddFiles c => new AddFilesHandler(this).Execute(c, owner),
+            Intent.AddToGitIgnore c => new AddToGitIgnoreHandler(this).Execute(c, owner),
+            Intent.AmendCommit c => new AmendCommitHandler(this).Execute(c, owner),
+            Intent.ApplyPatch c => new ApplyPatchHandler(this).Execute(c, owner),
+            Intent.Archive c => new ArchiveHandler(this).Execute(c, owner),
+            Intent.BatchFileProcess c => new BatchFileProcessHandler(this).Execute(c, owner),
+            Intent.Browse c => new BrowseHandler(this).Execute(c, owner),
+            Intent.CheckoutBranch c => new CheckoutBranchHandler(this).Execute(c, owner),
+            Intent.CheckoutRemoteBranch c => new CheckoutRemoteBranchHandler(this).Execute(c, owner),
+            Intent.CheckoutRevision c => new CheckoutRevisionHandler(this).Execute(c, owner),
+            Intent.CherryPick c => new CherryPickHandler(this).Execute(c, owner),
+            Intent.CleanupRepository c => new CleanupRepositoryHandler(this).Execute(c, owner),
+            Intent.Clone c => new CloneHandler(this).Execute(c, owner),
+            Intent.CommandLineProcess c => new CommandLineProcessHandler(this).Execute(c, owner),
+            Intent.Commit c => new CommitHandler(this).Execute(c, owner),
+            Intent.CommitDiff c => new CommitDiffHandler(this).Execute(c, owner),
+            Intent.CompareRevisions c => new CompareRevisionsHandler(this).Execute(c, owner),
+            Intent.ContinueRebase c => new ContinueRebaseHandler(this).Execute(c, owner),
+            Intent.CreateBranch c => new CreateBranchHandler(this).Execute(c, owner),
+            Intent.CreateBranchFrom c => new CreateBranchFromHandler(this).Execute(c, owner),
+            Intent.CreateTag c => new CreateTagHandler(this).Execute(c, owner),
+            Intent.DeleteBranches c => new DeleteBranchesHandler(this).Execute(c, owner),
+            Intent.DeleteRemoteBranch c => new DeleteRemoteBranchHandler(this).Execute(c, owner),
+            Intent.DeleteTag c => new DeleteTagHandler(this).Execute(c, owner),
+            Intent.EditFile c => new EditFileHandler(this).Execute(c, owner),
+            Intent.EditGitAttributes c => new EditGitAttributesHandler(this).Execute(c, owner),
+            Intent.EditGitIgnore c => new EditGitIgnoreHandler(this).Execute(c, owner),
+            Intent.FileHistory c => new FileHistoryHandler(this, Settings).Execute(c, owner),
+            Intent.FixupCommit c => new FixupCommitHandler(this).Execute(c, owner),
+            Intent.FormatPatch c => new FormatPatchHandler(this).Execute(c, owner),
+            Intent.GeneralSettings c => new GeneralSettingsHandler(this).Execute(c, owner),
+            Intent.GitCommandLineProcess c => new GitCommandLineProcessHandler(this).Execute(c, owner),
+            Intent.GitCommandProcess c => new GitCommandProcessHandler(this).Execute(c, owner),
+            Intent.InitializeRepository c => new InitializeRepositoryHandler(this).Execute(c, owner),
+            Intent.MailMap c => new MailMapHandler(this).Execute(c, owner),
+            Intent.MergeBranch c => new MergeBranchHandler(this).Execute(c, owner),
+            Intent.OpenSettings c => new OpenSettingsHandler(this).Execute(c, owner),
+            Intent.OpenWithDifftool c => new OpenWithDifftoolHandler(this).Execute(c, owner),
+            Intent.PluginSettings c => new PluginSettingsHandler(this).Execute(c, owner),
+            Intent.Pull c => new PullHandler(this).Execute(c, owner),
+            Intent.PullImmediately c => new PullHandler(this).Execute(c, owner),
+            Intent.Push c => new PushHandler(this).Execute(c, owner),
+            Intent.Rebase c => new RebaseHandler(this).Execute(c, owner),
+            Intent.RebaseWithAdvancedOptions c => new RebaseWithAdvancedOptionsHandler(this).Execute(c, owner),
+            Intent.Remotes c => new RemotesHandler(this).Execute(c, owner),
+            Intent.RenameBranch c => new RenameBranchHandler(this).Execute(c, owner),
+            Intent.RepoSettings c => new RepoSettingsHandler(this).Execute(c, owner),
+            Intent.ResetChanges c => new ResetChangesHandler(this).Execute(c, owner),
+            Intent.ResetCurrentBranch c => new ResetCurrentBranchHandler(this).Execute(c, owner),
+            Intent.ResolveConflicts c => new ResolveConflictsHandler(this).Execute(c, owner),
+            Intent.RevertCommit c => new RevertCommitHandler(this).Execute(c, owner),
+            Intent.SparseWorkingCopy c => new SparseWorkingCopyHandler(this).Execute(c, owner),
+            Intent.SquashCommit c => new SquashCommitHandler(this).Execute(c, owner),
+            Intent.Stash c => new StashHandler(this).Execute(c, owner),
+            Intent.StashApply c => new StashApplyHandler(this).Execute(c, owner),
+            Intent.StashDrop c => new StashDropHandler(this).Execute(c, owner),
+            Intent.StashPop c => new StashPopHandler(this).Execute(c, owner),
+            Intent.StashSave c => new StashSaveHandler(this).Execute(c, owner),
+            Intent.StashStaged c => new StashStagedHandler(this).Execute(c, owner),
+            Intent.Submodules c => new SubmodulesHandler(this).Execute(c, owner),
+            Intent.SyncSubmodules c => new SyncSubmodulesHandler(this).Execute(c, owner),
+            Intent.UpdateSubmodule c => new UpdateSubmoduleHandler(this).Execute(c, owner),
+            Intent.UpdateSubmodules c => new UpdateSubmodulesHandler(this, Settings).Execute(c, owner),
+            Intent.UpdateSubmodulesDialog c => new UpdateSubmodulesDialogHandler(this).Execute(c, owner),
+            Intent.VerifyDatabase c => new VerifyDatabaseHandler(this).Execute(c, owner),
+            Intent.ViewPatch c => new ViewPatchHandler(this).Execute(c, owner),
+            Intent.WorktreeCreate c => new WorktreeCreateHandler(this, _serviceProvider.GetRequiredService<IGitExecutorProvider>()).Execute(c, owner),
+            Intent.WorktreeDelete c => new WorktreeDeleteHandler(this).Execute(c, owner),
+            Intent.WorktreeSwitch c => new WorktreeSwitchHandler(Settings).Execute(c, owner),
             _ => throw new NotSupportedException($"Unhandled UI command intent: {command.GetType().Name}")
         };
-
-        static bool Run(Action action)
-        {
-            action();
-            return true;
-        }
-
-        bool CherryPick(Intent.CherryPick c)
-            => c.Revisions switch
-            {
-                null or [] => StartCherryPickDialog(owner, revision: null),
-                [GitRevision single] => StartCherryPickDialog(owner, single),
-                _ => StartCherryPickDialog(owner, c.Revisions),
-            };
     }
 }
