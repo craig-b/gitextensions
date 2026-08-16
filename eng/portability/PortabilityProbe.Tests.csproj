@@ -22,7 +22,7 @@
 
     SCOPE: the two portable-layer unit test suites, plus the shared test infrastructure both use.
       1. GitExtensions.Extensibility.Tests :  4 of  5 files —  1 artefact
-      2. GitCommands.Tests                 : 83 of 89 files —  6 debt (1 artefact, 5 WINDOWS-ONLY)
+      2. GitCommands.Tests                 : 85 of 89 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
       3. CommonTestUtils (shared infra)    : 21 of 25 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
 
       History: this list used to be dominated by two genuine product PORTABILITY-BUGs, both since
@@ -166,18 +166,12 @@
          coordinate with here), using an unnamed/process-local semaphore instead. -->
     <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\TestAppSettingsAttribute.cs" />
 
-    <!-- ===== DEBT: GitCommands.Tests, 83 of 89 files included / 6 debt (shrinks) ===== -->
+    <!-- ===== DEBT: GitCommands.Tests, 85 of 89 files included / 4 debt (shrinks) ===== -->
 
-    <!-- WINDOWS-ONLY: GitTagControllerTest exercises GitTagController and IGitUICommands, both on
-         PortabilityProbe.csproj's debt list (GitTagController drives a UI flow through
-         IGitUICommands/IWin32Window - see that file's M3 entry). Not testable until that debt is
-         paid down. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\Tag\GitTagControllerTest.cs" />
-
-    <!-- WINDOWS-ONLY: BuildServerSettingsTests exercises GitCommands.Settings.BuildServerSettings,
-         on PortabilityProbe.csproj's debt list (cascade of the Extensibility setting-binding types
-         - see that file's M1.8 entry). Not testable until that debt is paid down. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Settings\BuildServerSettingsTests.cs" />
+    <!-- M3 DONE: GitTagControllerTest came off this list - GitTagController is portable (runs
+         through the UI command bus with an object? owner) and the test no longer touches
+         IWin32Window. M1.8 DONE: BuildServerSettingsTests came off with the setting-binding
+         split. -->
 
     <!-- WINDOWS-ONLY: uses ResourceManager.LocalizationHelpers; ResourceManager targets
          net10.0-windows/UseWindowsForms=true (it isn't one of the four probed portable layers) and

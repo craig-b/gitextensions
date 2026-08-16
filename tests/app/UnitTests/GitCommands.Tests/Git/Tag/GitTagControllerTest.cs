@@ -67,16 +67,16 @@ public class GitTagControllerTest
     public void PassesCreatedArgsAndWindowToCommands()
     {
         GitCreateTagArgs args = CreateAnnotatedTagArgs();
-        IWin32Window window = CreateTestingWindow();
+        object window = CreateTestingWindow();
 
         _controller.CreateTag(args, window);
 
         _uiCommands.Received(1).Execute(Arg.Is<UICmd.GitCommandLineProcess>(cmd => cmd.Command.Arguments.StartsWith("tag")), window);
     }
 
-    private static IWin32Window CreateTestingWindow()
+    private static object CreateTestingWindow()
     {
-        return Substitute.For<IWin32Window>();
+        return new object();
     }
 
     private static GitCreateTagArgs CreateAnnotatedTagArgs()
