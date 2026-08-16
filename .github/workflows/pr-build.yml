@@ -171,6 +171,9 @@ jobs:
     - name: Build engine projects for the Windows TFM
       run: dotnet build src/app/GitCommands/GitCommands.csproj -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-engine.binlog
 
+    - name: Run portable tests
+      run: dotnet test eng/portability/PortabilityProbe.Tests.csproj --nologo --verbosity q --logger:trx /bl:artifacts/log/portability-tests.binlog
+
     - name: Verify translation sources
       run: python3 eng/check_xlf_sources.py
 
@@ -181,6 +184,7 @@ jobs:
         name: portability-logs
         path: |
           artifacts/**/log/**/*.binlog
+          artifacts/Debug/TestsResults/**/*.trx
         if-no-files-found: ignore
 
   test-report:

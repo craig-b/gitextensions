@@ -200,6 +200,12 @@
     <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\Properties\AssemblyInfo.cs" />
 
     <Compile Include="@(ProbeSource)" />
+
+    <!-- Grants PortabilityProbe.Tests (eng/portability/PortabilityProbe.Tests.csproj) access to
+         internals compiled into this assembly, mirroring each probed project's own
+         InternalsVisibleTo grant to its normal test assembly. See the file for why this isn't
+         done via the SDK's <InternalsVisibleTo> item. -->
+    <Compile Include="$(MSBuildThisFileDirectory)PortabilityProbe.InternalsVisibleTo.cs" />
   </ItemGroup>
 
 </Project>
