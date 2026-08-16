@@ -21,7 +21,7 @@ using JetBrains.Annotations;
 namespace GitUI;
 
 /// <summary>Contains methods to invoke GitEx forms, dialogs, etc.</summary>
-public sealed class GitUICommands : IGitUICommands
+public sealed partial class GitUICommands : IGitUICommands
 {
     private const string BlameHistoryCommand = "blamehistory";
     private const string FileHistoryCommand = "filehistory";

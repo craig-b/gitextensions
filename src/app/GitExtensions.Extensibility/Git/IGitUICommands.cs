@@ -1,11 +1,12 @@
 ﻿using System.Security.Cryptography;
+using GitExtensions.Extensibility.Git.UICommands;
 using GitExtensions.Extensibility.Plugins;
 using GitExtensions.Extensibility.Settings;
 using GitUIPluginInterfaces;
 
 namespace GitExtensions.Extensibility.Git;
 
-public interface IGitUICommands : IServiceProvider
+public interface IGitUICommands : IServiceProvider, IUICommandBus
 {
     event EventHandler<GitUIEventArgs>? PostBrowseInitialize;
     event EventHandler<GitUIPostActionEventArgs>? PostCheckoutBranch;
