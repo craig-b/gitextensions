@@ -14,6 +14,7 @@ using GitUI.Theming;
 using GitUI.UserControls;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -563,9 +564,9 @@ Inactive remote is completely invisible to git.");
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question) == DialogResult.Yes)
             {
-                UICommands.StartPullDialogAndPullImmediately(
-                    remote: remote,
-                    pullAction: GitPullAction.Fetch);
+                UICommands.Execute(new UICmd.PullImmediately(
+                    Remote: remote,
+                    PullAction: GitPullAction.Fetch), null);
                 _remotesManager.ConfigureRemotes(remote);
                 UICommands.RepoChangedNotifier.Notify();
             }

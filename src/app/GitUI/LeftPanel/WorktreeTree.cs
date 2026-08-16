@@ -4,6 +4,7 @@ using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUI.CommandsDialogs.WorktreeDialog;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -183,7 +184,7 @@ internal sealed class WorktreeTree(TreeNode treeNode, IGitUICommandsSource uiCom
     public void CreateWorktree(IWin32Window owner)
     {
         string? mainWorktreePath = GetMainWorktreePath();
-        if (UICommands.WorktreeCreate(owner, mainWorktreePath))
+        if (UICommands.Execute(new UICmd.WorktreeCreate(mainWorktreePath), owner))
         {
             Refresh();
         }
@@ -191,7 +192,7 @@ internal sealed class WorktreeTree(TreeNode treeNode, IGitUICommandsSource uiCom
 
     public void PruneWorktrees(IWin32Window owner)
     {
-        if (UICommands.StartCommandLineProcessDialog(owner, command: null, "worktree prune"))
+        if (UICommands.Execute(new UICmd.CommandLineProcess(Command: null, "worktree prune"), owner))
         {
             UICommands.RepoChangedNotifier.Notify();
         }

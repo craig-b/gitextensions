@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -70,12 +71,12 @@ internal abstract class BaseRevisionNode : Node
 
     public bool Rebase()
     {
-        return UICommands.StartRebaseDialog(ParentWindow(), onto: FullPath);
+        return UICommands.Execute(new UICmd.Rebase(Onto: FullPath), ParentWindow());
     }
 
     public bool Reset()
     {
-        return UICommands.StartResetCurrentBranchDialog(ParentWindow(), branch: FullPath);
+        return UICommands.Execute(new UICmd.ResetCurrentBranch(Branch: FullPath), ParentWindow());
     }
 
     internal BaseRevisionNode? CreateRootNode(IDictionary<string, BaseRevisionNode> pathToNode,

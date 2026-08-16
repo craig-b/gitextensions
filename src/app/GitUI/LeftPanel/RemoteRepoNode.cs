@@ -110,7 +110,7 @@ internal sealed class RemoteRepoNode : BaseRevisionNode
 
     private bool DoFetch()
     {
-        UICommands.StartPullDialogAndPullImmediately(
+        ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
             out bool pullCompleted,
             TreeViewNode.TreeView,
             remote: FullPath,
@@ -120,7 +120,7 @@ internal sealed class RemoteRepoNode : BaseRevisionNode
 
     private bool DoPrune()
     {
-        UICommands.StartPullDialogAndPullImmediately(
+        ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
             out bool pullCompleted,
             TreeViewNode.TreeView,
             remote: FullPath,

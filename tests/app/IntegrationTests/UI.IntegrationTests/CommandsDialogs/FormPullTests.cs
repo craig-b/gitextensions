@@ -3,6 +3,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI;
 using GitUI.CommandsDialogs;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -217,7 +218,7 @@ public class FormPullTests
             () =>
             {
                 // False because we haven't performed any actions
-                _commands.StartPullDialog(owner: null, remoteBranch: remoteBranch, remote: remote, pullAction: pullAction).Should().BeFalse();
+                _commands.Execute(new UICmd.Pull(remoteBranch, remote, pullAction), null).Should().BeFalse();
             },
             testDriverAsync);
     }

@@ -25,6 +25,7 @@ using GitUIPluginInterfaces;
 using Microsoft;
 using Microsoft.VisualStudio.Threading;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -870,7 +871,7 @@ public sealed partial class FormCommit : GitModuleForm
 
         _branchNameLabelOnClick = (object? sender, EventArgs e) => this.InvokeAndForget(async () =>
         {
-            UICommands.StartRemotesDialog(this, null, currentBranchName);
+            UICommands.Execute(new UICmd.Remotes(null, currentBranchName), this);
             await TaskScheduler.Default;
             await UpdateBranchNameDisplayAsync();
         });
@@ -1216,14 +1217,14 @@ public sealed partial class FormCommit : GitModuleForm
                 if (result == btnCheckout)
                 {
                     ObjectId[]? objectIds = _editedCommit is not null ? [_editedCommit.ObjectId] : null;
-                    if (!UICommands.StartCheckoutBranch(this, objectIds))
+                    if (!UICommands.Execute(new UICmd.CheckoutBranch(ContainObjectIds: objectIds), this))
                     {
                         return;
                     }
                 }
                 else if (result == btnCreate)
                 {
-                    if (!UICommands.StartCreateBranchDialog(this, _editedCommit?.ObjectId ?? default))
+                    if (!UICommands.Execute(new UICmd.CreateBranch(_editedCommit?.ObjectId ?? default), this))
                     {
                         return;
                     }
@@ -1282,7 +1283,7 @@ public sealed partial class FormCommit : GitModuleForm
                 {
                     if (push)
                     {
-                        UICommands.StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out pushCompleted);
+                        ((GitUICommands)UICommands).StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out pushCompleted);
                     }
                 }
                 finally
@@ -1976,7 +1977,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void SolveMergeConflictsClick(object sender, EventArgs e)
     {
-        if (UICommands.StartResolveConflictsDialog(this, false))
+        if (UICommands.Execute(new UICmd.ResolveConflicts(false), this))
         {
             Initialize();
         }
@@ -2172,7 +2173,7 @@ public sealed partial class FormCommit : GitModuleForm
         foreach (FileStatusItem item in items)
         {
             GitRevision?[] revs = [item.SecondRevision, item.FirstRevision];
-            UICommands.OpenWithDifftool(this, revs, item.Item.Name, item.Item.OldName, RevisionDiffKind.DiffAB, item.Item.IsTracked, customTool: toolName);
+            UICommands.Execute(new UICmd.OpenWithDifftool(revs, item.Item.Name, item.Item.OldName, RevisionDiffKind.DiffAB, item.Item.IsTracked, CustomTool: toolName), this);
         }
     }
 
@@ -2193,13 +2194,13 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void ResetChanges(bool onlyWorkTree)
     {
-        BypassFormActivatedEventHandler(() => UICommands.StartResetChangesDialog(this, Unstaged.AllItems.Select(i => i.Item).ToList(), onlyWorkTree));
+        BypassFormActivatedEventHandler(() => UICommands.Execute(new UICmd.ResetChanges(Unstaged.AllItems.Select(i => i.Item).ToList(), onlyWorkTree), this));
         Initialize();
     }
 
     private void StashStagedClick(object sender, EventArgs e)
     {
-        BypassFormActivatedEventHandler(() => UICommands.StashStaged(owner: this));
+        BypassFormActivatedEventHandler(() => UICommands.Execute(new UICmd.StashStaged(), this));
         Initialize();
     }
 
@@ -2222,7 +2223,7 @@ public sealed partial class FormCommit : GitModuleForm
         if (CommitAndPush.Text == TranslatedStrings.ButtonPush)
         {
             bool pushForced = CommitAndPush.BackColor == OtherColors.AmendButtonForcedColor;
-            UICommands.StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out _);
+            ((GitUICommands)UICommands).StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out _);
             return;
         }
 
@@ -2768,7 +2769,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void commitCommitter_Click(object sender, EventArgs e)
     {
-        UICommands.StartSettingsDialog(this, SettingsDialog.Pages.GitConfigSettingsPage.GetPageReference());
+        UICommands.Execute(new UICmd.OpenSettings(SettingsDialog.Pages.GitConfigSettingsPage.GetPageReference()), this);
     }
 
     private void toolAuthor_Leave(object sender, EventArgs e)
@@ -2778,7 +2779,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void createBranchToolStripButton_Click(object sender, EventArgs e)
     {
-        bool branchCreated = UICommands.StartCreateBranchDialog(this);
+        bool branchCreated = UICommands.Execute(new UICmd.CreateBranch(), this);
         if (!branchCreated)
         {
             return;

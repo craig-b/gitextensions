@@ -1,6 +1,7 @@
 ﻿using System.IO.Abstractions;
 using GitCommands.Git.Extensions;
 using GitExtensions.Extensibility.Git;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitCommands.Git.Tag;
 
@@ -10,9 +11,9 @@ public interface IGitTagController
     /// Create the Tag depending on input parameter.
     /// </summary>
     /// <param name="args">tag creation arguments</param>
-    /// <param name="parentWindow">the UI window to act as the parent of the create tag dialog</param>
+    /// <param name="parentWindow">the host-specific owner window of the create tag dialog</param>
     /// <returns>the true if the tag is created.</returns>
-    bool CreateTag(GitCreateTagArgs args, IWin32Window parentWindow);
+    bool CreateTag(GitCreateTagArgs args, object? parentWindow);
 }
 
 public class GitTagController : IGitTagController
@@ -35,9 +36,9 @@ public class GitTagController : IGitTagController
     /// Create the Tag depending on input parameter.
     /// </summary>
     /// <param name="args">tag creation arguments</param>
-    /// <param name="parentWindow">the UI window to act as the parent of the create tag dialog</param>
+    /// <param name="parentWindow">the host-specific owner window of the create tag dialog</param>
     /// <returns>the true if the tag is created.</returns>
-    public bool CreateTag(GitCreateTagArgs args, IWin32Window parentWindow)
+    public bool CreateTag(GitCreateTagArgs args, object? parentWindow)
     {
         ArgumentNullException.ThrowIfNull(parentWindow);
 
@@ -50,7 +51,7 @@ public class GitTagController : IGitTagController
 
         try
         {
-            return _uiCommands.StartCommandLineProcessDialog(parentWindow, Commands.CreateTag(args, tagMessageFileName, _uiCommands.Module.GetPathForGitExecution));
+            return _uiCommands.Execute(new UICmd.GitCommandLineProcess(Commands.CreateTag(args, tagMessageFileName, _uiCommands.Module.GetPathForGitExecution)), parentWindow);
         }
         finally
         {

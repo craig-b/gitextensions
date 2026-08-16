@@ -1,6 +1,7 @@
 ﻿using CommonTestUtils;
 using GitUI;
 using GitUI.CommandsDialogs;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -186,7 +187,7 @@ public class FormRebaseTests
         UITest.RunForm(
             () =>
             {
-                _commands.StartRebaseDialog(owner: null, from, to, onto, interactive, startRebaseImmediately);
+                _commands.Execute(new UICmd.Rebase(onto, from, to, interactive, startRebaseImmediately), null);
             },
             testDriverAsync);
     }

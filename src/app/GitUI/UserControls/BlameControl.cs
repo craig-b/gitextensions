@@ -96,7 +96,7 @@ public sealed partial class BlameControl : GitModuleControl
     public void ConfigureRepositoryHostPlugin(IRepositoryHostPlugin? gitHoster)
     {
         _gitHoster = gitHoster;
-        _gitHoster?.ConfigureContextMenu(contextMenu);
+        (_gitHoster as IRepositoryHostContextMenuProvider)?.ConfigureContextMenu(contextMenu);
     }
 
     public void UpdateShowLineNumbers()

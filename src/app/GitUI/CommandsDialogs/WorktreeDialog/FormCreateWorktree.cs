@@ -2,6 +2,7 @@
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.WorktreeDialog;
 
@@ -103,7 +104,7 @@ public sealed partial class FormCreateWorktree : GitExtensionsDialog
             rbCreateNewBranch.Checked
             ? $"-b {txtNewBranchName.Text}"
             : (cbxBranches.SelectedItem as GitRef)?.Name;
-        DialogResult = UICommands.StartGitCommandProcessDialog(this, CreateWorktreeCommand(Module, relativePath, newBranchOption!)) ? DialogResult.OK : DialogResult.None;
+        DialogResult = UICommands.Execute(new UICmd.GitCommandProcess(CreateWorktreeCommand(Module, relativePath, newBranchOption!)), this) ? DialogResult.OK : DialogResult.None;
     }
 
     private GitArgumentBuilder CreateWorktreeCommand(IGitModule module, string relativePath, string newBranchOption)

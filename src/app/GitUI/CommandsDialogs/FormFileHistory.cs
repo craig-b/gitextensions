@@ -13,6 +13,7 @@ using GitUI.UserControls;
 using GitUIPluginInterfaces;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -409,7 +410,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
             ? GetFileNameForRevision(selectedRevisions[0])
             : null;
 
-        UICommands.OpenWithDifftool(this, selectedRevisions, FileName, orgFileName, diffKind, true, customTool: toolName);
+        UICommands.Execute(new UICmd.OpenWithDifftool(selectedRevisions, FileName, orgFileName, diffKind, true, CustomTool: toolName), this);
     }
 
     private void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -498,7 +499,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         IReadOnlyList<GitRevision> selectedRevisions = RevisionGrid.GetSelectedRevisions();
         if (selectedRevisions.Count == 1)
         {
-            UICommands.StartCherryPickDialog(this, selectedRevisions[0]);
+            UICommands.Execute(new UICmd.CherryPick([selectedRevisions[0]]), this);
         }
     }
 
@@ -507,7 +508,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         IReadOnlyList<GitRevision> selectedRevisions = RevisionGrid.GetSelectedRevisions();
         if (selectedRevisions.Count == 1)
         {
-            UICommands.StartRevertCommitDialog(this, selectedRevisions[0]);
+            UICommands.Execute(new UICmd.RevertCommit(selectedRevisions[0]), this);
         }
     }
 

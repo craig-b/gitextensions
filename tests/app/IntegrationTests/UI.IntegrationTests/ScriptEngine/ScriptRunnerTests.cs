@@ -11,6 +11,7 @@ using GitUI.ScriptsEngine;
 using GitUIPluginInterfaces;
 using NSubstitute;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.ScriptEngine;
 [Apartment(ApartmentState.STA)]
@@ -223,7 +224,7 @@ public class ScriptRunnerTests
     private void RunFormTest(Func<FormBrowse, Task> testDriverAsync)
     {
         UITest.RunForm(
-            showForm: () => _uiCommands.StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => _uiCommands.Execute(new UICmd.Browse(), null).Should().BeTrue(),
             testDriverAsync);
     }
 

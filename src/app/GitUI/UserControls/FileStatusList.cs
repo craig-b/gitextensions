@@ -19,6 +19,7 @@ using GitUI.UserControls;
 using GitUIPluginInterfaces;
 using Microsoft;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -1662,7 +1663,7 @@ public sealed partial class FileStatusList : GitModuleControl
             }
             else
             {
-                UICommands.StartFileHistoryDialog(this, SelectedItem.Item.Name, SelectedItem.SecondRevision);
+                UICommands.Execute(new UICmd.FileHistory(SelectedItem.Item.Name, SelectedItem.SecondRevision), this);
             }
         }
         else

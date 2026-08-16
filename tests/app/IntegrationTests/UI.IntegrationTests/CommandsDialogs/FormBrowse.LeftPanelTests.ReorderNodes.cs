@@ -4,6 +4,7 @@ using GitCommands;
 using GitUI;
 using GitUI.CommandsDialogs;
 using GitUI.LeftPanel;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -212,7 +213,7 @@ public class FormBrowse_LeftPanel_ReorderNodesTest
     private void RunFormTest(Func<FormBrowse, Task> testDriverAsync)
     {
         UITest.RunForm(
-            showForm: () => _commands.StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => _commands.Execute(new UICmd.Browse(), null).Should().BeTrue(),
             testDriverAsync);
     }
 }

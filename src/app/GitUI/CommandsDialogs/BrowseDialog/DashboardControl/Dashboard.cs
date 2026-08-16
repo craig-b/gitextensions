@@ -6,6 +6,7 @@ using GitExtUtils.GitUI;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Properties;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.BrowseDialog.DashboardControl;
 
@@ -122,7 +123,7 @@ public partial class Dashboard : GitModuleControl
                         foreach (IRepositoryHostPlugin gitHoster in PluginRegistry.GitHosters)
                         {
                             lastControl = CreateLink(panel, string.Format(_cloneFork.Text, gitHoster.Name), Images.CloneRepoGitHub,
-                                (repoSender, eventArgs) => UICommands.StartCloneForkFromHoster(this, gitHoster, GitModuleChanged));
+                                (repoSender, eventArgs) => UICommands.Execute(new UICmd.CloneForkFromHoster(gitHoster, GitModuleChanged), this));
                         }
 
                         return lastControl;
@@ -226,12 +227,12 @@ public partial class Dashboard : GitModuleControl
 
     private void cloneItem_Click(object? sender, EventArgs e)
     {
-        UICommands.StartCloneDialog(this, null, false, OnModuleChanged);
+        UICommands.Execute(new UICmd.Clone(GitModuleChanged: OnModuleChanged), this);
     }
 
     private void createItem_Click(object? sender, EventArgs e)
     {
-        UICommands.StartInitializeDialog(this, Module.WorkingDir, OnModuleChanged);
+        UICommands.Execute(new UICmd.InitializeRepository(Module.WorkingDir, OnModuleChanged), this);
     }
 
     private static void DonateItem_Click(object? sender, EventArgs e)

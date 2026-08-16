@@ -6,6 +6,7 @@ using GitExtUtils.GitUI;
 using GitExtUtils.GitUI.Theming;
 using GitUIPluginInterfaces;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.HelperDialogs;
 
@@ -108,7 +109,7 @@ public partial class FormResetAnotherBranch : GitModuleForm
         {
             if (cbxCheckoutBranch.Checked)
             {
-                UICommands.StartCheckoutBranch(this, gitRefToReset.Name);
+                UICommands.Execute(new UICmd.CheckoutBranch(gitRefToReset.Name), this);
             }
 
             UICommands.RepoChangedNotifier.Notify();

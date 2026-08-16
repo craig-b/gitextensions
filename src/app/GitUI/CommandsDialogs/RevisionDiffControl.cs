@@ -8,6 +8,7 @@ using GitUIPluginInterfaces;
 using Microsoft;
 using Microsoft.VisualStudio.Threading;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -577,7 +578,7 @@ public partial class RevisionDiffControl : GitModuleControl, IRevisionGridFileUp
         }
         else
         {
-            UICommands.StartFileHistoryDialog(this, item.Item.Name, item.SecondRevision);
+            UICommands.Execute(new UICmd.FileHistory(item.Item.Name, item.SecondRevision), this);
         }
     }
 

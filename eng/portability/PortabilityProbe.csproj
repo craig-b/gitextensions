@@ -13,16 +13,16 @@
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
-      1. GitExtensions.Extensibility   :  94 of 117 files — 23 debt
+      1. GitExtensions.Extensibility   : 112 of 116 files —  4 debt
       2. GitExtUtils                   :  39 of  67 files — 28 debt, added by M1.7
-      3. GitCommands                   : 193 of 197 files —  4 debt, added after M1.4/M1.5
-      4. GitUIPluginInterfaces         :  19 of  21 files —  2 debt, entangled with GitCommands
-                                          at type level so it joined in the same step
+      3. GitCommands                   : 197 of 198 files —  0 debt (artefact only)
+      4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
 
     An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
-    (fonts), M1.5 (application paths), M1.7's splits and the UserNotification seam, the same scope
-    needs 57 — of which 49 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
-    with its root), and 2 are compilation artefacts, see below.
+    (fonts), M1.5 (application paths), M1.7's splits, the UserNotification seam, M1.8's binding
+    split and M3's UI command bus, the same scope needs 34 — of which 30 have a DIRECT Windows
+    dependency, 2 are pure cascade (each annotated with its root), and 2 are compilation
+    artefacts, see below.
 
     Notes on maintaining the Remove list:
       - Derive it from files with a DIRECT error, never by iteratively excluding everything the
@@ -95,18 +95,13 @@
     <ProbeSource Remove="$(RepoRoot)**\obj\**" />
     <ProbeSource Remove="$(RepoRoot)**\bin\**" />
 
-    <!-- ===== DEBT: Extensibility, 11 of 112 files (shrinks) ===== -->
+    <!-- ===== DEBT: Extensibility, 4 of 116 files (shrinks) ===== -->
 
-    <!-- M3: the 93-method god-interface and its IWin32Window/Image surface -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\IGitUICommands.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\MessageBoxes.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIEventArgs.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Git\GitUIPostActionEventArgs.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPlugin.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\GitPluginBase.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IRepositoryHostPlugin.cs" />
-    <!-- cascade of M3: IGitPluginForRepository only extends IGitPlugin -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\IGitPluginForRepository.cs" />
+    <!-- M3 DONE: the Start* family left IGitUICommands for the UI command bus (intents in
+         Git\UICommands, one handler per intent in GitUI); owners, plugin icons and the commit
+         template icon became object? host payloads; MessageBoxes and the hoster context-menu
+         hook moved to GitExtensions.Extensibility.WinForms. IGitUICommands, GitUIEventArgs,
+         GitUIPostActionEventArgs and the plugin interfaces are portable. -->
 
     <!-- M1.8 DONE: the WinForms-typed binding half (ISettingControlBinding, SettingControlBinding,
          PseudoSetting, CredentialsControl) moved to GitExtensions.Extensibility.WinForms; the
@@ -120,6 +115,9 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationUtil.cs" />
     <!-- cascade of M7: forwards to TranslationUtil -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\TranslationUtils.cs" />
+    <!-- cascade of M7: registers its translation items through TranslationUtils; everything
+         M3-related in it (the object? Icon, IGitUICommands registration) is portable -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\GitPluginBase.cs" />
 
 
     <!-- ===== DEBT: GitExtUtils, 28 of 67 files (shrinks) ===== -->
@@ -167,19 +165,13 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
 
-    <!-- ===== DEBT: GitCommands, 2 of 197 files (shrinks) ===== -->
-
-    <!-- M3: drives a UI flow through IGitUICommands and IWin32Window -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\Tag\GitTagController.cs" />
+    <!-- ===== DEBT: GitCommands, 0 of 198 files (M3 cleared GitTagController) ===== -->
 
     <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Properties\AssemblyInfo.cs" />
 
 
-    <!-- ===== DEBT: GitUIPluginInterfaces, 2 of 21 files (shrinks) ===== -->
-
-    <!-- cascade of M3: extends IGitPluginForRepository -->
-    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\IGitPluginForCommit.cs" />
+    <!-- ===== DEBT: GitUIPluginInterfaces, 0 of 21 files (M3 cleared IGitPluginForCommit) ===== -->
 
     <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
     <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\Properties\AssemblyInfo.cs" />

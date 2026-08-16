@@ -62,7 +62,7 @@ public class GourcePlugin : GitPluginBase, IGitPluginForRepository
     {
         if (!args.GitModule.IsValidGitWorkingDir())
         {
-            MessageBoxes.ShowError(args.OwnerForm, _currentDirectoryIsNotValidGit.Text);
+            MessageBoxes.ShowError(args.OwnerForm as IWin32Window, _currentDirectoryIsNotValidGit.Text);
             return false;
         }
 
@@ -71,7 +71,7 @@ public class GourcePlugin : GitPluginBase, IGitPluginForRepository
         if (!string.IsNullOrEmpty(pathToGource) && !File.Exists(pathToGource))
         {
             DialogResult result = MessageBoxes.Show(
-                args.OwnerForm,
+                args.OwnerForm as IWin32Window,
                 string.Format(_resetConfigPath.Text, pathToGource), _gource.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
             if (result == DialogResult.Yes)
@@ -84,42 +84,42 @@ public class GourcePlugin : GitPluginBase, IGitPluginForRepository
         if (string.IsNullOrEmpty(pathToGource))
         {
             if (MessageBoxes.Show(
-                    args.OwnerForm, _doYouWantDownloadGource.Text, _download.Text,
+                    args.OwnerForm as IWin32Window, _doYouWantDownloadGource.Text, _download.Text,
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
-                string gourceUrl = ThreadHelper.JoinableTaskFactory.Run(() => SearchForGourceUrlAsync(args.OwnerForm));
+                string gourceUrl = ThreadHelper.JoinableTaskFactory.Run(() => SearchForGourceUrlAsync(args.OwnerForm as IWin32Window));
 
                 if (string.IsNullOrEmpty(gourceUrl))
                 {
-                    MessageBoxes.ShowError(args.OwnerForm, _cannotFindGource.Text);
+                    MessageBoxes.ShowError(args.OwnerForm as IWin32Window, _cannotFindGource.Text);
                     return false;
                 }
 
                 string downloadDir = Path.GetTempPath();
                 string fileName = Path.Join(downloadDir, "gource.zip");
-                int downloadSize = ThreadHelper.JoinableTaskFactory.Run(() => DownloadFileAsync(args.OwnerForm, gourceUrl, fileName));
+                int downloadSize = ThreadHelper.JoinableTaskFactory.Run(() => DownloadFileAsync(args.OwnerForm as IWin32Window, gourceUrl, fileName));
                 if (downloadSize > 0)
                 {
-                    MessageBoxes.Show(args.OwnerForm, string.Format(_bytesDownloaded.Text, downloadSize), "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBoxes.Show(args.OwnerForm as IWin32Window, string.Format(_bytesDownloaded.Text, downloadSize), "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     Directory.CreateDirectory(Path.Join(downloadDir, "gource"));
-                    UnZipFiles(args.OwnerForm, fileName, Path.Join(downloadDir, "gource"), true);
+                    UnZipFiles(args.OwnerForm as IWin32Window, fileName, Path.Join(downloadDir, "gource"), true);
 
                     string newGourcePath = Path.Join(downloadDir, "gource\\gource.exe");
                     if (File.Exists(newGourcePath))
                     {
-                        MessageBoxes.Show(args.OwnerForm, _gourceDownloadedAndUnzipped.Text, "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBoxes.Show(args.OwnerForm as IWin32Window, _gourceDownloadedAndUnzipped.Text, "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         pathToGource = newGourcePath;
                     }
                 }
                 else
                 {
-                    MessageBoxes.ShowError(args.OwnerForm, _downloadingFailed.Text);
+                    MessageBoxes.ShowError(args.OwnerForm as IWin32Window, _downloadingFailed.Text);
                 }
             }
         }
 
         using GourceStart gourceStart = new(pathToGource, args, _gourceArguments.ValueOrDefault(Settings));
-        gourceStart.ShowDialog(args.OwnerForm);
+        gourceStart.ShowDialog(args.OwnerForm as IWin32Window);
         Settings.SetValue(_gourceArguments.Name, gourceStart.GourceArguments);
         Settings.SetValue(_gourcePath.Name, gourceStart.PathToGource);
 

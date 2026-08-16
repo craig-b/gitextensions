@@ -5,6 +5,7 @@ using GitUI.Shells;
 using Microsoft;
 using ResourceManager;
 using ResourceManager.Hotkey;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.Menus;
 
@@ -72,7 +73,7 @@ internal partial class ToolsToolStripMenuItem : ToolStripMenuItemEx
         string translation = AppSettings.Translation;
         CommitInfoPosition commitInfoPosition = AppSettings.CommitInfoPosition;
 
-        UICommands.StartSettingsDialog(OwnerForm);
+        UICommands.Execute(new UICmd.OpenSettings(), OwnerForm);
 
         SettingsChanged?.Invoke(sender, new(translation, commitInfoPosition));
     }

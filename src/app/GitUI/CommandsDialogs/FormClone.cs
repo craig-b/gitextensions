@@ -8,6 +8,7 @@ using GitExtUtils;
 using GitExtUtils.GitUI.Theming;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -251,7 +252,7 @@ public partial class FormClone : GitExtensionsDialog
             {
                 Hide();
                 IGitUICommands uiCommands = UICommands.WithWorkingDirectory(dirTo);
-                uiCommands.StartBrowseDialog(owner: null);
+                uiCommands.Execute(new UICmd.Browse(), null);
             }
             else if (ShowInTaskbar == false && _gitModuleChanged is not null &&
                 AskIfNewRepositoryShouldBeOpened(dirTo))

@@ -36,3 +36,9 @@ internal sealed class PluginSettingsHandler(GitUICommands commands) : IUICommand
     public bool Execute(Intent.PluginSettings command, IWin32Window? owner)
         => commands.Execute(new Intent.OpenSettings(PluginsSettingsGroup.GetPageReference()), owner);
 }
+
+internal sealed class OpenPluginSettingsHandler(GitUICommands commands) : IUICommandHandler<Intent.OpenPluginSettings>
+{
+    public bool Execute(Intent.OpenPluginSettings command, IWin32Window? owner)
+        => commands.Execute(new Intent.OpenSettings(new SettingsPageReferenceByPlugin(command.Plugin)), owner);
+}

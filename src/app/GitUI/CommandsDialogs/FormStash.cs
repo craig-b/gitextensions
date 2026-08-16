@@ -4,6 +4,7 @@ using GitExtUtils.GitUI;
 using GitUIPluginInterfaces;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -312,7 +313,7 @@ public sealed partial class FormStash : GitModuleForm
         using (WaitCursorScope.Enter())
         {
             string msg = !string.IsNullOrWhiteSpace(StashMessage.Text) ? " " + StashMessage.Text.Trim() : string.Empty;
-            UICommands.StashSave(this, chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg);
+            UICommands.Execute(new UICmd.StashSave(chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg), this);
             Initialize();
         }
     }
@@ -322,7 +323,7 @@ public sealed partial class FormStash : GitModuleForm
         using (WaitCursorScope.Enter())
         {
             string msg = !string.IsNullOrWhiteSpace(StashMessage.Text) ? " " + StashMessage.Text.Trim() : string.Empty;
-            UICommands.StashSave(this, chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg, Stashed.SelectedItems.Select(i => i.Item.Name).ToList());
+            UICommands.Execute(new UICmd.StashSave(chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg, Stashed.SelectedItems.Select(i => i.Item.Name).ToList()), this);
             Initialize();
         }
     }
@@ -353,7 +354,7 @@ public sealed partial class FormStash : GitModuleForm
                 if (result == TaskDialogButton.Yes)
                 {
                     _lastSelectedStashIndex = Stashes.SelectedIndex;
-                    UICommands.StashDrop(this, stashName);
+                    UICommands.Execute(new UICmd.StashDrop(stashName), this);
                     Initialize();
                 }
 
@@ -365,7 +366,7 @@ public sealed partial class FormStash : GitModuleForm
             else
             {
                 _lastSelectedStashIndex = Stashes.SelectedIndex;
-                UICommands.StashDrop(this, stashName);
+                UICommands.Execute(new UICmd.StashDrop(stashName), this);
                 Initialize();
             }
         }
@@ -378,7 +379,7 @@ public sealed partial class FormStash : GitModuleForm
 
     private void ApplyClick(object sender, EventArgs e)
     {
-        UICommands.StashApply(this, GetStashName());
+        UICommands.Execute(new UICmd.StashApply(GetStashName()), this);
         Initialize();
     }
 

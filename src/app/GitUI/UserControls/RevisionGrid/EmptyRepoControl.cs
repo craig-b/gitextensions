@@ -1,4 +1,5 @@
 ﻿using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.UserControls.RevisionGrid;
 
@@ -26,8 +27,8 @@ public sealed partial class EmptyRepoControl : GitModuleControl
         }
         else
         {
-            btnEditGitIgnore.Click += (_, e) => UICommands.StartEditGitIgnoreDialog(this, localExcludes: false);
-            btnOpenCommitForm.Click += (_, e) => UICommands.StartCommitDialog(this);
+            btnEditGitIgnore.Click += (_, e) => UICommands.Execute(new UICmd.EditGitIgnore(LocalExcludes: false), this);
+            btnOpenCommitForm.Click += (_, e) => UICommands.Execute(new UICmd.Commit(), this);
         }
 
         Dock = DockStyle.Fill;

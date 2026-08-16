@@ -5,6 +5,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -230,7 +231,7 @@ public partial class FormApplyPatch : GitModuleForm
 
     private void Mergetool_Click(object sender, EventArgs e)
     {
-        UICommands.StartResolveConflictsDialog(this);
+        UICommands.Execute(new UICmd.ResolveConflicts(), this);
         EnableButtons();
     }
 
@@ -271,7 +272,7 @@ public partial class FormApplyPatch : GitModuleForm
 
     private void AddFiles_Click(object sender, EventArgs e)
     {
-        UICommands.StartAddFilesDialog(this);
+        UICommands.Execute(new UICmd.AddFiles(), this);
     }
 
     private void MergePatch_Load(object sender, EventArgs e)

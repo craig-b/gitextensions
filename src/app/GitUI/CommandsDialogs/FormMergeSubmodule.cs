@@ -3,6 +3,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -72,7 +73,7 @@ public sealed partial class FormMergeSubmodule : GitModuleForm
     {
         ObjectId[] ids = [ObjectId.Parse(tbLocal.Text), ObjectId.Parse(tbRemote.Text)];
         IGitUICommands submoduleCommands = UICommands.WithWorkingDirectory(Module.GetSubmoduleFullPath(_filename));
-        if (!submoduleCommands.StartCheckoutBranch(this, ids))
+        if (!submoduleCommands.Execute(new UICmd.CheckoutBranch(ContainObjectIds: ids), this))
         {
             return;
         }

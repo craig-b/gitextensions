@@ -9,6 +9,7 @@ using GitExtUtils;
 using GitUI.HelperDialogs;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -282,14 +283,14 @@ public partial class FormResolveConflicts : GitModuleForm
 
             if (!Module.InTheMiddleOfConflictedMerge() && _thereWhereMergeConflicts)
             {
-                UICommands.UpdateSubmodules(this);
+                UICommands.Execute(new UICmd.UpdateSubmodules(), this);
 
                 if (!Module.InTheMiddleOfPatch() && !_inTheMiddleOfRebase && _offerCommit)
                 {
                     if (AppSettings.DontConfirmCommitAfterConflictsResolved ||
                         MessageBoxes.Show(this, _allConflictsResolved.Text, _allConflictsResolvedCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
-                        UICommands.StartCommitDialog(this);
+                        UICommands.Execute(new UICmd.Commit(), this);
                     }
                 }
 
@@ -1534,7 +1535,7 @@ public partial class FormResolveConflicts : GitModuleForm
 
     private void fileHistoryToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        UICommands.StartFileHistoryDialog(this, GetFileName());
+        UICommands.Execute(new UICmd.FileHistory(GetFileName()), this);
     }
 
     #region Hotkey commands

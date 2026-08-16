@@ -3,6 +3,7 @@ using GitCommands.Git;
 using GitCommands.Git.Tag;
 using GitExtensions.Extensibility.Git;
 using NSubstitute;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitCommandsTests.Git.Tag;
 public class GitTagControllerTest
@@ -54,7 +55,7 @@ public class GitTagControllerTest
 
         _fileSystem.File.Exists(Arg.Is<string>(s => s != null)).Returns(true);
 
-        _uiCommands.StartCommandLineProcessDialog(Arg.Any<IWin32Window>(), Arg.Is<IGitCommand>(cmd => cmd.Arguments.StartsWith("tag")))
+        _uiCommands.Execute(Arg.Is<UICmd.GitCommandLineProcess>(cmd => cmd.Command.Arguments.StartsWith("tag")), Arg.Any<object?>())
             .Returns(uiResult);
 
         _controller.CreateTag(args, CreateTestingWindow()).Should().Be(uiResult);
@@ -70,7 +71,7 @@ public class GitTagControllerTest
 
         _controller.CreateTag(args, window);
 
-        _uiCommands.Received(1).StartCommandLineProcessDialog(window, Arg.Is<IGitCommand>(cmd => cmd.Arguments.StartsWith("tag")));
+        _uiCommands.Received(1).Execute(Arg.Is<UICmd.GitCommandLineProcess>(cmd => cmd.Command.Arguments.StartsWith("tag")), window);
     }
 
     private static IWin32Window CreateTestingWindow()

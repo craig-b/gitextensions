@@ -5,6 +5,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -207,7 +208,7 @@ public partial class FormRebase : GitExtensionsDialog
 
     private void MergetoolClick(object sender, EventArgs e)
     {
-        UICommands.StartResolveConflictsDialog(this);
+        UICommands.Execute(new UICmd.ResolveConflicts(), this);
         EnableButtons();
     }
 
@@ -237,7 +238,7 @@ public partial class FormRebase : GitExtensionsDialog
 
     private void AddFilesClick(object sender, EventArgs e)
     {
-        UICommands.StartAddFilesDialog(this);
+        UICommands.Execute(new UICmd.AddFiles(), this);
     }
 
     private void ResolvedClick(object sender, EventArgs e)
@@ -442,7 +443,7 @@ public partial class FormRebase : GitExtensionsDialog
 
     private void Commit_Click(object sender, EventArgs e)
     {
-        UICommands.StartCommitDialog(this);
+        UICommands.Execute(new UICmd.Commit(), this);
         EnableButtons();
     }
 

@@ -3,6 +3,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Properties;
 using GitUIPluginInterfaces;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -95,13 +96,13 @@ partial class FileStatusList
 
     private void EditGitIgnore_Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, localExcludes: false);
+        UICommands.Execute(new UICmd.EditGitIgnore(LocalExcludes: false), this);
         RequestRefresh();
     }
 
     private void EditLocallyIgnoredFiles_Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, localExcludes: true);
+        UICommands.Execute(new UICmd.EditGitIgnore(LocalExcludes: true), this);
         RequestRefresh();
     }
 

@@ -6,6 +6,7 @@ using GitExtUtils;
 using GitExtUtils.GitUI;
 using GitUI.ScriptsEngine;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -342,7 +343,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
             stash = _isDirtyDir == true;
             if (stash)
             {
-                UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInAutoStash);
+                UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInAutoStash), owner);
             }
         }
 
@@ -354,7 +355,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
             return DialogResult.Cancel;
         }
 
-        if (UICommands.StartCommandLineProcessDialog(owner, Commands.CheckoutBranch(branchName, isRemote, localChanges, newBranchMode, newBranchName)))
+        if (UICommands.Execute(new UICmd.GitCommandLineProcess(Commands.CheckoutBranch(branchName, isRemote, localChanges, newBranchMode, newBranchName)), owner))
         {
             if (stash)
             {
@@ -384,7 +385,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
 
                 if (messageBoxResult ?? false)
                 {
-                    UICommands.StashPop(this);
+                    UICommands.Execute(new UICmd.StashPop(), this);
                 }
             }
 
@@ -392,7 +393,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
 
             if (originalId != currentId)
             {
-                UICommands.UpdateSubmodules(this);
+                UICommands.Execute(new UICmd.UpdateSubmodules(), this);
             }
 
             ScriptsRunner.RunEventScripts(ScriptEvent.AfterCheckout, this);

@@ -13,6 +13,7 @@ using GitUI.UserControls;
 using GitUI.UserControls.RevisionGrid;
 using GitUIPluginInterfaces;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -108,7 +109,7 @@ partial class FileStatusList
         string[] fileNames = SelectedFolder is { Length: > 0 } selectedFolder
             ? [$"/{selectedFolder}/"]
             : [.. SelectedItems.Select(item => "/" + item.Item.Name)];
-        if (fileNames.Length > 0 && UICommands.StartAddToGitIgnoreDialog(this, localExclude, fileNames))
+        if (fileNames.Length > 0 && UICommands.Execute(new UICmd.AddToGitIgnore(localExclude, [.. fileNames]), this))
         {
             RequestRefresh();
         }
@@ -225,7 +226,7 @@ partial class FileStatusList
         foreach (string name in submodules)
         {
             IGitUICommands submodulCommands = UICommands.WithWorkingDirectory(_fullPathResolver.Resolve(name.EnsureTrailingPathSeparator()));
-            submodulCommands.StartCommitDialog(this);
+            submodulCommands.Execute(new UICmd.Commit(), this);
         }
 
         RequestRefresh();
@@ -372,7 +373,7 @@ partial class FileStatusList
         }
 
         string? fileName = _fullPathResolver.Resolve(SelectedItem.Item.Name);
-        UICommands.StartFileEditorDialog(fileName, lineNumber: GetLineNumber());
+        UICommands.Execute(new UICmd.EditFile(fileName, LineNumber: GetLineNumber()), null);
         RequestRefresh();
     }
 
@@ -742,7 +743,7 @@ partial class FileStatusList
 
                 // If item.FirstRevision is null, compare to root commit
                 GitRevision?[] revs = [item.SecondRevision, item.FirstRevision];
-                UICommands.OpenWithDifftool(this, revs, item.Item.Name, item.Item.OldName, diffKind, item.Item.IsTracked, customTool: toolName);
+                UICommands.Execute(new UICmd.OpenWithDifftool(revs, item.Item.Name, item.Item.OldName, diffKind, item.Item.IsTracked, CustomTool: toolName), this);
             }
         }
     }
@@ -1156,7 +1157,7 @@ partial class FileStatusList
             return;
         }
 
-        UICommands.StartFileHistoryDialog(this, fileName, revision, showBlame: showBlame);
+        UICommands.Execute(new UICmd.FileHistory(fileName, revision, ShowBlame: showBlame), this);
     }
 
     private void StashSubmoduleChanges_Click(object sender, EventArgs e)
@@ -1165,7 +1166,7 @@ partial class FileStatusList
         foreach (string name in submodules)
         {
             IGitUICommands uiCmds = UICommands.WithGitModule(Module.GetSubmodule(name));
-            uiCmds.StashSave(this, AppSettings.IncludeUntrackedFilesInManualStash);
+            uiCmds.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), this);
         }
 
         RequestRefresh();

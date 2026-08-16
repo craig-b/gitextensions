@@ -21,6 +21,7 @@ using GitUIPluginInterfaces;
 using ICSharpCode.TextEditor.Util;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.Editor;
 
@@ -1559,7 +1560,7 @@ public partial class FileViewer : GitModuleControl
 
     private void settingsButton_Click(object sender, EventArgs e)
     {
-        UICommands.StartSettingsDialog(ParentForm, DiffViewerSettingsPage.GetPageReference());
+        UICommands.Execute(new UICmd.OpenSettings(DiffViewerSettingsPage.GetPageReference()), ParentForm);
     }
 
     private void IgnoreAllWhitespaceChangesToolStripMenuItem_Click(object sender, EventArgs e)

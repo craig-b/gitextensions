@@ -1,6 +1,7 @@
 ﻿using CommonTestUtils;
 using GitUI;
 using GitUI.CommandsDialogs;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -96,7 +97,7 @@ public class FormInitTests
         UITest.RunForm(
             () =>
             {
-                _commands.StartInitializeDialog(owner: null, path).Should().BeTrue();
+                _commands.Execute(new UICmd.InitializeRepository(path), null).Should().BeTrue();
             },
             testDriverAsync);
     }

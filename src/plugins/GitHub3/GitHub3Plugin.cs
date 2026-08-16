@@ -13,6 +13,7 @@ using GitUIPluginInterfaces;
 using GitUIPluginInterfaces.RepositoryHosts;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.Plugins.GitHub3;
 
@@ -71,7 +72,7 @@ internal static class GitHubLoginInfo
 [Export(typeof(IGitPlugin))]
 [Export(typeof(IRepositoryHostPlugin))]
 [Export(typeof(IGitPluginForCommit))]
-public class GitHub3Plugin : GitPluginBase, IRepositoryHostPlugin, IGitPluginForCommit
+public class GitHub3Plugin : GitPluginBase, IRepositoryHostPlugin, IGitPluginForCommit, IRepositoryHostContextMenuProvider
 {
     private readonly TranslationString _viewInWebSite = new("View in {0}");
     private readonly TranslationString _tokenAlreadyExist = new("You already have an personal access token. To get a new one, delete your old one in Plugins > Plugin Settings first.");
@@ -239,7 +240,7 @@ public class GitHub3Plugin : GitPluginBase, IRepositoryHostPlugin, IGitPluginFor
     {
         if (string.IsNullOrEmpty(GitHubLoginInfo.OAuthToken))
         {
-            args.GitUICommands.StartSettingsDialog(this);
+            args.GitUICommands.Execute(new UICmd.OpenPluginSettings(this), null);
         }
         else
         {
@@ -360,7 +361,7 @@ public class GitHub3Plugin : GitPluginBase, IRepositoryHostPlugin, IGitPluginFor
             return;
         }
 
-        ToolStripMenuItem toolStripMenuItem = new(string.Format(_viewInWebSite.Text, Name), Icon)
+        ToolStripMenuItem toolStripMenuItem = new(string.Format(_viewInWebSite.Text, Name), Icon as Image)
         {
             Tag = HostedRemoteMenuItem
         };

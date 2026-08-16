@@ -11,7 +11,10 @@ public interface IGitPlugin
 
     string? Description { get; }
 
-    Image? Icon { get; }
+    /// <summary>
+    ///  The plugin's icon (an <c>Image</c> in the WinForms host).
+    /// </summary>
+    object? Icon { get; }
 
     IGitPluginSettingsContainer? SettingsContainer { get; set; }
 

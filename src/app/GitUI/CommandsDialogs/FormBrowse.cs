@@ -35,6 +35,7 @@ using Microsoft.VisualStudio.Threading;
 using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Taskbar;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -878,7 +879,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
                 ToolStripMenuItem item = new()
                 {
                     Text = plugin.Name,
-                    Image = plugin.Icon,
+                    Image = plugin.Icon as Image,
                     Tag = plugin
                 };
                 item.Click += delegate
@@ -1324,19 +1325,19 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void CheckoutToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCheckoutRevisionDialog(this);
+        UICommands.Execute(new UICmd.CheckoutRevision(), this);
     }
 
     private void CommitToolStripMenuItemClick(object? sender, EventArgs e)
     {
         this.ForceActivate();
-        UICommands.StartCommitDialog(this);
+        UICommands.Execute(new UICmd.Commit(), this);
     }
 
     private void PushToolStripMenuItemClick(object? sender, EventArgs e)
     {
         this.ForceActivate();
-        UICommands.StartPushDialog(this, pushOnShow: ModifierKeys.HasFlag(Keys.Shift));
+        UICommands.Execute(new UICmd.Push(PushOnShow: ModifierKeys.HasFlag(Keys.Shift)), this);
     }
 
     private void RefreshToolStripMenuItemClick(object sender, EventArgs e)
@@ -1352,12 +1353,12 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void PatchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartViewPatchDialog(this);
+        UICommands.Execute(new UICmd.ViewPatch(), this);
     }
 
     private void ApplyPatchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartApplyPatchDialog(this);
+        UICommands.Execute(new UICmd.ApplyPatch(), this);
     }
 
     private void userShell_Click(object? sender, EventArgs e)
@@ -1387,30 +1388,30 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void FormatPatchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartFormatPatchDialog(this);
+        UICommands.Execute(new UICmd.FormatPatch(), this);
     }
 
     private void CheckoutBranchToolStripMenuItemClick(object? sender, EventArgs e)
     {
-        UICommands.StartCheckoutBranch(this);
+        UICommands.Execute(new UICmd.CheckoutBranch(), this);
     }
 
     private void StashToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this);
+        UICommands.Execute(new UICmd.Stash(), this);
         UpdateStashCount();
     }
 
     private void ResetToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        UICommands.StartResetChangesDialog(this, Module.GetWorkTreeFiles(), onlyWorkTree: false);
+        UICommands.Execute(new UICmd.ResetChanges(Module.GetWorkTreeFiles(), OnlyWorkTree: false), this);
         RefreshGitStatusMonitor();
         revisionDiff.RefreshArtificial();
     }
 
     private void RunMergetoolToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartResolveConflictsDialog(this);
+        UICommands.Execute(new UICmd.ResolveConflicts(), this);
     }
 
     private void CurrentBranchClick(object sender, EventArgs e)
@@ -1420,24 +1421,24 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void DeleteBranchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartDeleteBranchDialog(this, string.Empty);
+        UICommands.Execute(new UICmd.DeleteBranches([string.Empty]), this);
     }
 
     private void DeleteTagToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartDeleteTagDialog(this, null);
+        UICommands.Execute(new UICmd.DeleteTag(null), this);
     }
 
     private void CherryPickToolStripMenuItemClick(object sender, EventArgs e)
     {
         IReadOnlyList<GitRevision> revisions = RevisionGrid.GetSelectedRevisions(SortDirection.Descending);
 
-        UICommands.StartCherryPickDialog(this, revisions);
+        UICommands.Execute(new UICmd.CherryPick([.. revisions]), this);
     }
 
     private void MergeBranchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartMergeBranchDialog(this, null);
+        UICommands.Execute(new UICmd.MergeBranch(null), this);
     }
 
     private void toolsToolStripMenuItem_SettingsChanged(object sender, Menus.SettingsChangedEventArgs e)
@@ -1453,7 +1454,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         // Await plugin registration
         _loadOperations.JoinPendingOperations();
 
-        UICommands.StartSettingsDialog(this);
+        UICommands.Execute(new UICmd.OpenSettings(), this);
 
         HandleSettingsChanged(translation, commitInfoPosition);
     }
@@ -1506,7 +1507,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void TagToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCreateTagDialog(this, RevisionGrid.LatestSelectedRevision);
+        UICommands.Execute(new UICmd.CreateTag(RevisionGrid.LatestSelectedRevision), this);
     }
 
     private static void SaveApplicationSettings()
@@ -1516,12 +1517,12 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void EditGitignoreToolStripMenuItem1Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, false);
+        UICommands.Execute(new UICmd.EditGitIgnore(false), this);
     }
 
     private void EditGitInfoExcludeToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, true);
+        UICommands.Execute(new UICmd.EditGitIgnore(true), this);
     }
 
     private void ArchiveToolStripMenuItemClick(object sender, EventArgs e)
@@ -1536,18 +1537,18 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         GitRevision mainRevision = revisions[0];
         GitRevision? diffRevision = revisions.Count == 2 ? revisions[1] : null;
 
-        UICommands.StartArchiveDialog(this, mainRevision, diffRevision);
+        UICommands.Execute(new UICmd.Archive(mainRevision, diffRevision), this);
     }
 
     private void EditMailMapToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartMailMapDialog(this);
+        UICommands.Execute(new UICmd.MailMap(), this);
     }
 
     private void EditLocalGitConfigToolStripMenuItemClick(object sender, EventArgs e)
     {
         string fileName = Path.Combine(Module.ResolveGitInternalPath("config"));
-        UICommands.StartFileEditorDialog(fileName, true);
+        UICommands.Execute(new UICmd.EditFile(fileName, true), null);
     }
 
     private void CompressGitDatabaseToolStripMenuItemClick(object sender, EventArgs e)
@@ -1557,12 +1558,12 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void recoverLostObjectsToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartVerifyDatabaseDialog(this);
+        UICommands.Execute(new UICmd.VerifyDatabase(), this);
     }
 
     private void ManageRemoteRepositoriesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartRemotesDialog(this);
+        UICommands.Execute(new UICmd.Remotes(), this);
     }
 
     private void RebaseToolStripMenuItemClick(object sender, EventArgs e)
@@ -1582,11 +1583,11 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             string from = revisions[1].ObjectId.ToShortString(); // 1st selected commit (excluded from rebase)
             string to = RevisionGrid.CurrentBranch.Value; // current branch checked out (HEAD)
 
-            UICommands.StartRebaseDialog(this, from, to, onto, interactive: false, startRebaseImmediately: false);
+            UICommands.Execute(new UICmd.Rebase(onto, from, to, Interactive: false, StartImmediately: false), this);
         }
         else
         {
-            UICommands.StartRebaseDialog(this, onto);
+            UICommands.Execute(new UICmd.Rebase(onto), this);
         }
     }
 
@@ -1612,7 +1613,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void ManageSubmodulesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartSubmodulesDialog(this);
+        UICommands.Execute(new UICmd.Submodules(), this);
         UpdateSubmodulesStructure();
     }
 
@@ -1630,60 +1631,60 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void UpdateAllSubmodulesToolStripMenuItemClick(object? sender, EventArgs e)
     {
-        UICommands.StartUpdateSubmodulesDialog(this);
+        UICommands.Execute(new UICmd.UpdateSubmodulesDialog(), this);
         UpdateSubmodulesStructure();
     }
 
     private void SynchronizeAllSubmodulesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartSyncSubmodulesDialog(this);
+        UICommands.Execute(new UICmd.SyncSubmodules(), this);
         UpdateSubmodulesStructure();
     }
 
     private void ToolStripSplitStashButtonClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this);
+        UICommands.Execute(new UICmd.Stash(), this);
         UpdateStashCount();
     }
 
     private void StashChangesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StashSave(this, AppSettings.IncludeUntrackedFilesInManualStash);
+        UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), this);
         UpdateStashCount();
     }
 
     private void StashStagedToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StashStaged(this);
+        UICommands.Execute(new UICmd.StashStaged(), this);
         UpdateStashCount();
     }
 
     private void StashPopToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StashPop(this);
+        UICommands.Execute(new UICmd.StashPop(), this);
         UpdateStashCount();
     }
 
     private void ManageStashesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this);
+        UICommands.Execute(new UICmd.Stash(), this);
         UpdateStashCount();
     }
 
     private void CreateStashToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this, false);
+        UICommands.Execute(new UICmd.Stash(false), this);
         UpdateStashCount();
     }
 
     private void PluginSettingsToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartPluginSettingsDialog(this);
+        UICommands.Execute(new UICmd.PluginSettings(), this);
     }
 
     private void RepoSettingsToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartRepoSettingsDialog(this);
+        UICommands.Execute(new UICmd.RepoSettings(), this);
     }
 
     private void CloseToolStripMenuItemClick(object sender, EventArgs e)
@@ -1693,7 +1694,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void CleanupToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCleanupRepositoryDialog(this);
+        UICommands.Execute(new UICmd.CleanupRepository(), this);
     }
 
     public void SetWorkingDir(string? path, ObjectId selectedId = default, ObjectId firstId = default)
@@ -1781,12 +1782,12 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void CreateBranchToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCreateBranchDialog(this, RevisionGrid.LatestSelectedRevision?.ObjectId ?? default);
+        UICommands.Execute(new UICmd.CreateBranch(RevisionGrid.LatestSelectedRevision?.ObjectId ?? default), this);
     }
 
     private void editGitAttributesToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitAttributesDialog(this);
+        UICommands.Execute(new UICmd.EditGitAttributes(), this);
     }
 
     private void deleteIndexLockToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1852,7 +1853,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
                     : toolStripItem.BackColor;
                 toolStripItem.ForeColor = isBranchVisible ? branchSelect.ForeColor : Color.Silver.AdaptForeColor(effectiveBackColor);
                 toolStripItem.Image = (isBranchVisible ? Images.Branch : Images.EyeClosed).AdaptLightness();
-                toolStripItem.Click += (s, e) => UICommands.StartCheckoutBranch(this, toolStripItem.Text!);
+                toolStripItem.Click += (s, e) => UICommands.Execute(new UICmd.CheckoutBranch(toolStripItem.Text!), this);
             }
 
             IEnumerable<IGitRef> GetBranches()
@@ -1870,7 +1871,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     {
         if (PluginRegistry.GitHosters.Count > 0)
         {
-            UICommands.StartCloneForkFromHoster(this, PluginRegistry.GitHosters[0], SetGitModule);
+            UICommands.Execute(new UICmd.CloneForkFromHoster(PluginRegistry.GitHosters[0], SetGitModule), this);
             RefreshRevisions();
         }
         else
@@ -1886,7 +1887,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             return;
         }
 
-        UICommands.StartPullRequestsDialog(this, repoHost);
+        UICommands.Execute(new UICmd.PullRequests(repoHost), this);
     }
 
     private void _createPullRequestToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1896,7 +1897,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             return;
         }
 
-        UICommands.StartCreatePullRequest(this, repoHost);
+        UICommands.Execute(new UICmd.CreatePullRequest(repoHost), this);
     }
 
     private void _addUpstreamRemoteToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1906,7 +1907,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             return;
         }
 
-        UICommands.AddUpstreamRemote(this, repoHost);
+        UICommands.Execute(new UICmd.AddUpstreamRemote(repoHost), this);
     }
 
     private bool TryGetRepositoryHost([NotNullWhen(returnValue: true)] out IRepositoryHostPlugin? repoHost)
@@ -2098,18 +2099,18 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             case Command.FocusPrevTab: FocusNextTab(forward: false); break;
             case Command.FocusFilter: ToolStripFilters.SetFocus(); break;
             case Command.OpenRepo: fileToolStripMenuItem.OpenRepositoryMenuItem.PerformClick(); break;
-            case Command.Commit: UICommands.StartCommitDialog(this); break;
+            case Command.Commit: UICommands.Execute(new UICmd.Commit(), this); break;
             case Command.AddNotes: AddNotes(); break;
             case Command.FindFileInSelectedCommit: FindFileInSelectedCommit(); break;
-            case Command.CheckoutBranch: UICommands.StartCheckoutBranch(this); break;
+            case Command.CheckoutBranch: UICommands.Execute(new UICmd.CheckoutBranch(), this); break;
             case Command.QuickFetch: QuickFetch(); break;
             case Command.QuickPull: DoPull(pullAction: GitPullAction.Merge, isSilent: true); break;
             case Command.QuickPullOrFetch: toolStripButtonPull.PerformButtonClick(); break;
-            case Command.QuickPush: UICommands.StartPushDialog(this, true); break;
+            case Command.QuickPush: UICommands.Execute(new UICmd.Push(true), this); break;
             case Command.CloseRepository: SetWorkingDir(""); break;
-            case Command.Stash: UICommands.StashSave(this, AppSettings.IncludeUntrackedFilesInManualStash); break;
-            case Command.StashStaged: UICommands.StashStaged(this); break;
-            case Command.StashPop: UICommands.StashPop(this); break;
+            case Command.Stash: UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), this); break;
+            case Command.StashStaged: UICommands.Execute(new UICmd.StashStaged(), this); break;
+            case Command.StashPop: UICommands.Execute(new UICmd.StashPop(), this); break;
             case Command.OpenCommitsWithDifftool: RevisionGrid.DiffSelectedCommitsWithDifftool(); break;
             case Command.OpenWithDifftool: OpenWithDifftool(); break;
             case Command.OpenWithDifftoolFirstToLocal: OpenWithDifftoolFirstToLocal(); break;
@@ -2125,10 +2126,10 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             case Command.GoToChild: RestoreFileStatusListFocus(() => RevisionGrid?.ExecuteCommand(RevisionGridControl.Command.GoToChild)); break;
             case Command.GoToParent: RestoreFileStatusListFocus(() => RevisionGrid?.ExecuteCommand(RevisionGridControl.Command.GoToParent)); break;
             case Command.PullOrFetch: DoPull(pullAction: AppSettings.FormPullAction, isSilent: false); break;
-            case Command.Push: UICommands.StartPushDialog(this, pushOnShow: ModifierKeys.HasFlag(Keys.Shift)); break;
-            case Command.CreateBranch: UICommands.StartCreateBranchDialog(this, RevisionGrid.LatestSelectedRevision?.ObjectId ?? default); break;
-            case Command.MergeBranches: UICommands.StartMergeBranchDialog(this, null); break;
-            case Command.CreateTag: UICommands.StartCreateTagDialog(this, RevisionGrid.LatestSelectedRevision); break;
+            case Command.Push: UICommands.Execute(new UICmd.Push(PushOnShow: ModifierKeys.HasFlag(Keys.Shift)), this); break;
+            case Command.CreateBranch: UICommands.Execute(new UICmd.CreateBranch(RevisionGrid.LatestSelectedRevision?.ObjectId ?? default), this); break;
+            case Command.MergeBranches: UICommands.Execute(new UICmd.MergeBranch(null), this); break;
+            case Command.CreateTag: UICommands.Execute(new UICmd.CreateTag(RevisionGrid.LatestSelectedRevision), this); break;
             case Command.Rebase: rebaseToolStripMenuItem.PerformClick(); break;
             case Command.ManageWorkTrees: manageWorktreeToolStripMenuItem.PerformClick(); break;
             default: return base.ExecuteCommand(cmd);
@@ -2419,11 +2420,11 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     {
         if (isSilent)
         {
-            UICommands.StartPullDialogAndPullImmediately(this, pullAction: pullAction);
+            UICommands.Execute(new UICmd.PullImmediately(PullAction: pullAction), this);
         }
         else
         {
-            UICommands.StartPullDialog(this, pullAction: pullAction);
+            UICommands.Execute(new UICmd.Pull(PullAction: pullAction), this);
         }
     }
 
@@ -2786,7 +2787,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private void menuitemSparseWorkingCopy_Click(object sender, EventArgs e)
     {
-        UICommands.StartSparseWorkingCopyDialog(this);
+        UICommands.Execute(new UICmd.SparseWorkingCopy(), this);
     }
 
     private void toolStripMenuItemReflog_Click(object sender, EventArgs e)
@@ -2997,7 +2998,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         createItem.Click += (_, _) =>
         {
             string mainPath = worktrees.Count > 0 ? worktrees[0].Path : Module.WorkingDir;
-            if (UICommands.WorktreeCreate(this, mainPath))
+            if (UICommands.Execute(new UICmd.WorktreeCreate(mainPath), this))
             {
                 RefreshRevisions();
             }
@@ -3007,7 +3008,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         ToolStripMenuItem pruneItem = new(TranslatedStrings.PruneWorktrees);
         pruneItem.Click += (_, _) =>
         {
-            if (UICommands.StartCommandLineProcessDialog(this, command: null, "worktree prune"))
+            if (UICommands.Execute(new UICmd.CommandLineProcess(Command: null, "worktree prune"), this))
             {
                 RefreshRevisions();
             }

@@ -16,6 +16,7 @@ using GitUI.Infrastructure;
 using GitUI.ScriptsEngine;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -185,7 +186,7 @@ public partial class FormPush : GitModuleForm
 
     private void OpenRemotesDialogAndRefreshList(string? selectedRemoteName)
     {
-        if (!UICommands.StartRemotesDialog(this, selectedRemoteName))
+        if (!UICommands.Execute(new UICmd.Remotes(selectedRemoteName), this))
         {
             return;
         }
@@ -477,7 +478,7 @@ public partial class FormPush : GitModuleForm
             {
                 if (PluginRegistry.TryGetGitHosterForModule(Module) is not null)
                 {
-                    UICommands.StartCreatePullRequest(owner);
+                    UICommands.Execute(new UICmd.CreatePullRequest(), owner);
                 }
                 else
                 {
@@ -590,7 +591,7 @@ public partial class FormPush : GitModuleForm
             Validates.NotNull(_selectedRemote);
 
             DebugHelpers.Assert(form.Visible, "The progress dialog must be visible.");
-            UICommands.StartPullDialogAndPullImmediately(
+            ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
                 out bool pullCompleted,
                 form,
                 _selectedRemoteBranchName,
@@ -750,7 +751,7 @@ public partial class FormPush : GitModuleForm
 
     private void PullClick(object sender, EventArgs e)
     {
-        UICommands.StartPullDialog(this);
+        UICommands.Execute(new UICmd.Pull(), this);
     }
 
     private void UpdateRemoteBranchDropDown()

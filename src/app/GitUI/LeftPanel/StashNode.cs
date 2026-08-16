@@ -2,6 +2,7 @@
 using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -37,17 +38,17 @@ internal sealed class StashNode : BaseRevisionNode
 
     internal bool OpenStash(IWin32Window owner)
     {
-        return UICommands.StartStashDialog(owner, manageStashes: true, ReflogSelector);
+        return UICommands.Execute(new UICmd.Stash(true, ReflogSelector), owner);
     }
 
     public void ApplyStash(IWin32Window owner)
     {
-        UICommands.StashApply(owner, ReflogSelector);
+        UICommands.Execute(new UICmd.StashApply(ReflogSelector), owner);
     }
 
     public void PopStash(IWin32Window owner)
     {
-        UICommands.StashPop(owner, ReflogSelector);
+        UICommands.Execute(new UICmd.StashPop(ReflogSelector), owner);
     }
 
     public void DropStash(IWin32Window owner)
@@ -85,7 +86,7 @@ internal sealed class StashNode : BaseRevisionNode
 
             if (result == TaskDialogButton.Yes)
             {
-                UICommands.StashDrop(owner, ReflogSelector);
+                UICommands.Execute(new UICmd.StashDrop(ReflogSelector), owner);
             }
         }
     }

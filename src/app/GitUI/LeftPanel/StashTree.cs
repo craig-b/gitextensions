@@ -2,6 +2,7 @@
 using GitUI.UserControls.RevisionGrid;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -62,16 +63,16 @@ internal sealed class StashTree : BaseRevisionTree
 
     public void StashAll(IWin32Window owner)
     {
-        UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInManualStash);
+        UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), owner);
     }
 
     public void StashStaged(IWin32Window owner)
     {
-        UICommands.StashStaged(owner);
+        UICommands.Execute(new UICmd.StashStaged(), owner);
     }
 
     public void OpenStash(IWin32Window owner)
     {
-        UICommands.StartStashDialog(owner, manageStashes: true);
+        UICommands.Execute(new UICmd.Stash(true), owner);
     }
 }

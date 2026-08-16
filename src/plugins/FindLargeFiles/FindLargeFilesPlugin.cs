@@ -29,7 +29,7 @@ public class FindLargeFilesPlugin : GitPluginBase, IGitPluginForRepository
     public override bool Execute(GitUIEventArgs args)
     {
         using FindLargeFilesForm frm = new(_sizeLargeFile.ValueOrDefault(Settings), args.GitUICommands);
-        frm.ShowDialog(args.OwnerForm);
+        frm.ShowDialog(args.OwnerForm as IWin32Window);
 
         return true;
     }

@@ -4,6 +4,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitExtUtils.GitUI;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.WorktreeDialog;
 
@@ -70,7 +71,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
 
     private void PruneWorktrees()
     {
-        UICommands.StartCommandLineProcessDialog(this, command: null, "worktree prune");
+        UICommands.Execute(new UICmd.CommandLineProcess(Command: null, "worktree prune"), this);
         Initialize();
     }
 
@@ -81,7 +82,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
             return;
         }
 
-        if (UICommands.WorktreeDelete(this, workTree.Path))
+        if (UICommands.Execute(new UICmd.WorktreeDelete(workTree.Path), this))
         {
             Initialize();
         }
@@ -112,7 +113,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
             return;
         }
 
-        if (UICommands.WorktreeSwitch(this, workTree.Path))
+        if (UICommands.Execute(new UICmd.WorktreeSwitch(workTree.Path), this))
         {
             Close();
         }
@@ -155,7 +156,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
             ? _worktrees[0].Path
             : UICommands.Module.WorkingDir;
 
-        if (UICommands.WorktreeCreate(this, basePath))
+        if (UICommands.Execute(new UICmd.WorktreeCreate(basePath), this))
         {
             ShouldRefreshRevisionGrid = true;
             Initialize();

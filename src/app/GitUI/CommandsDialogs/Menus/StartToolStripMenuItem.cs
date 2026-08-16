@@ -4,6 +4,7 @@ using GitExtUtils;
 using GitUI.CommandsDialogs.BrowseDialog;
 using ResourceManager;
 using ResourceManager.Hotkey;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.Menus;
 
@@ -55,7 +56,7 @@ internal partial class StartToolStripMenuItem : ToolStripMenuItemEx
 
     private void CloneToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCloneDialog(OwnerForm, string.Empty, false, GitModuleChanged);
+        UICommands.Execute(new UICmd.Clone(string.Empty, false, GitModuleChanged), OwnerForm);
     }
 
     private void ExitToolStripMenuItemClick(object sender, EventArgs e)
@@ -65,7 +66,7 @@ internal partial class StartToolStripMenuItem : ToolStripMenuItemEx
 
     private void InitNewRepositoryToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartInitializeDialog(OwnerForm, gitModuleChanged: GitModuleChanged);
+        UICommands.Execute(new UICmd.InitializeRepository(GitModuleChanged: GitModuleChanged), OwnerForm);
     }
 
     private void OpenToolStripMenuItemClick(object sender, EventArgs e)

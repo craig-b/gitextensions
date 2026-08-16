@@ -1,6 +1,7 @@
 ﻿using CommonTestUtils;
 using GitUI;
 using GitUI.CommandsDialogs;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -66,7 +67,7 @@ public class FormCloneTests
         UITest.RunForm(
             () =>
             {
-                _commands.StartCloneDialog(owner: null, url: null);
+                _commands.Execute(new UICmd.Clone(Url: null), null);
             },
             testDriverAsync);
     }

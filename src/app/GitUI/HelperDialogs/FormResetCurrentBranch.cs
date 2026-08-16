@@ -4,6 +4,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUIPluginInterfaces;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.HelperDialogs;
 
@@ -88,7 +89,7 @@ public partial class FormResetCurrentBranch : GitModuleForm
                 {
                     if (currentCheckout != Revision.ObjectId)
                     {
-                        UICommands.UpdateSubmodules(this);
+                        UICommands.Execute(new UICmd.UpdateSubmodules(), this);
                     }
                 }
             }
@@ -108,7 +109,7 @@ public partial class FormResetCurrentBranch : GitModuleForm
 
         if (updateSubmodules)
         {
-            UICommands.StartUpdateSubmodulesDialog(this);
+            UICommands.Execute(new UICmd.UpdateSubmodulesDialog(), this);
         }
 
         UICommands.RepoChangedNotifier.Notify();

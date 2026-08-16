@@ -4,6 +4,7 @@ using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Plugins;
+using GitExtensions.Extensibility.Settings;
 using GitExtensions.Plugins.DeleteUnusedBranches.Properties;
 using GitExtUtils;
 using GitExtUtils.GitUI;
@@ -13,6 +14,7 @@ using Microsoft;
 using Microsoft.VisualStudio.Threading;
 using ResourceManager;
 using MessageBoxes = GitUI.MessageBoxes;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.Plugins.DeleteUnusedBranches;
 
@@ -239,7 +241,7 @@ public sealed partial class DeleteUnusedBranchesForm : GitExtensionsFormBase
         Hide();
         Close();
         Validates.NotNull(_gitUiCommands);
-        _gitUiCommands.StartSettingsDialog(_gitPlugin);
+        _gitUiCommands.Execute(new UICmd.OpenPluginSettings(_gitPlugin), null);
     }
 
     private void includeUnmergedBranches_CheckedChanged(object sender, EventArgs e)

@@ -15,6 +15,7 @@ using GitUI.Infrastructure;
 using GitUI.Properties;
 using GitUI.ScriptsEngine;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -303,7 +304,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 return;
             }
 
-            UICommands.StartCommitDialog(this);
+            UICommands.Execute(new UICmd.Commit(), this);
         });
     }
 
@@ -410,7 +411,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if (result == btnCheckout)
             {
-                if (!UICommands.StartCheckoutBranch(owner))
+                if (!UICommands.Execute(new UICmd.CheckoutBranch(), owner))
                 {
                     return DialogResult.Cancel;
                 }
@@ -458,7 +459,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 {
                     if (!InitModules())
                     {
-                        UICommands.UpdateSubmodules(owner);
+                        UICommands.Execute(new UICmd.UpdateSubmodules(), owner);
                     }
                 }
                 else
@@ -530,7 +531,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 // indeterminate, ask the user what they'd like to do.
                 if (AppSettings.UpdateSubmodulesOnCheckout ?? AppSettings.DontConfirmUpdateSubmodulesOnCheckout ?? AskIfSubmodulesShouldBeInitialized())
                 {
-                    UICommands.StartUpdateSubmodulesDialog(this);
+                    UICommands.Execute(new UICmd.UpdateSubmodulesDialog(), this);
                 }
 
                 return true;
@@ -558,7 +559,7 @@ public sealed partial class FormPull : GitExtensionsDialog
             // Rebase failed -> special 'rebase' merge conflict
             if (Rebase.Checked && Module.InTheMiddleOfRebase())
             {
-                return UICommands.StartTheContinueRebaseDialog(owner);
+                return UICommands.Execute(new UICmd.ContinueRebase(), owner);
             }
             else if (Module.InTheMiddleOfAction())
             {
@@ -601,7 +602,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if ((bool)messageBoxResult)
             {
-                UICommands.StashPop(owner);
+                UICommands.Execute(new UICmd.StashPop(), owner);
             }
         }
 
@@ -668,7 +669,7 @@ public sealed partial class FormPull : GitExtensionsDialog
         if (!Fetch.Checked && AutoStash.Checked && !Module.IsBareRepository() &&
             Module.GitStatus(UntrackedFilesMode.No, IgnoreSubmodulesMode.All).Count > 0)
         {
-            UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInAutoStash);
+            UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInAutoStash), owner);
             return true;
         }
 
@@ -952,7 +953,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
     private void StashClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this);
+        UICommands.Execute(new UICmd.Stash(), this);
     }
 
     private void PullFromRemoteCheckedChanged(object sender, EventArgs e)
@@ -1009,12 +1010,12 @@ public sealed partial class FormPull : GitExtensionsDialog
     {
         if (IsPullAll())
         {
-            UICommands.StartRemotesDialog(this);
+            UICommands.Execute(new UICmd.Remotes(), this);
         }
         else
         {
             string selectedRemote = _NO_TRANSLATE_Remotes.Text;
-            UICommands.StartRemotesDialog(this, selectedRemote);
+            UICommands.Execute(new UICmd.Remotes(selectedRemote), this);
         }
 
         _bInternalUpdate = true;

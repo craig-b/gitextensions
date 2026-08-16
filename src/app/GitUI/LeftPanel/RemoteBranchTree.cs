@@ -5,6 +5,7 @@ using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUI.UserControls.RevisionGrid;
 using Microsoft;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -129,12 +130,12 @@ internal sealed class RemoteBranchTree : BaseRefTree
 
     internal void PopupManageRemotesForm(string? remoteName)
     {
-        UICommands.StartRemotesDialog(TreeViewNode.TreeView, remoteName);
+        UICommands.Execute(new UICmd.Remotes(remoteName), TreeViewNode.TreeView);
     }
 
     internal bool FetchAll()
     {
-        UICommands.StartPullDialogAndPullImmediately(
+        ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
             out bool pullCompleted,
             TreeViewNode.TreeView,
             pullAction: GitPullAction.FetchAll);
@@ -143,7 +144,7 @@ internal sealed class RemoteBranchTree : BaseRefTree
 
     internal bool FetchPruneAll()
     {
-        UICommands.StartPullDialogAndPullImmediately(
+        ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
             out bool pullCompleted,
             TreeViewNode.TreeView,
             pullAction: GitPullAction.FetchPruneAll);

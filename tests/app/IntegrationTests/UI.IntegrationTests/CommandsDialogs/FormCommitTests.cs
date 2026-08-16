@@ -12,6 +12,7 @@ using GitUI.ScriptsEngine;
 using GitUI.UserControls;
 using ICSharpCode.TextEditor;
 using NSubstitute;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -766,10 +767,10 @@ public class FormCommitTests
             {
                 (commitKind switch
                 {
-                    CommitKind.Normal => _commands.StartCommitDialog(owner: null),
-                    CommitKind.Squash => _commands.StartSquashCommitDialog(owner: null, _referenceRepository.Module.GetRevision()),
-                    CommitKind.Fixup => _commands.StartFixupCommitDialog(owner: null, _referenceRepository.Module.GetRevision()),
-                    CommitKind.Amend => _commands.StartAmendCommitDialog(owner: null, _referenceRepository.Module.GetRevision()),
+                    CommitKind.Normal => _commands.Execute(new UICmd.Commit(), null),
+                    CommitKind.Squash => _commands.Execute(new UICmd.SquashCommit(_referenceRepository.Module.GetRevision()), null),
+                    CommitKind.Fixup => _commands.Execute(new UICmd.FixupCommit(_referenceRepository.Module.GetRevision()), null),
+                    CommitKind.Amend => _commands.Execute(new UICmd.AmendCommit(_referenceRepository.Module.GetRevision()), null),
                     _ => throw new ArgumentException($"Unsupported commit kind: {commitKind}", nameof(commitKind))
                 }).Should().BeTrue();
 

@@ -7,9 +7,9 @@ namespace GitUI;
 
 // IUICommandBus dispatch: this switch is the composition root for UI command handlers - it
 // constructs each handler with its dependencies and stays exhaustively compile-checked against
-// the intent set. The M3.2 handlers own the dialog logic; the Start* facade methods on
-// GitUICommands are thin shims through Execute(intent, owner) until call sites migrate.
-// See cross-platform-plan.md section 13.
+// the intent set. The handlers own the dialog logic; the bus is the only path - the Start*
+// facade family is gone, and only the host-only bridges (ShowModelessForm and the two
+// out-parameter dialogs) remain on the concrete class. See cross-platform-plan.md section 13.
 partial class GitUICommands
 {
     /// <summary>
@@ -21,12 +21,16 @@ partial class GitUICommands
     public bool Execute(Intent.IUICommand command)
         => Execute(command, AmbientOwner);
 
+    public bool Execute(Intent.IUICommand command, object? ownerWindow)
+        => Execute(command, ownerWindow as IWin32Window);
+
     internal bool Execute(Intent.IUICommand command, IWin32Window? owner)
     {
         return command switch
         {
             Intent.AddFiles c => new AddFilesHandler(this).Execute(c, owner),
             Intent.AddToGitIgnore c => new AddToGitIgnoreHandler(this).Execute(c, owner),
+            Intent.AddUpstreamRemote c => new AddUpstreamRemoteHandler(this).Execute(c, owner),
             Intent.AmendCommit c => new AmendCommitHandler(this).Execute(c, owner),
             Intent.ApplyPatch c => new ApplyPatchHandler(this).Execute(c, owner),
             Intent.Archive c => new ArchiveHandler(this).Execute(c, owner),
@@ -38,6 +42,7 @@ partial class GitUICommands
             Intent.CherryPick c => new CherryPickHandler(this).Execute(c, owner),
             Intent.CleanupRepository c => new CleanupRepositoryHandler(this).Execute(c, owner),
             Intent.Clone c => new CloneHandler(this).Execute(c, owner),
+            Intent.CloneForkFromHoster c => new CloneForkFromHosterHandler(this).Execute(c, owner),
             Intent.CommandLineProcess c => new CommandLineProcessHandler(this).Execute(c, owner),
             Intent.Commit c => new CommitHandler(this).Execute(c, owner),
             Intent.CommitDiff c => new CommitDiffHandler(this).Execute(c, owner),
@@ -45,6 +50,7 @@ partial class GitUICommands
             Intent.ContinueRebase c => new ContinueRebaseHandler(this).Execute(c, owner),
             Intent.CreateBranch c => new CreateBranchHandler(this).Execute(c, owner),
             Intent.CreateBranchFrom c => new CreateBranchFromHandler(this).Execute(c, owner),
+            Intent.CreatePullRequest c => new CreatePullRequestHandler(this).Execute(c, owner),
             Intent.CreateTag c => new CreateTagHandler(this).Execute(c, owner),
             Intent.DeleteBranches c => new DeleteBranchesHandler(this).Execute(c, owner),
             Intent.DeleteRemoteBranch c => new DeleteRemoteBranchHandler(this).Execute(c, owner),
@@ -61,11 +67,13 @@ partial class GitUICommands
             Intent.InitializeRepository c => new InitializeRepositoryHandler(this).Execute(c, owner),
             Intent.MailMap c => new MailMapHandler(this).Execute(c, owner),
             Intent.MergeBranch c => new MergeBranchHandler(this).Execute(c, owner),
+            Intent.OpenPluginSettings c => new OpenPluginSettingsHandler(this).Execute(c, owner),
             Intent.OpenSettings c => new OpenSettingsHandler(this).Execute(c, owner),
             Intent.OpenWithDifftool c => new OpenWithDifftoolHandler(this).Execute(c, owner),
             Intent.PluginSettings c => new PluginSettingsHandler(this).Execute(c, owner),
             Intent.Pull c => new PullHandler(this).Execute(c, owner),
             Intent.PullImmediately c => new PullHandler(this).Execute(c, owner),
+            Intent.PullRequests c => new PullRequestsHandler(this).Execute(c, owner),
             Intent.Push c => new PushHandler(this).Execute(c, owner),
             Intent.Rebase c => new RebaseHandler(this).Execute(c, owner),
             Intent.RebaseWithAdvancedOptions c => new RebaseWithAdvancedOptionsHandler(this).Execute(c, owner),

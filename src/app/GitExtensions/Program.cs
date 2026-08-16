@@ -16,6 +16,7 @@ using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
 using ResourceManager;
 using MessageBoxes = GitUI.MessageBoxes;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions;
 
@@ -185,7 +186,7 @@ internal static class Program
                     {
                         if (!checkSettingsLogic.AutoSolveAllSettings() || !checklistSettingsPage.CheckSettings())
                         {
-                            uiCommands.StartSettingsDialog(owner: null);
+                            uiCommands.Execute(new UICmd.OpenSettings(null), null);
                         }
                     }
                 }
@@ -209,7 +210,7 @@ internal static class Program
 
         if (args.Length <= 1)
         {
-            commands.StartBrowseDialog(owner: null);
+            commands.Execute(new UICmd.Browse(), null);
         }
         else
         {

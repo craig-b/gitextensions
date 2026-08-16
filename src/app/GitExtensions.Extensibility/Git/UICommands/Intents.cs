@@ -1,3 +1,4 @@
+using GitExtensions.Extensibility.Plugins;
 using GitExtensions.Extensibility.Settings;
 using GitUIPluginInterfaces;
 
@@ -8,16 +9,17 @@ namespace GitExtensions.Extensibility.Git.UICommands;
 // window is deliberately absent (resolved ambiently by the host).
 //
 // Not modelled as intents (see cross-platform-plan.md section 13):
-//  - ShowModelessForm: passes a Func<Form> form factory, not data - explicit special case.
-//  - AddCommitTemplate/RemoveCommitTemplate: Func<string> + Image payload.
-//  - AddUpstreamRemote, StartCloneForkFromHoster, StartCreatePullRequest,
-//    StartPullRequestsDialog, StartSettingsDialog(IGitPlugin): these reference
-//    IRepositoryHostPlugin/IGitPlugin, which stay Windows-bound until M3 clears
-//    IGitUICommands/GitUIEventArgs from their signatures (plus IGitPlugin's Image icon);
-//    modelling them now would put this file on the probe's exclusion list.
+//  - ShowModelessForm: passes a Func<Form> form factory, not data - a host-only special case
+//    that stays on the concrete GitUICommands class.
+//  - AddCommitTemplate/RemoveCommitTemplate: Func<string> + an icon payload; they remain
+//    interface methods taking the icon as object?.
 
 public sealed record AddFiles(string? Files = null) : IUICommand;
 public sealed record AddToGitIgnore(bool LocalExclude, IReadOnlyList<string> FilePatterns) : IUICommand;
+
+/// <summary>Adds the hoster's upstream repository as a remote, then fetches it - fire and forget.</summary>
+public sealed record AddUpstreamRemote(IRepositoryHostPlugin GitHoster) : IUICommand;
+
 public sealed record AmendCommit(GitRevision Revision) : IUICommand;
 public sealed record ApplyPatch(string? PatchFile = null) : IUICommand;
 public sealed record Archive(GitRevision? Revision = null, GitRevision? Revision2 = null, string? Path = null) : IUICommand;
@@ -35,6 +37,9 @@ public sealed record CleanupRepository(string? Path = null) : IUICommand;
 /// <summary>Wart: <paramref name="GitModuleChanged"/> is a callback, not data - kept so the intent stays usable until handlers raise a proper event.</summary>
 public sealed record Clone(string? Url = null, bool OpenedFromProtocolHandler = false, EventHandler<GitModuleEventArgs>? GitModuleChanged = null) : IUICommand;
 
+/// <summary>Wart: <paramref name="GitModuleChanged"/> is a callback, not data - see <see cref="Clone"/>.</summary>
+public sealed record CloneForkFromHoster(IRepositoryHostPlugin GitHoster, EventHandler<GitModuleEventArgs>? GitModuleChanged = null) : IUICommand;
+
 public sealed record CommandLineProcess(string? Command, ArgumentString Arguments) : IUICommand;
 public sealed record Commit(string? CommitMessage = null, bool ShowOnlyWhenChanges = false) : IUICommand;
 public sealed record CommitDiff(ObjectId ObjectId) : IUICommand;
@@ -44,6 +49,12 @@ public sealed record CreateBranch(ObjectId ObjectId = default, string? NewBranch
 
 /// <summary>Resolves <paramref name="Branch"/> to a revision first; shows an error if it does not resolve.</summary>
 public sealed record CreateBranchFrom(string Branch) : IUICommand;
+
+/// <summary>
+///  A null <paramref name="GitHoster"/> picks the single hoster relevant to the current repository;
+///  an error dialog is shown when none - or more than one - is relevant.
+/// </summary>
+public sealed record CreatePullRequest(IRepositoryHostPlugin? GitHoster = null, string? ChooseRemote = null, string? ChooseBranch = null) : IUICommand;
 
 public sealed record CreateTag(GitRevision? Revision = null) : IUICommand;
 public sealed record DeleteBranches(IReadOnlyList<string> Branches) : IUICommand;
@@ -64,6 +75,7 @@ public sealed record InitializeRepository(string? Directory = null, EventHandler
 
 public sealed record MailMap : IUICommand;
 public sealed record MergeBranch(string? Branch) : IUICommand;
+public sealed record OpenPluginSettings(IGitPlugin Plugin) : IUICommand;
 public sealed record OpenSettings(SettingsPageReference? InitialPage = null) : IUICommand;
 public sealed record OpenWithDifftool(IReadOnlyList<GitRevision?> Revisions, string FileName, string? OldFileName, RevisionDiffKind DiffKind, bool IsTracked, string? CustomTool = null) : IUICommand;
 public sealed record PluginSettings : IUICommand;
@@ -71,6 +83,8 @@ public sealed record Pull(string? RemoteBranch = null, string? Remote = null, Gi
 
 /// <summary>Pulls without showing the dialog (unless settings require it).</summary>
 public sealed record PullImmediately(string? RemoteBranch = null, string? Remote = null, GitPullAction PullAction = GitPullAction.None) : IUICommand;
+
+public sealed record PullRequests(IRepositoryHostPlugin GitHoster) : IUICommand;
 
 public sealed record Push(bool PushOnShow = false, bool ForceWithLease = false, string? BranchName = null) : IUICommand;
 

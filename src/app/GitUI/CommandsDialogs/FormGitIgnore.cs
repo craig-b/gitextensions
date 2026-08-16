@@ -3,6 +3,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI.CommandsDialogs.GitIgnoreDialog;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -217,7 +218,7 @@ public sealed partial class FormGitIgnore : GitModuleForm
     private void AddPattern_Click(object sender, EventArgs e)
     {
         SaveGitIgnore();
-        UICommands.StartAddToGitIgnoreDialog(this, _localExclude, "*.dll");
+        UICommands.Execute(new UICmd.AddToGitIgnore(_localExclude, ["*.dll"]), this);
         LoadGitIgnore();
     }
 

@@ -31,6 +31,7 @@ using ResourceManager;
 using ResourceManager.Hotkey;
 using TaskDialog = System.Windows.Forms.TaskDialog;
 using TaskDialogButton = System.Windows.Forms.TaskDialogButton;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -1803,7 +1804,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         InitiateRefAction(
             new GitRefListsForRevision(selectedRevision).GetRenameableLocalBranches(),
-            gitRef => UICommands.StartRenameDialog(ParentForm, gitRef.Name),
+            gitRef => UICommands.Execute(new UICmd.RenameBranch(gitRef.Name), ParentForm),
             FormQuickGitRefSelector.QuickAction.Rename);
     }
 
@@ -1821,15 +1822,15 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             {
                 if (gitRef.IsTag)
                 {
-                    UICommands.StartDeleteTagDialog(ParentForm, gitRef.Name);
+                    UICommands.Execute(new UICmd.DeleteTag(gitRef.Name), ParentForm);
                 }
                 else if (gitRef.IsRemote)
                 {
-                    UICommands.StartDeleteRemoteBranchDialog(ParentForm, gitRef.Name);
+                    UICommands.Execute(new UICmd.DeleteRemoteBranch(gitRef.Name), ParentForm);
                 }
                 else
                 {
-                    UICommands.StartDeleteBranchDialog(ParentForm, gitRef.Name);
+                    UICommands.Execute(new UICmd.DeleteBranches([gitRef.Name]), ParentForm);
                 }
             },
             FormQuickGitRefSelector.QuickAction.Delete);
@@ -1879,7 +1880,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             Point clientPoint = new(cellBounds.X + e.X, cellBounds.Y + e.Y);
             if (_messageColumnProvider.HitTest(e.RowIndex, clientPoint)?.GitRef is { } gitRef)
             {
-                GoToRelatedRef(gitRef, handleGone: localBranch => UICommands.StartDeleteBranchDialog(this, localBranch));
+                GoToRelatedRef(gitRef, handleGone: localBranch => UICommands.Execute(new UICmd.DeleteBranches([localBranch]), this));
                 return;
             }
         }
@@ -2083,11 +2084,11 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                 return new FormCommitDiff(UICommands, selectedRevisions[0].ObjectId);
             }
 
-            UICommands.ShowModelessForm(ParentForm, false, null, null, ProvideForm);
+            ((GitUICommands)UICommands).ShowModelessForm(ParentForm, false, null, null, ProvideForm);
         }
         else if (!selectedRevisions.Any())
         {
-            UICommands.StartCompareRevisionsDialog(ParentForm);
+            UICommands.Execute(new UICmd.CompareRevisions(), ParentForm);
         }
     }
 
@@ -2118,13 +2119,13 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
     private void ResetChangesToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartResetChangesDialog(this, Module.GetWorkTreeFiles(), onlyWorkTree: LatestSelectedRevision?.ObjectId == ObjectId.WorkTreeId);
+        UICommands.Execute(new UICmd.ResetChanges(Module.GetWorkTreeFiles(), OnlyWorkTree: LatestSelectedRevision?.ObjectId == ObjectId.WorkTreeId), this);
         ArtificialChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void CommitToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCommitDialog(this);
+        UICommands.Execute(new UICmd.Commit(), this);
     }
 
     private void ResetAnotherBranchToHereToolStripMenuItemClick(object sender, EventArgs e)
@@ -2274,12 +2275,12 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         foreach (IGitRef head in filterRefs(gitRefListsForRevision.AllTags))
         {
-            AddBranchMenuItem(deleteTagDropDown, head, delegate { UICommands.StartDeleteTagDialog(ParentForm, head.Name); });
+            AddBranchMenuItem(deleteTagDropDown, head, delegate { UICommands.Execute(new UICmd.DeleteTag(head.Name), ParentForm); });
             AddBranchMenuItem(selectInLeftPanelDropDown, head, SelectInLeftPanel_Click);
 
             string refUnambiguousName = GetRefUnambiguousName(head);
             ToolStripMenuItem mergeItem = AddBranchMenuItem(mergeBranchDropDown, head,
-                delegate { UICommands.StartMergeBranchDialog(ParentForm, refUnambiguousName); });
+                delegate { UICommands.Execute(new UICmd.MergeBranch(refUnambiguousName), ParentForm); });
             mergeItem.Tag = refUnambiguousName;
         }
 
@@ -2296,7 +2297,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             else
             {
                 ToolStripMenuItem toolStripItem = AddBranchMenuItem(mergeBranchDropDown, head,
-                    delegate { UICommands.StartMergeBranchDialog(ParentForm, GetRefUnambiguousName(head)); });
+                    delegate { UICommands.Execute(new UICmd.MergeBranch(GetRefUnambiguousName(head)), ParentForm); });
 
                 _rebaseOnTopOf ??= (string?)toolStripItem.Tag;
             }
@@ -2312,7 +2313,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
         if (mergeBranchDropDown.Items.Count == 0 && !currentBranchPointsToRevision)
         {
             ToolStripMenuItem toolStripItem = new(revision.Guid);
-            toolStripItem.Click += delegate { UICommands.StartMergeBranchDialog(ParentForm, revision.Guid); };
+            toolStripItem.Click += delegate { UICommands.Execute(new UICmd.MergeBranch(revision.Guid), ParentForm); };
             mergeBranchDropDown.Items.Add(toolStripItem);
             _rebaseOnTopOf ??= toolStripItem.Tag as string;
         }
@@ -2333,11 +2334,11 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                 }
                 else
                 {
-                    AddBranchMenuItem(deleteBranchDropDown, head, delegate { UICommands.StartDeleteBranchDialog(ParentForm, head.Name); });
+                    AddBranchMenuItem(deleteBranchDropDown, head, delegate { UICommands.Execute(new UICmd.DeleteBranches([head.Name]), ParentForm); });
                 }
 
-                AddBranchMenuItem(renameDropDown, head, delegate { UICommands.StartRenameDialog(ParentForm, head.Name); });
-                AddBranchMenuItem(pushBranchDropDown, head, (_, _) => UICommands.StartPushDialog(ParentForm, pushOnShow: false, forceWithLease: false, out _, head.Name));
+                AddBranchMenuItem(renameDropDown, head, delegate { UICommands.Execute(new UICmd.RenameBranch(head.Name), ParentForm); });
+                AddBranchMenuItem(pushBranchDropDown, head, (_, _) => ((GitUICommands)UICommands).StartPushDialog(ParentForm, pushOnShow: false, forceWithLease: false, out _, head.Name));
             }
 
             if (head.CompleteName != currentBranchRef)
@@ -2356,11 +2357,11 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                 {
                     if (head.IsRemote)
                     {
-                        UICommands.StartCheckoutRemoteBranch(ParentForm, head.Name);
+                        UICommands.Execute(new UICmd.CheckoutRemoteBranch(head.Name), ParentForm);
                     }
                     else
                     {
-                        UICommands.StartCheckoutBranch(ParentForm, head.Name);
+                        UICommands.Execute(new UICmd.CheckoutBranch(head.Name), ParentForm);
                     }
                 });
             }
@@ -2380,7 +2381,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                     }
                 }
 
-                AddBranchMenuItem(deleteBranchDropDown, head, delegate { UICommands.StartDeleteRemoteBranchDialog(ParentForm, head.Name); });
+                AddBranchMenuItem(deleteBranchDropDown, head, delegate { UICommands.Execute(new UICmd.DeleteRemoteBranch(head.Name), ParentForm); });
             }
         }
 
@@ -2517,7 +2518,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         if (AppSettings.DontConfirmRebase)
         {
-            UICommands.StartRebase(ParentForm, _rebaseOnTopOf);
+            UICommands.Execute(new UICmd.Rebase(_rebaseOnTopOf, StartImmediately: true), ParentForm);
             return;
         }
 
@@ -2544,7 +2545,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         if (result == TaskDialogButton.Yes)
         {
-            UICommands.StartRebase(ParentForm, _rebaseOnTopOf);
+            UICommands.Execute(new UICmd.Rebase(_rebaseOnTopOf, StartImmediately: true), ParentForm);
         }
     }
 
@@ -2557,7 +2558,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         if (AppSettings.DontConfirmRebase)
         {
-            UICommands.StartInteractiveRebase(ParentForm, _rebaseOnTopOf);
+            UICommands.Execute(new UICmd.Rebase(_rebaseOnTopOf, Interactive: true, StartImmediately: true), ParentForm);
             return;
         }
 
@@ -2584,7 +2585,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         if (result == TaskDialogButton.Yes)
         {
-            UICommands.StartInteractiveRebase(ParentForm, _rebaseOnTopOf);
+            UICommands.Execute(new UICmd.Rebase(_rebaseOnTopOf, Interactive: true, StartImmediately: true), ParentForm);
         }
     }
 
@@ -2604,7 +2605,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                 from = string.Empty;
             }
 
-            UICommands.StartRebaseDialogWithAdvOptions(ParentForm, _rebaseOnTopOf, from);
+            UICommands.Execute(new UICmd.RebaseWithAdvancedOptions(_rebaseOnTopOf, from), ParentForm);
         }
     }
 
@@ -2612,7 +2613,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
     {
         if (LatestSelectedRevision is not null)
         {
-            UICommands.StartCheckoutRevisionDialog(ParentForm, LatestSelectedRevision.Guid);
+            UICommands.Execute(new UICmd.CheckoutRevision(LatestSelectedRevision.Guid), ParentForm);
         }
     }
 
@@ -2628,7 +2629,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
         GitRevision? mainRevision = selectedRevisions.Count > 0 ? selectedRevisions[0] : null;
         GitRevision? diffRevision = selectedRevisions.Count == 2 ? selectedRevisions[1] : null;
 
-        UICommands.StartArchiveDialog(ParentForm, mainRevision, diffRevision);
+        UICommands.Execute(new UICmd.Archive(mainRevision, diffRevision), ParentForm);
     }
 
     internal void ToggleShowAuthorDate()
@@ -2698,19 +2699,19 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
         IReadOnlyList<GitRevision> revisions = GetSelectedRevisions(SortDirection.Ascending);
         foreach (GitRevision rev in revisions)
         {
-            UICommands.StartRevertCommitDialog(ParentForm, rev);
+            UICommands.Execute(new UICmd.RevertCommit(rev), ParentForm);
         }
     }
 
     private void CherryPickCommitToolStripMenuItemClick(object sender, EventArgs e)
     {
         IReadOnlyList<GitRevision> revisions = GetSelectedRevisions(SortDirection.Descending);
-        UICommands.StartCherryPickDialog(ParentForm, revisions);
+        UICommands.Execute(new UICmd.CherryPick([.. revisions]), ParentForm);
     }
 
     private void ApplyStashToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StashApply(this, LatestSelectedRevision!.ObjectId.ToString());
+        UICommands.Execute(new UICmd.StashApply(LatestSelectedRevision!.ObjectId.ToString()), this);
         PerformRefreshRevisions();
     }
 
@@ -2722,7 +2723,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             return;
         }
 
-        UICommands.StashPop(this, stashName);
+        UICommands.Execute(new UICmd.StashPop(stashName), this);
         PerformRefreshRevisions();
     }
 
@@ -2767,7 +2768,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
             if (result == TaskDialogButton.Yes)
             {
-                UICommands.StashDrop(this, stashName);
+                UICommands.Execute(new UICmd.StashDrop(stashName), this);
                 PerformRefreshRevisions();
             }
         }
@@ -2780,7 +2781,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             return;
         }
 
-        UICommands.StartFixupCommitDialog(ParentForm, LatestSelectedRevision);
+        UICommands.Execute(new UICmd.FixupCommit(LatestSelectedRevision), ParentForm);
     }
 
     private void SquashCommitToolStripMenuItemClick(object sender, EventArgs e)
@@ -2790,7 +2791,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             return;
         }
 
-        UICommands.StartSquashCommitDialog(ParentForm, LatestSelectedRevision);
+        UICommands.Execute(new UICmd.SquashCommit(LatestSelectedRevision), ParentForm);
     }
 
     private void AmendCommitToolStripMenuItemClick(object sender, EventArgs e)
@@ -2800,7 +2801,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             return;
         }
 
-        UICommands.StartAmendCommitDialog(ParentForm, LatestSelectedRevision);
+        UICommands.Execute(new UICmd.AmendCommit(LatestSelectedRevision), ParentForm);
     }
 
     private void SelectInLeftPanel_Click(object? sender, EventArgs e)
@@ -3510,7 +3511,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
                 if (!string.IsNullOrEmpty(fileName) && fileName.EndsWith(".patch", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // Start apply patch dialog for each dropped patch file...
-                    UICommands.StartApplyPatchDialog(ParentForm, fileName);
+                    UICommands.Execute(new UICmd.ApplyPatch(fileName), ParentForm);
                 }
             }
         }

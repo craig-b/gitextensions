@@ -7,6 +7,7 @@ using GitExtUtils;
 using GitUI.CommandsDialogs;
 using Microsoft;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -372,7 +373,7 @@ internal sealed class SubmoduleTree : Tree
 
     public void UpdateSubmodule(IWin32Window owner, SubmoduleNode node)
     {
-        UICommands.StartUpdateSubmoduleDialog(owner, node.LocalPath, node.SuperPath);
+        UICommands.Execute(new UICmd.UpdateSubmodule(node.LocalPath, node.SuperPath), owner);
     }
 
     public void OpenSubmodule(SubmoduleNode node)
@@ -387,12 +388,12 @@ internal sealed class SubmoduleTree : Tree
 
     public void ManageSubmodules(IWin32Window owner)
     {
-        UICommands.StartSubmodulesDialog(owner);
+        UICommands.Execute(new UICmd.Submodules(), owner);
     }
 
     public void SynchronizeSubmodules(IWin32Window owner)
     {
-        UICommands.StartSyncSubmodulesDialog(owner);
+        UICommands.Execute(new UICmd.SyncSubmodules(), owner);
     }
 
     public void ResetSubmodule(IWin32Window owner, SubmoduleNode node)
@@ -411,12 +412,12 @@ internal sealed class SubmoduleTree : Tree
     public void StashSubmodule(IWin32Window owner, SubmoduleNode node)
     {
         IGitUICommands uiCmds = UICommands.WithWorkingDirectory(node.Info.Path);
-        uiCmds.StashSave(owner, AppSettings.IncludeUntrackedFilesInManualStash);
+        uiCmds.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), owner);
     }
 
     public void CommitSubmodule(IWin32Window owner, SubmoduleNode node)
     {
         IGitUICommands submodulCommands = UICommands.WithWorkingDirectory(node.Info.Path.EnsureTrailingPathSeparator());
-        submodulCommands.StartCommitDialog(owner);
+        submodulCommands.Execute(new UICmd.Commit(), owner);
     }
 }
