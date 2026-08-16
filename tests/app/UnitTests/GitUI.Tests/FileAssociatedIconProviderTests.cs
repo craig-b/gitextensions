@@ -1,8 +1,8 @@
 ﻿using System.IO.Abstractions;
-using GitCommands;
+using GitUI;
 using NSubstitute;
 
-namespace GitCommandsTests;
+namespace GitUITests;
 public class FileAssociatedIconProviderTests
 {
     private FileBase _file = null!;

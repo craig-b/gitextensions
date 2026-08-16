@@ -1,8 +1,9 @@
 using System.IO.Abstractions;
+using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 
-namespace GitCommands;
+namespace GitUI;
 
 public interface ICommitTemplateManager
 {

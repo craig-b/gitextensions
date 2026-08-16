@@ -15,13 +15,13 @@
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
       1. GitExtensions.Extensibility   :  94 of 117 files — 23 debt
       2. GitExtUtils                   :  39 of  67 files — 28 debt, added by M1.7
-      3. GitCommands                   : 193 of 201 files —  8 debt, added after M1.4/M1.5
-      4. GitUIPluginInterfaces         :  18 of  21 files —  3 debt, entangled with GitCommands
+      3. GitCommands                   : 193 of 197 files —  4 debt, added after M1.4/M1.5
+      4. GitUIPluginInterfaces         :  19 of  21 files —  2 debt, entangled with GitCommands
                                           at type level so it joined in the same step
 
     An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
     (fonts), M1.5 (application paths), M1.7's splits and the UserNotification seam, the same scope
-    needs 62 — of which 54 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
+    needs 57 — of which 49 have a DIRECT Windows dependency, 6 are pure cascade (each annotated
     with its root), and 2 are compilation artefacts, see below.
 
     Notes on maintaining the Remove list:
@@ -178,17 +178,10 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
 
-    <!-- ===== DEBT: GitCommands, 8 of 201 files (shrinks) ===== -->
+    <!-- ===== DEBT: GitCommands, 4 of 197 files (shrinks) ===== -->
 
     <!-- M3: drives a UI flow through IGitUICommands and IWin32Window -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Git\Tag\GitTagController.cs" />
-
-    <!-- Found by scope step 3, not previously in the plan: Image/Icon/menu types inside the
-         engine. Rendering concerns; want the same treatment as M1.6/M1.7. -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CommitTemplateItem.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CommitTemplateManager.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\CustomDiffMergeTool.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\FileAssociatedIconProvider.cs" />
 
     <!-- cascade of M1.8: built from the Extensibility setting-binding types -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Settings\BuildServerSettings.cs" />
@@ -198,12 +191,7 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Properties\AssemblyInfo.cs" />
 
 
-    <!-- ===== DEBT: GitUIPluginInterfaces, 3 of 21 files (shrinks) ===== -->
-
-    <!-- Application.ExecutablePath for the default plugins directory. The host already calls
-         Initialise(userPluginsPath: ...); supplying the default path the same way, or using
-         AppPaths once this project references Extensibility, deletes this entry. -->
-    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\ManagedExtensibility.cs" />
+    <!-- ===== DEBT: GitUIPluginInterfaces, 2 of 21 files (shrinks) ===== -->
 
     <!-- cascade of M3: extends IGitPluginForRepository -->
     <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\IGitPluginForCommit.cs" />

@@ -132,7 +132,10 @@ internal static class Program
         // route those to a message box. Without this they would only be traced.
         UserNotification.ShowError = static (text, caption) => GitExtensions.Extensibility.MessageBoxes.ShowError(owner: null, text, caption);
 
-        ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath);
+        // GitUIPluginInterfaces cannot reference Application directly, so the default plugins
+        // path (beside the executable) is computed here and supplied the same way as userPluginsPath.
+        string defaultPluginsPath = Path.Join(new FileInfo(Application.ExecutablePath).Directory!.FullName, "Plugins");
+        ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath, defaultPluginsPath: defaultPluginsPath);
 
         AppSettings.LoadSettings();
 

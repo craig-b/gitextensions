@@ -1,6 +1,7 @@
-﻿using GitCommands.Utils;
+﻿using GitCommands;
+using GitCommands.Utils;
 
-namespace GitCommands;
+namespace GitUI;
 
 public sealed class CommitTemplateItem
 {

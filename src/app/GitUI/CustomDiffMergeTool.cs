@@ -1,4 +1,4 @@
-﻿namespace GitCommands;
+﻿namespace GitUI;
 
 public class CustomDiffMergeTool
 {

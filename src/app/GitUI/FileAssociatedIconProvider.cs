@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 
-namespace GitCommands;
+namespace GitUI;
 
 /// <summary>
 /// Provides the ability to extract icons associated with file types.

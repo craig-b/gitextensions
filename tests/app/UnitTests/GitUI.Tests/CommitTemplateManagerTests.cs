@@ -1,12 +1,12 @@
 ﻿using System.Collections;
 using System.IO.Abstractions;
 using CommonTestUtils;
-using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
+using GitUI;
 using NSubstitute;
 
-namespace GitCommandsTests;
+namespace GitUITests;
 public class CommitTemplateManagerTests
 {
     private readonly string _workingDir = @"c:\dev\repo";
