@@ -76,6 +76,10 @@ public class GitDirectoryResolverTests
         _directory.DidNotReceive().Exists(_gitWorkingDir);
     }
 
+    // Same shape as Resolve_should_return_path_from_git_file_if_present above (also Windows-only):
+    // _workingDir is a Windows drive-letter path fed through the mocked file system, and the
+    // expectation is a hardcoded Windows-native path.
+    [Platform(Include = "Win")]
     [Test]
     public void Resolve_should_return_resolved_full_path_from_git_file_if_present()
     {
@@ -103,7 +107,10 @@ public class GitDirectoryResolverTests
         helper.CreateFile(submodulePath, ".git", "\r \r\ngitdir: ../../.git/modules/Externals/Git.hub\r\ntext");
         _resolver = new GitDirectoryResolver();
 
-        _resolver.Resolve(submodulePath).Should().Be($@"{helper.Module.WorkingDirGitDir}modules\Externals\Git.hub\");
+        // Path.Combine(...).EnsureTrailingPathSeparator() is the same native-separator-joining
+        // convention GitDirectoryResolver.Resolve itself uses, in place of the hardcoded "\"
+        // join, which only matched on Windows.
+        _resolver.Resolve(submodulePath).Should().Be(Path.Combine(helper.Module.WorkingDirGitDir, "modules", "Externals", "Git.hub").EnsureTrailingPathSeparator());
         _resolver.Resolve(helper.Module.WorkingDir).Should().Be(helper.Module.WorkingDirGitDir);
     }
 }

@@ -131,7 +131,9 @@ public class DiffMergeToolConfigurationManagerTests
     [Test]
     public void LoadDiffMergeToolConfig_should_create_tool_config_with_userSuppliedPath_if_tool_unregistered()
     {
-        DiffMergeToolConfiguration config = _configurationManager.LoadDiffMergeToolConfig("bla", @"c:\some\path\to the tool\bla.exe");
+        // "\" is only the native separator PathUtil.ToPosixPath (used internally to build
+        // config.Path) converts on Windows.
+        DiffMergeToolConfiguration config = _configurationManager.LoadDiffMergeToolConfig("bla", $"c:{Path.DirectorySeparatorChar}some{Path.DirectorySeparatorChar}path{Path.DirectorySeparatorChar}to the tool{Path.DirectorySeparatorChar}bla.exe");
 
         config.Should().NotBeNull();
         config.ExeFileName.Should().Be("bla.exe");
@@ -154,6 +156,10 @@ public class DiffMergeToolConfigurationManagerTests
         config.MergeCommand.Should().BeEmpty();
     }
 
+    // "notepad" is looked up as a real, installed executable (via the default FindFileInFolders,
+    // searching PATH) - notepad.exe is a Windows system binary with no Linux equivalent to
+    // substitute, so this genuinely only demonstrates real-path discovery on Windows.
+    [Platform(Include = "Win")]
     [Test]
     public void LoadDiffMergeToolConfig_should_create_tool_config_if_tool_unregistered_but_exists_path()
     {

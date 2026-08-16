@@ -22,18 +22,23 @@
 
     SCOPE: the two portable-layer unit test suites, plus the shared test infrastructure both use.
       1. GitExtensions.Extensibility.Tests :  4 of  5 files —  1 artefact
-      2. GitCommands.Tests                 : 66 of 89 files — 23 debt (1 artefact, 21 WINDOWS-ONLY,
-                                              1 PORTABILITY-BUG)
+      2. GitCommands.Tests                 : 83 of 89 files —  6 debt (1 artefact, 5 WINDOWS-ONLY)
       3. CommonTestUtils (shared infra)    : 21 of 25 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
 
-      History: the AppSettings-registry PORTABILITY-BUG that used to dominate this list (30 files,
-      ~2170 tests) was fixed in product code by commit 89e02fc6e ("fix: guard AppSettings registry
-      access off Windows") - the registry helpers and GetSettingsFromRegistry are now guarded with
-      OperatingSystem.IsWindows(). Re-including those files unmasked a second, narrower
-      PORTABILITY-BUG in AppSettings.SaveSettings' named Mutex (also fixed in product code since;
-      see the note above the Compile Include below) plus a batch of WINDOWS-ONLY tests the first
-      bug's total-failure mode had been hiding (hardcoded Windows path/executable-name/CRLF
-      literals, and one settings key the fix deliberately leaves registry-only).
+      History: this list used to be dominated by two genuine product PORTABILITY-BUGs, both since
+      fixed: AppSettings' static constructor touching the Windows registry unconditionally
+      (commit 89e02fc6e) and AppSettings.SaveSettings' named Mutex using an invalid name off
+      Windows (commit b238048dc). Re-including the ~30 files those had forced out unmasked a
+      further batch of WINDOWS-ONLY failures - hardcoded Windows path/separator/executable-name/
+      CRLF literals, mostly. Rather than exclude those too, they were fixed in the test SOURCES
+      (tests/**, not product code): literals that are byte-identical to their replacement
+      expression on Windows were replaced outright (e.g. "\r\n" -> Environment.NewLine,
+      "path\\sub" -> Path.Combine/Path.DirectorySeparatorChar forms, "ping.exe" -> an
+      OS-conditional that still yields "ping.exe" on Windows); genuinely Windows-semantic cases
+      (drive letters, UNC \\wsl$\ syntax, notepad.exe/short-command-line OS behaviour) were scoped
+      with [Platform(Include = "Win")] instead, the same way NormalizePath/NormalizeWslPath
+      already were in this file - still executed on Windows, unchanged. The remaining 6 files
+      below are ones where no such translation exists (see each annotation) and 1 artefact.
 
     Notes on maintaining the Remove list, same fixpoint caveat as the probe's:
       - csc's two-phase reporting (declarations, then method bodies) still applies. Derive
@@ -161,7 +166,7 @@
          coordinate with here), using an unnamed/process-local semaphore instead. -->
     <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\TestAppSettingsAttribute.cs" />
 
-    <!-- ===== DEBT: GitCommands.Tests, 66 of 89 files included / 23 debt (shrinks) ===== -->
+    <!-- ===== DEBT: GitCommands.Tests, 83 of 89 files included / 6 debt (shrinks) ===== -->
 
     <!-- WINDOWS-ONLY: GitTagControllerTest exercises GitTagController and IGitUICommands, both on
          PortabilityProbe.csproj's debt list (GitTagController drives a UI flow through
@@ -190,109 +195,17 @@
          deliberately does not support (see its header comment). -->
     <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\AsyncLoaderTests.cs" />
 
-    <!-- The AppSettings-registry PORTABILITY-BUG that used to force ~30 files onto this list was
-         fixed in product code by commit 89e02fc6e ("fix: guard AppSettings registry access off
-         Windows") - the registry helpers and GetSettingsFromRegistry are now guarded with
-         OperatingSystem.IsWindows(). All those files are back in SCOPE. Re-including them
-         unmasked two more issues below: one genuine new PORTABILITY-BUG (AppSettings.SaveSettings'
-         named Mutex), and a handful of WINDOWS-ONLY tests the registry bug's total-failure mode
-         had been hiding. -->
-
-    <!--
-      WINDOWS-ONLY: hardcoded Windows path literals (backslash separators, drive letters, UNC
-      \\host\share syntax) as test data. PathUtil/FullPathResolver key off whether the NATIVE
-      separator is backslash (Windows) or '/' (everywhere else, including here); on Linux, a
-      literal "C:\dev\repo" backslash string is never recognised as "the native form of this
-      path" and passes through unconverted, so these tests' expected outputs (posix-converted, or
-      compared against a Windows-shaped result) don't match. Genuine Windows-specific test intent,
-      not a bug.
-    -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\FullPathResolverTests.cs" />
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Helpers\PathUtilTest.cs" />
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\PathEqualityComparerTests.cs" />
-    <!-- Only Git/CommandsTests.cs itself (12 of 312 cases across all 4 CommandsTests*.cs partial
-         files) hardcodes Windows path literals as PathUtil.ToPosixPath input; the sibling partial
-         files (CreateTag/DeleteBranch/GetSelectedBranch) don't share any member with it and stay
-         included. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\CommandsTests.cs" />
-    <!-- Same hardcoded-Windows-path-literal pattern as above, unmasked once the registry bug
-         stopped failing these fixtures outright. Each file is mostly portable (a small minority
-         of cases fail); TestSource only removes whole files, so the majority goes with it. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\GitDirectoryResolverTests.cs" />
-    <!-- GetWorktrees_should_* cases expect the parser to convert git's forward-slash worktree
-         paths to a Windows-native backslash form; on Linux the native separator already is '/',
-         so ToNativePath is a no-op and the raw posix path survives. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\GitModuleWorktreeTests.cs" />
-    <!-- GetTagMessage cases hardcode "\r\n" as the expected line ending; the product code
-         (CommitMessageManager.FormatCommitMessage/StringBuilder.AppendLine) already uses
-         Environment.NewLine, which is "\n" on Linux - so this is the test assuming Windows, not a
-         product gap. GetRemotes_should_parse_correctly_configured_remotes (in the
-         GitModuleTests_Remotes.cs partial) hardcodes a "c:\Bare Repo" backslash literal as raw
-         `git remote -v` output and expects PathUtil.ToPosixPath to convert it - same native-
-         separator-is-already-'/' story as the WINDOWS-ONLY group above. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\GitModuleTests.cs" />
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\GitModuleTests_Remotes.cs" />
-    <!-- WriteCommitMessageToFileAsync_no_bom hardcodes "\r\n" as the expected line ending for the
-         same Environment.NewLine reason as GitModuleTests.GetTagMessage above - the product
-         already writes the platform-native ending. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\CommitMessageManagerTests.cs" />
-    <!-- repoToAdd = "path to add\\" - a hardcoded backslash literal used as a Repository path;
-         AddAsMostRecentAsync's trailing-separator normalisation appends the NATIVE separator
-         ('/' here), which the input's trailing '\' isn't recognised as, producing a mixed
-         "...add\/" rather than colliding cleanly. Windows-literal test data again, not a product
-         bug in the normalisation itself. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\UserRepositoryHistory\LocalRepositoryManagerTests.cs" />
-    <!-- repoAnchoredInTopPath1 etc. are @"C:\this\is\a\..." literals; the captioning/shortening
-         logic can't recognise a Windows drive-letter/backslash path as "anchored" on Linux. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\UserRepositoryHistory\RecentRepoSplitterTests.cs" />
-    <!-- Builds test repo paths with raw backslash string interpolation, e.g.
-         `@$"{_tempDir}\{rootrepo}\{parent}\{uninformative}"`, instead of Path.Combine - on Linux
-         this creates ONE oddly-named leaf entry (literal backslashes in the filename) rather than
-         nested directories, so RepositoryDescriptionProvider never sees the parent/root segments
-         it's meant to summarise. Test authoring assumed Windows path syntax; Path.Combine would
-         have made it portable, but that's a test-source edit and out of scope here. -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\RepositoryDescriptionProviderTests.cs" />
-
-    <!--
-      WINDOWS-ONLY: AppSettings.GitCommandValue ("gitcommand" key) is one of the "handful of
-      legacy/installer-shared values" commit 89e02fc6e's fix deliberately leaves registry-only -
-      reads always return the caller's default off Windows, writes are dropped. CommandLogTests
-      sets AppSettings.GitCommandValue to a fake executable name to make CommandLogEntry.ColumnLine
-      show that name instead of "git"; off Windows the write silently drops (by design, per the
-      fix), so the getter keeps returning "" -> AppSettings.GitCommand falls back to "git" and the
-      display never shows the fake name. This is the accepted, documented consequence of the fix's
-      design (not a fresh bug to report) - GitCommandValue itself never migrated off the registry
-      the way most other settings did.
-    -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\CommandLogTests.cs" />
-
-    <!--
-      WINDOWS-ONLY: hardcoded Windows executables ("ping.exe", "cmd.exe", "git.exe") as the
-      process to launch. None of these exist under those names on Linux (no .exe suffix, and
-      cmd/ping aren't necessarily installed at all), so Executable.Start fails with "No such file
-      or directory" before the behaviour under test (cancellation, timeout, batching) is ever
-      exercised. Genuine Windows-specific test intent, not a bug.
-    -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\ExecutableTests.cs" />
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\ExecutableExtensionsTests.cs" />
-
-    <!-- WINDOWS-ONLY (unchanged from before the registry fix): GitExtensions.Extensibility.
-         DebugHelpers.IsTestRunning detects a test host by matching Environment.ProcessPath's
-         filename against "testhost" - true for Windows' testhost.exe apphost, but `dotnet test`
-         on Linux runs testhost.dll in-process inside the `dotnet` muxer, so the process is named
-         "dotnet", not "testhost". ConfigureDiffMergeTool_should_return_if_tool_unset relies on
-         IsTestRunning to route DebugHelpers.Fail through NoAssertContext instead of throwing.
-         The file's other failures are the same hardcoded-Windows-path-literal story as the group
-         above (config.Path comparisons). -->
-    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\DiffMergeTools\DiffMergeToolConfigurationManagerTests.cs" />
-
-    <!--
-      (A second PORTABILITY-BUG used to be excluded here: AppSettings.SaveSettings' named Mutex
-      mixed a literal "Global\" with a posix-separated path — invalid for the Unix file-based
-      named-mutex implementation — and the bare catch swallowed the throw, so settings never
-      persisted on Linux. Fixed in product code: off-Windows the mutex name is now a flat
-      per-settings-file hash, and SettingTests.cs runs here again.)
-    -->
+    <!-- Both PORTABILITY-BUGs that used to dominate this list (AppSettings' static constructor
+         touching the registry unconditionally, and SaveSettings' invalid Mutex name) are fixed in
+         product code - see commits 89e02fc6e and b238048dc, and the SCOPE note at the top of this
+         file. Re-including the files those had forced out unmasked a further batch of
+         WINDOWS-ONLY test-authoring issues, which were fixed in the test sources themselves
+         (Environment.NewLine/Path.Combine/Path.DirectorySeparatorChar substitutions, OS-conditional
+         executable names, and [Platform(Include = "Win")] scoping for genuinely Windows-semantic
+         cases) rather than excluded - see each file's diff for the reasoning at each call site.
+         Nothing remains excluded here for that reason; the six entries above (GitTagControllerTest,
+         BuildServerSettingsTests, GitCommandHelpersTest, AppPathsTests, AsyncLoaderTests, plus the
+         Properties/AssemblyInfo.cs artefact) are unrelated debt out of scope for this pass. -->
 
     <Compile Include="@(TestSource)" />
 

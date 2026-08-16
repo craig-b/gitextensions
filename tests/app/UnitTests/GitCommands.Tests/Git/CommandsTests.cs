@@ -29,14 +29,18 @@ public partial class CommandsTests
 
         Commands.AddSubmodule("remotepath", "localpath", "branch", force: true, configs).Arguments.Should().Be($"{config}submodule add -f -b \"branch\" \"remotepath\" \"localpath\"");
 
-        Commands.AddSubmodule("remote\\path", "local\\path", "branch", force: true, configs).Arguments.Should().Be($"{config}submodule add -f -b \"branch\" \"remote/path\" \"local/path\"");
+        // AddSubmodule runs both paths through PathUtil.ToPosixPath internally, which only
+        // converts the NATIVE separator; a literal "\" is only the native separator on Windows.
+        Commands.AddSubmodule($"remote{Path.DirectorySeparatorChar}path", $"local{Path.DirectorySeparatorChar}path", "branch", force: true, configs).Arguments.Should().Be($"{config}submodule add -f -b \"branch\" \"remote/path\" \"local/path\"");
     }
 
     [Test]
     public void ApplyDiffPatchCmd()
     {
-        Commands.ApplyDiffPatch(false, "hello\\world.patch", PathUtil.ToPosixPath).Arguments.Should().Be("apply \"hello/world.patch\"");
-        Commands.ApplyDiffPatch(true, "hello\\world.patch", PathUtil.ToPosixPath).Arguments.Should().Be("apply --ignore-whitespace \"hello/world.patch\"");
+        // "\" is only the native separator PathUtil.ToPosixPath converts on Windows.
+        string patchFile = $"hello{Path.DirectorySeparatorChar}world.patch";
+        Commands.ApplyDiffPatch(false, patchFile, PathUtil.ToPosixPath).Arguments.Should().Be("apply \"hello/world.patch\"");
+        Commands.ApplyDiffPatch(true, patchFile, PathUtil.ToPosixPath).Arguments.Should().Be("apply --ignore-whitespace \"hello/world.patch\"");
     }
 
     [TestCase(false, false, "hello\\world.patch", "am --3way \"hello/world.patch\"")]
@@ -46,6 +50,12 @@ public partial class CommandsTests
     [TestCase(true, true, null, "am --3way --signoff --ignore-whitespace")]
     public void ApplyMailboxPatchCmd(bool signOff, bool ignoreWhitespace, string? patchFile, string expected)
     {
+        // [TestCase] arguments must be compile-time constants, so the hardcoded "\" in the
+        // literals above can't be replaced with Path.DirectorySeparatorChar directly - normalise
+        // here instead (a no-op on Windows, where '\' already is the native separator) before it
+        // reaches PathUtil.ToPosixPath, which only converts the native separator.
+        patchFile = patchFile?.Replace('\\', Path.DirectorySeparatorChar);
+
         Commands.ApplyMailboxPatch(signOff, ignoreWhitespace, patchFile, PathUtil.ToPosixPath).Arguments.Should().Be(expected);
     }
 
@@ -269,6 +279,11 @@ public partial class CommandsTests
     [TestCase(true, true, false, null, false, null, 5, "merge --squash --log=5 --no-edit branch")]
     public void MergeBranchCmd(bool allowFastForward, bool squash, bool noCommit, string? strategy, bool allowUnrelatedHistories, string? mergeCommitFilePath, int? log, string expected)
     {
+        // Same [TestCase]-can't-use-Path.DirectorySeparatorChar reasoning as ApplyMailboxPatchCmd
+        // above: normalise the "D:\myrepo\.git\file" case's separators here instead (a no-op for
+        // every other case, and a no-op on Windows generally).
+        mergeCommitFilePath = mergeCommitFilePath?.Replace('\\', Path.DirectorySeparatorChar);
+
         Commands.MergeBranch("branch", allowFastForward, squash, noCommit, strategy!, allowUnrelatedHistories, mergeCommitFilePath, PathUtil.ToPosixPath, log).Arguments.Should().Be(expected);
     }
 
@@ -326,7 +341,7 @@ public partial class CommandsTests
     {
         Commands.PushTag("path", "tag", all: false).Arguments.Should().Be("push --progress \"path\" tag tag");
         Commands.PushTag("path", " tag ", all: false).Arguments.Should().Be("push --progress \"path\" tag tag");
-        Commands.PushTag("path\\path", " tag ", all: false).Arguments.Should().Be("push --progress \"path/path\" tag tag");
+        Commands.PushTag($"path{Path.DirectorySeparatorChar}path", " tag ", all: false).Arguments.Should().Be("push --progress \"path/path\" tag tag");
         Commands.PushTag("path", "tag", all: true).Arguments.Should().Be("push --progress \"path\" --tags");
         Commands.PushTag("path", "tag", all: true, force: ForcePushOptions.Force).Arguments.Should().Be("push -f --progress \"path\" --tags");
         Commands.PushTag("path", "tag", all: true, force: ForcePushOptions.ForceWithLease).Arguments.Should().Be("push --force-with-lease --progress \"path\" --tags");

@@ -94,9 +94,16 @@ public class PathUtilTest
     [Test]
     public void ToWslPathTest()
     {
+        // ToMountPath (which both ToWslPath and ToCygwinPath forward to) runs ToPosixPath first,
+        // which only converts the NATIVE separator; the forward-slash input is already portable
+        // (works identically either way), the backslash one only matches on Windows.
         PathUtil.ToWslPath(null).Should().BeNull();
         "/mnt/c/Work/GitExtensions/".Should().Be(@"C:/Work/GitExtensions/".ToWslPath());
-        "/mnt/c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToWslPath());
+        if (OperatingSystem.IsWindows())
+        {
+            "/mnt/c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToWslPath());
+        }
+
         "/var/tmp/".Should().Be(@"/var/tmp/".ToWslPath());
     }
 
@@ -105,7 +112,11 @@ public class PathUtilTest
     {
         PathUtil.ToCygwinPath(null).Should().BeNull();
         "/cygdrive/c/Work/GitExtensions/".Should().Be(@"C:/Work/GitExtensions/".ToCygwinPath());
-        "/cygdrive/c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToCygwinPath());
+        if (OperatingSystem.IsWindows())
+        {
+            "/cygdrive/c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToCygwinPath());
+        }
+
         "/var/tmp/".Should().Be(@"/var/tmp/".ToCygwinPath());
     }
 
@@ -119,12 +130,16 @@ public class PathUtilTest
         $".:".Should().Be(@".:".ToMountPath(prefix));
         $"{prefix}c".Should().Be(@"C:".ToMountPath(prefix));
         $"{prefix}c_".Should().Be(@"C:_".ToMountPath(prefix));
-        $"{prefix}c/".Should().Be(@"C:\".ToMountPath(prefix));
         $"{prefix}c/".Should().Be(@"C:/".ToMountPath(prefix));
-        $"{prefix}c/folder".Should().Be(@"C:\folder".ToMountPath(prefix));
         $"{prefix}c/Work/GitExtensions/".Should().Be(@"C:/Work/GitExtensions/".ToMountPath(prefix));
-        $"{prefix}c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToMountPath(prefix));
         "/var/tmp/".Should().Be(@"/var/tmp/".ToMountPath(prefix));
+
+        if (OperatingSystem.IsWindows())
+        {
+            $"{prefix}c/".Should().Be(@"C:\".ToMountPath(prefix));
+            $"{prefix}c/folder".Should().Be(@"C:\folder".ToMountPath(prefix));
+            $"{prefix}c/Work/GitExtensions/".Should().Be(@"C:\Work\GitExtensions\".ToMountPath(prefix));
+        }
     }
 
     [Test]
@@ -354,25 +369,55 @@ public class PathUtilTest
         PathUtil.GetWslDistro(path).Should().Be(expected);
     }
 
+    // wslDistro is "" in every case here, so GetPathForGitExecution/GetWindowsPath both take
+    // their "no WSL" branch - plain path.ToPosixPath()/ToNativePath(), native-separator
+    // dependent despite the wsl$-shaped content of the first case (that text is never actually
+    // interpreted as a UNC prefix when distro is empty). [TestCase] can't hold
+    // Path.DirectorySeparatorChar directly, so normalise the input at the top of the method
+    // instead (a no-op on Windows); "expected" is always posix-shaped ('/') already, portable
+    // as-is.
     [TestCase(@"\\wsl$\Ubuntu\work\..\GitExtensions\", "", @"//wsl$/Ubuntu/work/../GitExtensions/")]
     [TestCase(@"C:\work\..\GitExtensions\", "", @"C:/work/../GitExtensions/")]
     [TestCase(@"work\..\GitExtensions\", "", @"work/../GitExtensions/")]
     public void GetPathForGitExecution_GetWindowsPath_default(string? path, string wslDistro, string expected)
     {
+        path = path?.Replace('\\', Path.DirectorySeparatorChar);
+
         PathUtil.GetPathForGitExecution(path, wslDistro).Should().Be(expected);
         PathUtil.GetWindowsPath(expected, wslDistro).Should().Be(path);
     }
 
-    [TestCase(@"\\Wsl$\Ubuntu\work\..\GitExtensions\", "Ubuntu", @"/work/../GitExtensions/")]
-    [TestCase(@"\\wsl$\Ubuntu\work/../GitExtensions", "Ubuntu", @"/work/../GitExtensions")]
-    [TestCase(@"\\wsl$\Ubuntu-20.04\work\..\GitExtensions\", "Ubuntu-20.04", @"/work/../GitExtensions/")]
+    // No "\\wsl$\" UNC prefix in the input, so - same as the default-branch method above -
+    // GetWslDistro finds nothing and this falls through to the drive-letter/plain ToPosixPath
+    // branches: native-separator dependent, not actually WSL-UNC-specific despite wslDistro
+    // being set. Normalise the input the same way.
     [TestCase(@"C:\work\..\GitExtensions\", "Ubuntu", @"/mnt/c/work/../GitExtensions/")]
     [TestCase(@"work\..\GitExtensions\", "Ubuntu", @"work/../GitExtensions/")]
     public void GetPathForGitExecution_wsl(string? path, string wslDistro, string expected)
     {
+        path = path?.Replace('\\', Path.DirectorySeparatorChar);
+
         PathUtil.GetPathForGitExecution(path, wslDistro).Should().Be(expected);
     }
 
+    // These DO carry a "\\wsl$\" UNC prefix, so GetWslDistro matches and GetPathForGitExecution
+    // slices off the prefix and posix-converts the remainder with ToPosixPath - genuinely
+    // native-separator dependent for that remainder, same as above, but WslPrefix itself
+    // (src/app/GitCommands/PathUtil.cs) is a hardcoded backslash UNC constant representing an
+    // actual Windows path syntax (how Windows accesses a WSL distro's filesystem), not something
+    // a native-separator substitution can meaningfully translate off Windows. Genuinely
+    // Windows/WSL-semantic, matching this file's existing NormalizePath/NormalizeWslPath
+    // [Platform(Include = "Win")] precedent for the same reason.
+    [Platform(Include = "Win")]
+    [TestCase(@"\\Wsl$\Ubuntu\work\..\GitExtensions\", "Ubuntu", @"/work/../GitExtensions/")]
+    [TestCase(@"\\wsl$\Ubuntu\work/../GitExtensions", "Ubuntu", @"/work/../GitExtensions")]
+    [TestCase(@"\\wsl$\Ubuntu-20.04\work\..\GitExtensions\", "Ubuntu-20.04", @"/work/../GitExtensions/")]
+    public void GetPathForGitExecution_wsl_uncPrefix(string? path, string wslDistro, string expected)
+    {
+        PathUtil.GetPathForGitExecution(path, wslDistro).Should().Be(expected);
+    }
+
+    [Platform(Include = "Win")]
     [TestCase(@"\\wsl$/Ubuntu/work/../GitExtensions", "Ubuntu", @"//wsl$/Ubuntu/work/../GitExtensions")]
     [TestCase(@"\\wsl$\Ubuntu-20.04\work\..\GitExtensions\", "Ubuntu", @"//wsl$/Ubuntu-20.04/work/../GitExtensions/")]
     public void GetPathForGitExecution_unexpected_usage(string? path, string wslDistro, string expected)
@@ -380,14 +425,25 @@ public class PathUtilTest
         PathUtil.GetPathForGitExecution(path, wslDistro).Should().Be(expected);
     }
 
-    // Mostly opposite to GetRepoPath_wsl
+    // Mostly opposite to GetRepoPath_wsl - same "\\wsl$\" UNC prefix reasoning as
+    // GetPathForGitExecution_wsl_uncPrefix above.
+    [Platform(Include = "Win")]
     [TestCase(@"\\wsl$\Ubuntu\work\..\GitExtensions\", "Ubuntu", @"/work/../GitExtensions/")]
     [TestCase(@"\\wsl$\Ubuntu\work\..\GitExtensions", "Ubuntu", @"/work/../GitExtensions")]
     [TestCase(@"\\wsl$\Ubuntu-20.04\work\..\GitExtensions\", "Ubuntu-20.04", @"/work/../GitExtensions/")]
-    [TestCase(@"C:\work\..\GitExtensions\", "Ubuntu", @"/mnt/c/work/../GitExtensions/")]
     [TestCase(@"\\wsl$\Ubuntu\work\..\GitExtensions\", "Ubuntu", @"work/../GitExtensions/")]
+    public void GetWindowsPath_wsl_uncPrefix(string expected, string wslDistro, string? path)
+    {
+        PathUtil.GetWindowsPath(path, wslDistro).Should().Be(expected);
+    }
+
+    // No UNC prefix - drive-letter branch of GetWindowsPath, native-separator dependent (same
+    // reasoning as GetPathForGitExecution_wsl above).
+    [TestCase(@"C:\work\..\GitExtensions\", "Ubuntu", @"/mnt/c/work/../GitExtensions/")]
     public void GetWindowsPath_wsl(string expected, string wslDistro, string? path)
     {
+        expected = expected.Replace('\\', Path.DirectorySeparatorChar);
+
         PathUtil.GetWindowsPath(path, wslDistro).Should().Be(expected);
     }
 
@@ -422,20 +478,51 @@ public class PathUtilTest
     [Test]
     public void GetDisplayPath()
     {
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // GetDisplayPath itself compares against PathUtil.UserProfilePath (a static field
+        // captured once, at process start), not a fresh Environment.GetFolderPath(UserProfile)
+        // call - and some other test in the suite may have since called
+        // EnvironmentConfiguration.SetEnvironmentVariables(), which reassigns the process's HOME
+        // (observed to flake this test off Windows: Environment.GetFolderPath re-reads live HOME
+        // there, so it can diverge from the value UserProfilePath latched at startup, depending
+        // on test execution order). Building the input from UserProfilePath directly - the same
+        // source GetDisplayPath itself reads - keeps this test's outcome independent of that
+        // ordering, on every platform, without changing what's actually under test.
+        string home = PathUtil.UserProfilePath;
 
-        PathUtil.GetDisplayPath(Path.Combine(home, "SomePath")).Should().Be(@"~\SomePath");
+        // Path.Combine(home, "SomePath") joins with the native separator, so the "~"-substituted
+        // result carries that same native separator - only literally "\" on Windows.
+        PathUtil.GetDisplayPath(Path.Combine(home, "SomePath")).Should().Be($"~{Path.DirectorySeparatorChar}SomePath");
+
+        // Not under UserProfilePath on any platform (this literal has no bearing on the current
+        // OS's profile path), so GetDisplayPath returns it unchanged regardless of platform.
         PathUtil.GetDisplayPath("c:\\SomePath").Should().Be("c:\\SomePath");
     }
 
+    // Path.GetDirectoryName (which FindAncestors walks up via) normalises separators to the
+    // NATIVE one on Windows regardless of which separator the input used - e.g. "/foo/bar" ->
+    // "\foo" there - so these hardcoded backslash expectations only match on Windows even though
+    // the '/' input itself is portable. [TestCase] arguments must be compile-time constants, so
+    // the "\\"-literals are normalised to the native separator at the top of the method (a no-op
+    // on Windows) rather than in the attributes themselves.
     [TestCase("/foo/bar", new[] { "\\foo\\", "\\" })]
     [TestCase("/foo/bar/", new[] { "\\foo\\", "\\" })]
     [TestCase("/foo", new[] { "\\" })]
     [TestCase("/foo/", new[] { "\\" })]
     [TestCase("/", new string[0])]
+    public void FindAncestors(string? path, string[] expected)
+    {
+        expected = Array.ConvertAll(expected, e => e.Replace('\\', Path.DirectorySeparatorChar));
+
+        PathUtil.FindAncestors(path!).ToArray().Should().Equal(expected);
+    }
+
+    // Drive-letter paths: off Windows, "\" isn't a separator at all, so "C:\foo\bar" is a single
+    // path segment with no ancestors to walk - a different (and correct) result off Windows, not
+    // a portable expectation to translate.
+    [Platform(Include = "Win")]
     [TestCase("C:\\foo\\bar", new[] { "C:\\foo\\", "C:\\" })]
     [TestCase("C:\\", new string[0])]
-    public void FindAncestors(string? path, string[] expected)
+    public void FindAncestors_driveLetter(string? path, string[] expected)
     {
         PathUtil.FindAncestors(path!).ToArray().Should().Equal(expected);
     }

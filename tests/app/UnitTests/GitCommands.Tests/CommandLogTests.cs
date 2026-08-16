@@ -4,6 +4,18 @@ using GitCommands.Logging;
 namespace GitCommandsTests;
 public class CommandLogTests
 {
+    // Sets AppSettings.GitCommandValue to an arbitrary fileName so CommandLogEntry.ColumnLine
+    // treats *that* file as "the git command" and strips its config args. GitCommandValue is one
+    // of the settings commit 89e02fc6e deliberately keeps registry-only (reads return the
+    // caller's default, writes are dropped off Windows), and CommandLogEntry.ColumnLine has no
+    // way to be told the git command name other than through AppSettings.GitCommand, so there's
+    // no route to this behaviour off Windows without a product-code change (out of scope this
+    // round). Every case here relies on the override taking effect, so the whole method is
+    // Windows-only; the sibling _should_display_wsl_git_command and _should_display_non_git_command
+    // methods below don't depend on the override actually landing (they either target the
+    // unconfigurable "git"/"wsl" defaults directly, or expect the non-git fallback either way) and
+    // already run everywhere.
+    [Platform(Include = "Win")]
     [TestCase("somegit.exe", "", "")]
     [TestCase("somegit.exe", @"verb -c config", "verb")]
     [TestCase("somegit.exe", @"-c config verb", "verb")]
@@ -43,6 +55,13 @@ public class CommandLogTests
         AppSettings.GitCommandValue = origGitCommandValue;
     }
 
+    // Depends on the AppSettings.GitCommandValue override too: "notAgit" and the WSL-shaped
+    // "anycmd ... git" fileName are deliberately crafted to end with the substring "git" without
+    // BEING the (overridden) git command "notanycmd", to prove FileName.EndsWith(gitCmd) doesn't
+    // false-positive on a near-miss. Off Windows gitCmd is stuck at the real default "git" (see
+    // the method above), so those two cases now genuinely DO end with gitCmd and misclassify -
+    // same root cause, same "no route without a product change" conclusion.
+    [Platform(Include = "Win")]
     [TestCase("anycmd", @"-d Ubuntu --cd ""\\wsl$\Ubuntu\home\user\repo\project"" git -c config=""value with space"" agr1 arg2", @"-d Ubuntu --cd ""\\wsl$\Ubuntu\home\user\repo\project"" git -c config=""value with space"" agr1 arg2")]
     [TestCase(@"anycmd -d Ubuntu --cd ""\\wsl$\Ubuntu\home\user\repo\project"" git", @"-c config=""value with space"" arg1 arg2", @"-c config=""value with space"" arg1 arg2")]
     [TestCase("notAgit.exe", "", "")]
