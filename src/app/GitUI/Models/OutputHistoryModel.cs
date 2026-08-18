@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text;
 using GitUI.Editor.Diff;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Models;
 
@@ -81,7 +80,7 @@ internal sealed class OutputHistoryModel : IOutputHistoryProvider, IOutputHistor
                 sb.Append(runProcess.Executable).Append(' ').AppendLine(runProcess.Arguments);
             }
 
-            List<TextMarker> textMarkers = [];
+            List<StyledSpan> textMarkers = [];
             AnsiEscapeUtilities.ParseEscape(runProcess.Output.Trim(), sb, textMarkers, traceErrors: false);
 
             return sb.AppendLine().AppendLine();

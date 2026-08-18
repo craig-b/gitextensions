@@ -1,5 +1,4 @@
-﻿using GitExtensions.Extensibility;
-using ICSharpCode.TextEditor.Document;
+using GitExtensions.Extensibility;
 
 namespace GitUI.Editor.Diff;
 
@@ -14,11 +13,20 @@ public class TextHighlightService : ITextHighlightService
     {
     }
 
-    public virtual void AddTextHighlighting(IDocument document)
-    {
-    }
+    /// <summary>
+    /// The parsed diff-line metadata for the diff line number gutter, if this service produces any.
+    /// </summary>
+    public virtual DiffLinesInfo? DiffLinesInfo => null;
 
-    public virtual bool IsSearchMatch(DiffViewerLineNumberControl lineNumbersControl, int indexInText)
+    /// <summary>
+    /// Whether the diff line number gutter should show a left (original) column.
+    /// Only relevant for services that set <see cref="DiffLinesInfo"/>.
+    /// </summary>
+    public virtual bool ShowLeftColumn => true;
+
+    public virtual IReadOnlyList<StyledSpan> GetHighlighting() => [];
+
+    public virtual bool IsSearchMatch(DiffLineType? lineType)
     {
         DebugHelpers.Fail($"Unexpected highlight service {GetType()}, not a diff/grep type.");
         return false;

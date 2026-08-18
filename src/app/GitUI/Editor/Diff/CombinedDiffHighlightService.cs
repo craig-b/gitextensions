@@ -6,11 +6,10 @@ public class CombinedDiffHighlightService : DiffHighlightService
 {
     private static readonly string[] _diffFullPrefixes = ["  ", "++", "+ ", " +", "--", "- ", " -"];
 
-    public CombinedDiffHighlightService(ref string text, bool useGitColoring, DiffViewerLineNumberControl lineNumbersControl)
+    public CombinedDiffHighlightService(ref string text, bool useGitColoring)
         : base(ref text, useGitColoring)
     {
         _diffLinesInfo = DiffLineNumAnalyzer.Analyze(text, _textMarkers, isCombinedDiff: true);
-        lineNumbersControl.DisplayLineNum(_diffLinesInfo, showLeftColumn: true);
         SetHighlighting(text);
     }
 

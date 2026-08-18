@@ -3,7 +3,6 @@ using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Theming;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Editor.Diff;
 
@@ -12,7 +11,7 @@ public partial class DiffLineNumAnalyzer
     [GeneratedRegex(@"\-(?<leftStart>\d{1,})\,{0,}(?<leftCount>\d{0,})\s\+(?<rightStart>\d{1,})\,{0,}(?<rightCount>\d{0,})", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex DiffRegex { get; }
 
-    public static DiffLinesInfo Analyze(string text, IReadOnlyList<TextMarker> allTextMarkers, bool isCombinedDiff, bool isGitWordDiff = false)
+    public static DiffLinesInfo Analyze(string text, IReadOnlyList<StyledSpan> allTextMarkers, bool isCombinedDiff, bool isGitWordDiff = false)
     {
         DiffLinesInfo ret = new();
         bool reverseGitColoring = AppSettings.ReverseGitColoring.Value;
@@ -39,7 +38,7 @@ public partial class DiffLineNumAnalyzer
                 break;
             }
 
-            Lazy<List<TextMarker>> textMarkers = new(()
+            Lazy<List<StyledSpan>> textMarkers = new(()
                 => [.. allTextMarkers.Where(m => (m.Offset < textOffset + lineLength && m.EndOffset >= textOffset))]);
 
             lineNumInDiff++;
@@ -172,13 +171,13 @@ public partial class DiffLineNumAnalyzer
 
         // git-diff colors moved lines in other than red green
         // However, Git may mark trailing whitespaces (diff.colormovedws is ignored)
-        bool IsMovedLine(List<TextMarker> textMarkers, DiffLineInfo meta)
+        bool IsMovedLine(List<StyledSpan> textMarkers, DiffLineInfo meta)
             => textMarkers.Count > 0
                 && !MarkerColorMatch(textMarkers[0], meta.LineType)
                 && (textMarkers.Count <= 1 || !MarkerColorMatch(textMarkers[^1], meta.LineType) || text.AsSpan()[textMarkers[^1].Offset..textMarkers[^1].EndOffset].IsWhiteSpace())
                 && (textMarkers.Count <= 2 || !textMarkers[1..^1].All(m => MarkerColorMatch(m, meta.LineType)));
 
-        bool IsGitWordMatch(DiffLineType lineType, string line, int textOffset, int textLength, List<TextMarker> textMarkers)
+        bool IsGitWordMatch(DiffLineType lineType, string line, int textOffset, int textLength, List<StyledSpan> textMarkers)
         {
             // Heuristics (or wild guessing): For GitWordDiff find if the line is exclusive (otherwise DiffLineType.MinusPlus).
             // If the marker covers the line this should be true.
@@ -200,17 +199,17 @@ public partial class DiffLineNumAnalyzer
                     && MarkerColorMatch(textMarkers[0], lineType);
         }
 
-        bool MarkerColorMatch(TextMarker textMarker, DiffLineType lineType)
+        bool MarkerColorMatch(StyledSpan textMarker, DiffLineType lineType)
         {
             // The expected marker color for a line type, for heuristics.
 
             return lineType is (DiffLineType.Minus or DiffLineType.MinusLeft)
                 ? (reverseGitColoring
-                    ? textMarker.Color == AppColor.AnsiTerminalRedBackNormal.GetThemeColor()
-                    : textMarker.ForeColor == AppColor.AnsiTerminalRedForeNormal.GetThemeColor())
+                    ? textMarker.Background == AppColor.AnsiTerminalRedBackNormal.GetThemeColor()
+                    : textMarker.Foreground == AppColor.AnsiTerminalRedForeNormal.GetThemeColor())
                 : (reverseGitColoring
-                    ? textMarker.Color == AppColor.AnsiTerminalGreenBackNormal.GetThemeColor()
-                    : textMarker.ForeColor == AppColor.AnsiTerminalGreenForeNormal.GetThemeColor());
+                    ? textMarker.Background == AppColor.AnsiTerminalGreenBackNormal.GetThemeColor()
+                    : textMarker.Foreground == AppColor.AnsiTerminalGreenForeNormal.GetThemeColor());
         }
 
         static bool IsMinusLine(string line)

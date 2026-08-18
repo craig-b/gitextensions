@@ -1,24 +1,29 @@
-﻿using ICSharpCode.TextEditor.Document;
-using JetBrains.Annotations;
-
 namespace GitUI.Editor.Diff;
 
 public interface ITextHighlightService
 {
     /// <summary>
-    /// Add text highlighting to the document.
-    /// This is primarily used to highlight changed files for diffs.
-    /// Called when the text is changed.
+    /// The parsed diff-line metadata for the diff line number gutter, if this service produces any.
     /// </summary>
-    /// <param name="document">The document to highlight.</param>
-    void AddTextHighlighting([NotNull] IDocument document);
+    DiffLinesInfo? DiffLinesInfo { get; }
 
     /// <summary>
-    /// Check if the index (line) in the text is a search match
-    /// for next/previous navigation, e.g. +/- for regular patches.
+    /// Whether the diff line number gutter should show a left (original) column.
+    /// Only relevant for services that set <see cref="DiffLinesInfo"/>.
     /// </summary>
-    /// <param name="lineNumbersControl">The line number control.</param>
-    /// <param name="indexInText">The index in the viewer text.</param>
+    bool ShowLeftColumn { get; }
+
+    /// <summary>
+    /// Get the styled spans computed for the current text.
+    /// This is primarily used to highlight changed files for diffs.
+    /// </summary>
+    /// <returns>The styled spans to apply to the document.</returns>
+    IReadOnlyList<StyledSpan> GetHighlighting();
+
+    /// <summary>
+    /// Check if the line type is a search match for next/previous navigation, e.g. +/- for regular patches.
+    /// </summary>
+    /// <param name="lineType">The line type at the index in the viewer text, if known.</param>
     /// <returns><see langword="true"/> if the line is a searchmatch; otherwise <see langword="false"/>.</returns>
-    bool IsSearchMatch(DiffViewerLineNumberControl lineNumbersControl, int indexInText);
+    bool IsSearchMatch(DiffLineType? lineType);
 }

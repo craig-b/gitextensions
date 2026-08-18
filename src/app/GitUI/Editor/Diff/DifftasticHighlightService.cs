@@ -1,9 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using GitCommands;
 using GitExtensions.Extensibility;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Editor.Diff;
 
@@ -12,13 +11,13 @@ namespace GitUI.Editor.Diff;
 /// </summary>
 public partial class DifftasticHighlightService : TextHighlightService
 {
-    protected readonly List<TextMarker> _textMarkers = [];
+    protected readonly List<StyledSpan> _textMarkers = [];
     private DiffLinesInfo _diffLinesInfo = new();
 
     [GeneratedRegex(@"^(\s*(?<matchStart>(?<lineNo>\d+)|(\.+)) )", RegexOptions.ExplicitCapture)]
     private static partial Regex LineNoRegex { get; }
 
-    public DifftasticHighlightService(ref string text, DiffViewerLineNumberControl lineNumbersControl, out int rightColumnStart)
+    public DifftasticHighlightService(ref string text, out int rightColumnStart)
     {
         // Hide VRulerPos by default
         rightColumnStart = 0;
@@ -29,7 +28,7 @@ public partial class DifftasticHighlightService : TextHighlightService
 
         StringBuilder sb = new(text.Length);
         StringBuilder lineBuilder = column > 0 ? new(column) : new();
-        List<TextMarker> textMarkers = [];
+        List<StyledSpan> textMarkers = [];
         int halfColumn = column / 2;
         bool nextIsHeader = true;
         bool debugPrinted = false;
@@ -92,7 +91,7 @@ public partial class DifftasticHighlightService : TextHighlightService
                 if (textMarkers.Count > 0 && textMarkers[0].Offset < leftLen)
                 {
                     // Use lineno coloring to guess if this is added or removed.
-                    Color c = reverseGitColoring ? textMarkers[0].Color : textMarkers[0].ForeColor;
+                    Color c = reverseGitColoring ? (textMarkers[0].Background ?? Color.Empty) : (textMarkers[0].Foreground ?? Color.Empty);
                     if (!IsUnchanged(c))
                     {
                         // Use mostly red/green to detect removed/added.
@@ -114,9 +113,9 @@ public partial class DifftasticHighlightService : TextHighlightService
             if (leftLen > 0)
             {
                 lineBuilder = lineBuilder.Remove(0, leftLen);
-                foreach (TextMarker tm in textMarkers)
+                for (int i = 0; i < textMarkers.Count; ++i)
                 {
-                    RemoveLineNoPart(tm, 0, leftLen);
+                    textMarkers[i] = RemoveLineNoPart(textMarkers[i], 0, leftLen);
                 }
             }
 
@@ -185,8 +184,9 @@ public partial class DifftasticHighlightService : TextHighlightService
             }
 
             bool first = true;
-            foreach (TextMarker tm in textMarkers)
+            for (int i = 0; i < textMarkers.Count; ++i)
             {
+                StyledSpan tm = textMarkers[i];
                 if (tm.EndOffset < rightStartOffset)
                 {
                     continue;
@@ -198,7 +198,7 @@ public partial class DifftasticHighlightService : TextHighlightService
 
                     // Use lineno coloring to guess if this is added or removed.
                     // If not unchanged this right lineno is assumed to be added (and is likely green).
-                    Color c = reverseGitColoring ? tm.Color : tm.ForeColor;
+                    Color c = reverseGitColoring ? (tm.Background ?? Color.Empty) : (tm.Foreground ?? Color.Empty);
                     if (!IsUnchanged(c))
                     {
                         DebugHelpers.Assert(lineType != DiffLineType.PlusRight, $"Left status for rightline {rightLineNo} is {lineType}, incorrect leftline parsing?");
@@ -208,18 +208,19 @@ public partial class DifftasticHighlightService : TextHighlightService
                     }
                 }
 
-                RemoveLineNoPart(tm, rightStartOffset, rightLen);
+                tm = RemoveLineNoPart(tm, rightStartOffset, rightLen);
                 if (tm.Offset >= rightStartOffset)
                 {
-                    tm.Offset += columnGap;
+                    tm = tm with { Offset = tm.Offset + columnGap };
                 }
+
+                textMarkers[i] = tm;
             }
 
             AddInfo(leftLineNo, rightLineNo, lineType, textMarkers, lineBuilder);
         }
 
         text = sb.ToString();
-        lineNumbersControl.DisplayLineNum(_diffLinesInfo, showLeftColumn: true);
 
         return;
 
@@ -228,41 +229,37 @@ public partial class DifftasticHighlightService : TextHighlightService
         static bool IsUnchanged(Color c)
             => c.R == c.G;
 
-        static void RemoveLineNoPart(TextMarker tm, int offset, int length)
+        static StyledSpan RemoveLineNoPart(StyledSpan tm, int offset, int length)
         {
             if (tm.Offset + tm.Length <= offset)
             {
                 // All is before the gap
-                return;
+                return tm;
             }
 
             if (tm.Offset >= offset + length)
             {
                 // All is after the gap
-                tm.Offset -= length;
-                return;
+                return tm with { Offset = tm.Offset - length };
             }
 
             if (tm.Offset <= offset && offset + length <= tm.Offset + tm.Length)
             {
                 // Gap is covered
-                tm.Length -= length;
-                return;
+                return tm with { Length = tm.Length - length };
             }
 
             if (tm.Offset > offset)
             {
                 // Remove the start in the gap
-                tm.Length -= tm.Offset - offset;
-                tm.Offset = offset;
-                return;
+                return tm with { Length = tm.Length - (tm.Offset - offset), Offset = offset };
             }
 
             // the end part of the gap
-            tm.Length -= tm.Offset + tm.Length - offset;
+            return tm with { Length = tm.Length - (tm.Offset + tm.Length - offset) };
         }
 
-        void AddInfo(int leftLineNo, int rightLineNo, DiffLineType lineType, List<TextMarker> textMarkers, StringBuilder lineBuilder)
+        void AddInfo(int leftLineNo, int rightLineNo, DiffLineType lineType, List<StyledSpan> textMarkers, StringBuilder lineBuilder)
         {
             _diffLinesInfo.Add(
                 new()
@@ -276,7 +273,7 @@ public partial class DifftasticHighlightService : TextHighlightService
                 });
             for (int i = 0; i < textMarkers.Count; ++i)
             {
-                TextMarker tm = textMarkers[i];
+                StyledSpan tm = textMarkers[i];
                 if (tm.Length <= 0)
                 {
                     textMarkers.RemoveAt(i);
@@ -284,7 +281,7 @@ public partial class DifftasticHighlightService : TextHighlightService
                     continue;
                 }
 
-                tm.Offset += sb.Length;
+                textMarkers[i] = tm with { Offset = tm.Offset + sb.Length };
             }
 
             _textMarkers.AddRange(textMarkers);
@@ -293,9 +290,10 @@ public partial class DifftasticHighlightService : TextHighlightService
         }
     }
 
-    public override void AddTextHighlighting(IDocument document)
-        => document.MarkerStrategy.AddMarkers(_textMarkers);
+    public override DiffLinesInfo DiffLinesInfo => _diffLinesInfo;
 
-    public override bool IsSearchMatch(DiffViewerLineNumberControl lineNumbersControl, int indexInText)
-        => lineNumbersControl.GetLineInfo(indexInText)?.LineType is DiffLineType.Plus or DiffLineType.Minus or DiffLineType.MinusPlus or DiffLineType.MinusLeft or DiffLineType.PlusRight;
+    public override IReadOnlyList<StyledSpan> GetHighlighting() => _textMarkers;
+
+    public override bool IsSearchMatch(DiffLineType? lineType)
+        => lineType is DiffLineType.Plus or DiffLineType.Minus or DiffLineType.MinusPlus or DiffLineType.MinusLeft or DiffLineType.PlusRight;
 }

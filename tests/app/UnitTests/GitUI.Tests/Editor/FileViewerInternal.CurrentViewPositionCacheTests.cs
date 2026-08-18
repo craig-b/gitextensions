@@ -168,7 +168,8 @@ public class CurrentViewPositionCacheTests
         _viewPositionCache.GetTestAccessor().SetCapturedIdentification("current");
 
         test.LineNumberControl.Clear();
-        ITextHighlightService highlightService = new PatchHighlightService(ref text, true, test.LineNumberControl);
+        ITextHighlightService highlightService = new PatchHighlightService(ref text, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         _viewPositionCache.Restore("current");
 
         test.TextEditor.ActiveTextAreaControl.TextArea.Caret.Position.Should().Be(existingViewPosition.CaretPosition,
@@ -183,7 +184,8 @@ public class CurrentViewPositionCacheTests
             "empty file, set the position to the first");
 
         test.LineNumberControl.Clear();
-        highlightService = new PatchHighlightService(ref text, true, test.LineNumberControl);
+        highlightService = new PatchHighlightService(ref text, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         _viewPositionCache.Capture();
         test.TextEditor.Text = text;
         _viewPositionCache.Restore("current");
@@ -200,7 +202,8 @@ public class CurrentViewPositionCacheTests
             "Empty name, position should be the first");
 
         test.LineNumberControl.Clear();
-        highlightService = new PatchHighlightService(ref text, true, test.LineNumberControl);
+        highlightService = new PatchHighlightService(ref text, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         _viewPositionCache.Capture();
         test.TextEditor.Text = text;
         _viewPositionCache.Restore("current");
@@ -217,7 +220,8 @@ public class CurrentViewPositionCacheTests
             "null name, set the position to the first");
 
         test.LineNumberControl.Clear();
-        highlightService = new PatchHighlightService(ref text, true, test.LineNumberControl);
+        highlightService = new PatchHighlightService(ref text, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         _viewPositionCache.Capture();
         test.TextEditor.Text = text;
         _viewPositionCache.Restore("current");
@@ -228,7 +232,8 @@ public class CurrentViewPositionCacheTests
         string text2 = "dummy text\ndummy";
         _viewPositionCache.Capture();
         test.LineNumberControl.Clear();
-        highlightService = new PatchHighlightService(ref text2, true, test.LineNumberControl);
+        highlightService = new PatchHighlightService(ref text2, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         test.TextEditor.Text = text2;
         _viewPositionCache.Restore("dummy");
 
@@ -236,7 +241,8 @@ public class CurrentViewPositionCacheTests
             "a new file will set the position back to 0,0");
 
         test.LineNumberControl.Clear();
-        highlightService = new PatchHighlightService(ref text, true, test.LineNumberControl);
+        highlightService = new PatchHighlightService(ref text, true);
+        test.LineNumberControl.DisplayLineNum(highlightService.DiffLinesInfo!, showLeftColumn: true);
         _viewPositionCache.Capture();
         test.TextEditor.Text = text;
         _viewPositionCache.Restore("current");

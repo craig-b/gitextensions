@@ -4,12 +4,22 @@ using System.Text.RegularExpressions;
 using GitExtensions.Extensibility;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Theming;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Editor.Diff;
 
 public partial class AnsiEscapeUtilities
 {
+    /// <summary>
+    /// The outcome of <see cref="TryGetTextMarker"/>: whether a span was appended, merged into the
+    /// previous entry (which the caller must replace in place), or nothing changed.
+    /// </summary>
+    public enum MarkerResult
+    {
+        None,
+        Merged,
+        New
+    }
+
     [GeneratedRegex(@"\u001b\[((?<escNo>\d+)\s*[:;]?\s*)*m", RegexOptions.ExplicitCapture)]
     private static partial Regex EscapeRegex { get; }
     private static readonly int _defaultForeColorId = Application.IsDarkModeEnabled ? _whiteId : _blackId;
@@ -29,7 +39,7 @@ public partial class AnsiEscapeUtilities
     /// <summary>
     /// Debug print colors similar to https://github.com/robertknight/konsole/raw/master/tests/color-spaces.pl
     /// </summary>
-    public static void PrintColors(StringBuilder sb, List<TextMarker> textMarkers)
+    public static void PrintColors(StringBuilder sb, List<StyledSpan> textMarkers)
     {
         int currentColorId = _defaultForeColorId;
         StringBuilder rawSb = new();
@@ -82,9 +92,9 @@ public partial class AnsiEscapeUtilities
                                 },
                                 prevMarker: null,
                                 sb,
-                                out TextMarker? tm))
+                                out StyledSpan tm) == MarkerResult.New)
                         {
-                            textMarkers.Add(tm!);
+                            textMarkers.Add(tm);
                         }
                     }
 
@@ -107,7 +117,7 @@ public partial class AnsiEscapeUtilities
     /// <param name="text">The text to parse.</param>
     /// <param name="sb">StringBuilder to appened the text with with the escape sequences removed.</param>
     /// <param name="textMarkers">Detected and current started highlight info for the document.</param>
-    public static void ParseEscape(string text, StringBuilder sb, List<TextMarker> textMarkers, bool themeColors = false, bool traceErrors = true)
+    public static void ParseEscape(string text, StringBuilder sb, List<StyledSpan> textMarkers, bool themeColors = false, bool traceErrors = true)
     {
         int errorCount = 0;
         int prevLineOffset = 0;
@@ -185,10 +195,15 @@ public partial class AnsiEscapeUtilities
             }
 
             currentHighlight.Length = len;
-            TextMarker? prevMarker = textMarkers.Count == 0 ? null : textMarkers[^1];
-            if (TryGetTextMarker(currentHighlight, prevMarker, sb, out TextMarker? tm))
+            StyledSpan? prevMarker = textMarkers.Count == 0 ? null : textMarkers[^1];
+            MarkerResult result = TryGetTextMarker(currentHighlight, prevMarker, sb, out StyledSpan tm);
+            if (result == MarkerResult.Merged)
             {
-                textMarkers.Add(tm!);
+                textMarkers[^1] = tm;
+            }
+            else if (result == MarkerResult.New)
+            {
+                textMarkers.Add(tm);
             }
 
             currentHighlight.Length = -1;
@@ -553,25 +568,28 @@ public partial class AnsiEscapeUtilities
     /// <param name="sb">Text in the document.</param>
     /// <param name="textMarker">The created text marker or null</param>
     /// <returns><see langword="true"/> if a marker was created, otherwise <see langword="false"/>.</returns>
-    public static bool TryGetTextMarker(HighlightInfo hl, TextMarker? prevMarker, StringBuilder sb, out TextMarker? textMarker)
+    public static MarkerResult TryGetTextMarker(HighlightInfo hl, StyledSpan? prevMarker, StringBuilder sb, out StyledSpan textMarker)
     {
         if (hl.DocOffset < 0 || hl.Length < 0)
         {
             Trace.WriteLine($"Unexpected no docOffset or backColor ({hl})");
             DebugHelpers.Fail($"Unexpected no docOffset or backColor ({hl})");
-            textMarker = null;
-            return false;
+            textMarker = default;
+            return MarkerResult.None;
         }
 
         // BackColor must always be set
         hl.BackColor ??= AppColor.EditorBackground.GetThemeColor();
 
         // Check if segment can be merged with the previous
-        if (prevMarker is not null
-            && prevMarker.Color == hl.BackColor
-            && prevMarker.ForeColor == hl.ForeColor)
+        // A null Foreground means the previous marker was created without an explicit fore color
+        // (equivalent to the old TextMarker's default Color.Empty), which never matches a *current*
+        // unset (null) fore color either - matching the original ICSharpCode.TextMarker comparison.
+        if (prevMarker is StyledSpan prev
+            && prev.Background == hl.BackColor
+            && (prev.Foreground ?? Color.Empty) == hl.ForeColor)
         {
-            int gapLen = hl.DocOffset - prevMarker.EndOffset - 1;
+            int gapLen = hl.DocOffset - prev.EndOffset - 1;
             if (gapLen == 0)
             {
                 // zero gap, Git often have consecutive sections (like '+' in separate)
@@ -594,16 +612,13 @@ public partial class AnsiEscapeUtilities
 
             if (gapLen >= 0)
             {
-                prevMarker.Length += gapLen + hl.Length;
-                textMarker = null;
-                return false;
+                textMarker = prev with { Length = prev.Length + gapLen + hl.Length };
+                return MarkerResult.Merged;
             }
         }
 
-        textMarker = hl.ForeColor is null
-            ? new TextMarker(hl.DocOffset, hl.Length, TextMarkerType.SolidBlock, (Color)hl.BackColor)
-            : new TextMarker(hl.DocOffset, hl.Length, TextMarkerType.SolidBlock, (Color)hl.BackColor, (Color)hl.ForeColor);
-        return true;
+        textMarker = new StyledSpan(hl.DocOffset, hl.Length, Foreground: hl.ForeColor, Background: hl.BackColor);
+        return MarkerResult.New;
     }
 
     internal readonly struct TestAccessor

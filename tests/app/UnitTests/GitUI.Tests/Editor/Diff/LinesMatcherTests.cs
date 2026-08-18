@@ -2,6 +2,9 @@
 using ICSharpCode.TextEditor.Document;
 
 namespace GitUITests.Editor.Diff;
+
+// NOTE: "using ICSharpCode.TextEditor.Document;" above is kept solely for TextUtilities.IsLetterDigitOrUnderscore,
+// used as an external predicate in the GetWords test - it is unrelated to the ISegment/LineSegment -> Segment change below.
 public class LinesMatcherTests
 {
     [Test]
@@ -65,9 +68,9 @@ public class LinesMatcherTests
     {
         const int removedCount = 10;
         const int maxCombinations = 100 * 100;
-        LineSegment[] removedLines = CreateLines(removedCount);
-        LineSegment[] addedLines = CreateLines((maxCombinations / removedCount) + 1);
-        Dictionary<ISegment, string> lineTexts = [];
+        Segment[] removedLines = CreateLines(removedCount);
+        Segment[] addedLines = CreateLines((maxCombinations / removedCount) + 1);
+        Dictionary<Segment, string> lineTexts = [];
         for (int index = 0; index < removedCount; ++index)
         {
             string lineText = $"line{index}";
@@ -75,10 +78,10 @@ public class LinesMatcherTests
             lineTexts[addedLines[index + removedCount]] = lineText;
         }
 
-        IEnumerable<(ISegment RemovedLine, ISegment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
+        IEnumerable<(Segment RemovedLine, Segment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
 
         int pairIndex = 0;
-        foreach ((ISegment removedLine, ISegment addedLine) in pairs)
+        foreach ((Segment removedLine, Segment addedLine) in pairs)
         {
             removedLine.Should().Be(removedLines[pairIndex]);
             addedLine.Should().Be(addedLines[pairIndex]);
@@ -87,15 +90,15 @@ public class LinesMatcherTests
 
         return;
 
-        string GetText(ISegment line) => lineTexts.GetValueOrDefault(line, "other line");
+        string GetText(Segment line) => lineTexts.GetValueOrDefault(line, "other line");
     }
 
     [Test]
     public void FindLinePairs_shall_match_trimmed_lines()
     {
-        LineSegment[] removedLines = CreateLines(3);
-        LineSegment[] addedLines = CreateLines(5);
-        Dictionary<ISegment, string> lineTexts = new()
+        Segment[] removedLines = CreateLines(3);
+        Segment[] addedLines = CreateLines(5);
+        Dictionary<Segment, string> lineTexts = new()
         {
             { removedLines[0], "r0" },
             { removedLines[1], " trimmed line\t" },
@@ -107,9 +110,9 @@ public class LinesMatcherTests
             { addedLines[4], "a4" },
         };
 
-        IEnumerable<(ISegment RemovedLine, ISegment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
+        IEnumerable<(Segment RemovedLine, Segment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
 
-        (ISegment RemovedLine, ISegment AddedLine)[] expectedPairs =
+        (Segment RemovedLine, Segment AddedLine)[] expectedPairs =
         [
             (removedLines[0], addedLines[0]),
             (removedLines[1], addedLines[3]),
@@ -119,15 +122,15 @@ public class LinesMatcherTests
 
         return;
 
-        string GetText(ISegment line) => lineTexts.GetValueOrDefault(line, "other line");
+        string GetText(Segment line) => lineTexts.GetValueOrDefault(line, "other line");
     }
 
     [Test]
     public void FindLinePairs_shall_match_lines_whose_common_words_have_maximum_summedup_length()
     {
-        LineSegment[] removedLines = CreateLines(4);
-        LineSegment[] addedLines = CreateLines(5);
-        Dictionary<ISegment, string> lineTexts = new()
+        Segment[] removedLines = CreateLines(4);
+        Segment[] addedLines = CreateLines(5);
+        Dictionary<Segment, string> lineTexts = new()
         {
             { removedLines[0], "line 0 had some words" },
             { removedLines[1], "line 1 had some more common words" },
@@ -140,9 +143,9 @@ public class LinesMatcherTests
             { addedLines[4], "a4" },
         };
 
-        IEnumerable<(ISegment RemovedLine, ISegment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
+        IEnumerable<(Segment RemovedLine, Segment AddedLine)> pairs = LinesMatcher.FindLinePairs(GetText, removedLines, addedLines);
 
-        (ISegment RemovedLine, ISegment AddedLine)[] expectedPairs =
+        (Segment RemovedLine, Segment AddedLine)[] expectedPairs =
         [
             (removedLines[0], addedLines[1]), // longer common words
             (removedLines[1], addedLines[2]), // most long common words
@@ -153,15 +156,18 @@ public class LinesMatcherTests
 
         return;
 
-        string GetText(ISegment line) => lineTexts.GetValueOrDefault(line, "other line");
+        string GetText(Segment line) => lineTexts.GetValueOrDefault(line, "other line");
     }
 
-    private static LineSegment[] CreateLines(int count)
+    // Segment has value equality (unlike the ICSharpCode LineSegment class this replaces, which used
+    // reference identity), so each line must get a distinct Offset - otherwise the Dictionary<Segment,
+    // string> lookups above and the equality assertions would collide across "placeholder" lines.
+    private static Segment[] CreateLines(int count)
     {
-        LineSegment[] lines = new LineSegment[count];
+        Segment[] lines = new Segment[count];
         for (int index = 0; index < count; ++index)
         {
-            lines[index] = new LineSegment();
+            lines[index] = new Segment(Offset: index, Length: 0);
         }
 
         return lines;

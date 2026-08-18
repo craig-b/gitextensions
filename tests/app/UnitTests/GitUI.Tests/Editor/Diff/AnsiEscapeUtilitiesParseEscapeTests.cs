@@ -1,6 +1,5 @@
 ﻿using System.Text;
 using GitUI.Editor.Diff;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUITests.Editor.Diff;
 public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
@@ -12,7 +11,7 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
     {
         string text = "No escape sequence  ";
         StringBuilder sb = new();
-        List<TextMarker> textMarkers = [];
+        List<StyledSpan> textMarkers = [];
 
         AnsiEscapeUtilities.ParseEscape(text, sb, textMarkers);
 
@@ -42,7 +41,7 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
               
             """.ReplaceLineEndings("\n");
         StringBuilder sb = new();
-        List<TextMarker> textMarkers = [];
+        List<StyledSpan> textMarkers = [];
 
         AnsiEscapeUtilities.ParseEscape(in_text, sb, textMarkers);
 
@@ -51,28 +50,28 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
 
         textMarkers[0].Offset.Should().Be(10);
         textMarkers[0].Length.Should().Be(3);
-        textMarkers[0].Color.Should().Be(SystemColors.Window);
-        textMarkers[0].ForeColor.Should().Be(GetAnsiColor());
+        textMarkers[0].Background.Should().Be(SystemColors.Window);
+        textMarkers[0].Foreground.Should().Be(GetAnsiColor());
 
         textMarkers[1].Offset.Should().Be(46);
         textMarkers[1].Length.Should().Be(8);
-        textMarkers[1].Color.Should().Be(SystemColors.Window);
-        textMarkers[1].ForeColor.Should().Be(GetAnsiColor(bold: true));
+        textMarkers[1].Background.Should().Be(SystemColors.Window);
+        textMarkers[1].Foreground.Should().Be(GetAnsiColor(bold: true));
 
         textMarkers[2].Offset.Should().Be(59);
         textMarkers[2].Length.Should().Be(16);
-        textMarkers[2].Color.Should().Be(GetAnsiColor(fore: false, bold: true));
-        textMarkers[2].ForeColor.Should().Be(Color.FromArgb(0, 0, 0));
+        textMarkers[2].Background.Should().Be(GetAnsiColor(fore: false, bold: true));
+        textMarkers[2].Foreground.Should().Be(Color.FromArgb(0, 0, 0));
 
         textMarkers[3].Offset.Should().Be(85);
         textMarkers[3].Length.Should().Be(7);
-        textMarkers[3].Color.Should().Be(SystemColors.Window);
-        textMarkers[3].ForeColor.Should().Be(GetAnsiColor(dim: true));
+        textMarkers[3].Background.Should().Be(SystemColors.Window);
+        textMarkers[3].Foreground.Should().Be(GetAnsiColor(dim: true));
 
         textMarkers[4].Offset.Should().Be(108);
         textMarkers[4].Length.Should().Be(15);
-        textMarkers[4].Color.Should().Be(SystemColors.Window);
-        textMarkers[4].ForeColor.Should().Be(GetAnsiColor());
+        textMarkers[4].Background.Should().Be(SystemColors.Window);
+        textMarkers[4].Foreground.Should().Be(GetAnsiColor());
     }
 
     [Test]
@@ -101,7 +100,7 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
             {_escape_sequence}1xmincomplete escape2
             """.ReplaceLineEndings("\n");
         StringBuilder sb = new();
-        List<TextMarker> textMarkers = [];
+        List<StyledSpan> textMarkers = [];
 
         AnsiEscapeUtilities.ParseEscape(in_text, sb, textMarkers);
 
@@ -110,23 +109,23 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
 
         textMarkers[0].Offset.Should().Be(10);
         textMarkers[0].Length.Should().Be(32);
-        textMarkers[0].Color.Should().Be(SystemColors.Window);
-        textMarkers[0].ForeColor.Should().Be(Color.FromArgb(255, 255, 0, 0));
+        textMarkers[0].Background.Should().Be(SystemColors.Window);
+        textMarkers[0].Foreground.Should().Be(Color.FromArgb(255, 255, 0, 0));
 
         textMarkers[1].Offset.Should().Be(42);
         textMarkers[1].Length.Should().Be(20);
-        textMarkers[1].Color.Should().Be(Color.FromArgb(255, 0, 255, 0));
-        textMarkers[1].ForeColor.Should().Be(Color.FromArgb(255, 255, 94, 94));
+        textMarkers[1].Background.Should().Be(Color.FromArgb(255, 0, 255, 0));
+        textMarkers[1].Foreground.Should().Be(Color.FromArgb(255, 255, 94, 94));
 
         textMarkers[2].Offset.Should().Be(62);
         textMarkers[2].Length.Should().Be(6);
-        textMarkers[2].Color.Should().Be(SystemColors.Window);
-        textMarkers[2].ForeColor.Should().Be(Color.FromArgb(255, 0, 0, 255));
+        textMarkers[2].Background.Should().Be(SystemColors.Window);
+        textMarkers[2].Foreground.Should().Be(Color.FromArgb(255, 0, 0, 255));
 
         textMarkers[3].Offset.Should().Be(100);
         textMarkers[3].Length.Should().Be(62);
-        textMarkers[3].Color.Should().Be(SystemColors.Window);
-        textMarkers[3].ForeColor.Should().Be(Color.FromArgb(0x00, 0x00, 0x00));
+        textMarkers[3].Background.Should().Be(SystemColors.Window);
+        textMarkers[3].Foreground.Should().Be(Color.FromArgb(0x00, 0x00, 0x00));
     }
 
     [Test]
@@ -158,7 +157,7 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
              some text
             """.ReplaceLineEndings("\n").Replace(carriageReplacer, carriageReturn);
         StringBuilder sb = new();
-        List<TextMarker> textMarkers = [];
+        List<StyledSpan> textMarkers = [];
 
         AnsiEscapeUtilities.ParseEscape(in_text, sb, textMarkers);
 
@@ -167,32 +166,32 @@ public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
 
         textMarkers[0].Offset.Should().Be(10);
         textMarkers[0].Length.Should().Be(23);
-        textMarkers[0].Color.Should().Be(SystemColors.Window);
-        textMarkers[0].ForeColor.Should().Be(Color.FromArgb(255, 255, 0, 0));
+        textMarkers[0].Background.Should().Be(SystemColors.Window);
+        textMarkers[0].Foreground.Should().Be(Color.FromArgb(255, 255, 0, 0));
 
         textMarkers[1].Offset.Should().Be(62);
         textMarkers[1].Length.Should().Be(1);
-        textMarkers[1].Color.Should().Be(SystemColors.Window);
-        textMarkers[1].ForeColor.Should().Be(GetAnsiColor());
+        textMarkers[1].Background.Should().Be(SystemColors.Window);
+        textMarkers[1].Foreground.Should().Be(GetAnsiColor());
 
         textMarkers[2].Offset.Should().Be(63);
         textMarkers[2].Length.Should().Be(38);
-        textMarkers[2].Color.Should().Be(SystemColors.Window);
-        textMarkers[2].ForeColor.Should().Be(GetAnsiColor(bold: true));
+        textMarkers[2].Background.Should().Be(SystemColors.Window);
+        textMarkers[2].Foreground.Should().Be(GetAnsiColor(bold: true));
 
         textMarkers[3].Offset.Should().Be(102);
         textMarkers[3].Length.Should().Be(13);
-        textMarkers[3].Color.Should().Be(SystemColors.Window);
-        textMarkers[3].ForeColor.Should().Be(GetAnsiColor(dim: true));
+        textMarkers[3].Background.Should().Be(SystemColors.Window);
+        textMarkers[3].Foreground.Should().Be(GetAnsiColor(dim: true));
 
         textMarkers[4].Offset.Should().Be(116);
         textMarkers[4].Length.Should().Be(47);
-        textMarkers[4].Color.Should().Be(SystemColors.Window);
-        textMarkers[4].ForeColor.Should().Be(GetAnsiColor(bold: true));
+        textMarkers[4].Background.Should().Be(SystemColors.Window);
+        textMarkers[4].Foreground.Should().Be(GetAnsiColor(bold: true));
 
         textMarkers[5].Offset.Should().Be(164);
         textMarkers[5].Length.Should().Be(54);
-        textMarkers[5].Color.Should().Be(SystemColors.Window);
-        textMarkers[5].ForeColor.Should().Be(GetAnsiColor());
+        textMarkers[5].Background.Should().Be(SystemColors.Window);
+        textMarkers[5].Foreground.Should().Be(GetAnsiColor());
     }
 }

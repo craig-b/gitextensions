@@ -1,13 +1,12 @@
 ﻿using System.Diagnostics;
 using GitExtensions.Extensibility;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Editor.Diff;
 
 internal static class LinesMatcher
 {
-    internal static IEnumerable<(ISegment RemovedLine, ISegment AddedLine)> FindLinePairs(
-        Func<ISegment, string> getText, IReadOnlyList<ISegment> removedLines, IReadOnlyList<ISegment> addedLines)
+    internal static IEnumerable<(Segment RemovedLine, Segment AddedLine)> FindLinePairs(
+        Func<Segment, string> getText, IReadOnlyList<Segment> removedLines, IReadOnlyList<Segment> addedLines)
     {
         int numberOfCombinations = removedLines.Count * addedLines.Count;
         if (numberOfCombinations < 1)
@@ -31,19 +30,19 @@ internal static class LinesMatcher
         LineData[] removed = [.. removedLines.Select(line => new LineData(line, getText(line)))];
         LineData[] added = [.. addedLines.Select(line => new LineData(line, getText(line)))];
 
-        foreach ((ISegment, ISegment) linePair in FindLinePairs(removed, added))
+        foreach ((Segment, Segment) linePair in FindLinePairs(removed, added))
         {
             yield return linePair;
         }
     }
 
-    private static IEnumerable<(ISegment RemovedLine, ISegment AddedLine)> FindLinePairs(LineData[] removed, LineData[] added)
+    private static IEnumerable<(Segment RemovedLine, Segment AddedLine)> FindLinePairs(LineData[] removed, LineData[] added)
     {
         (int removedIndex, int addedIndex) = FindBestMatch(removed, added);
 
         if (removedIndex > 0 && addedIndex > 0)
         {
-            foreach ((ISegment, ISegment) linePair in FindLinePairs(removed[0..removedIndex], added[0..addedIndex]))
+            foreach ((Segment, Segment) linePair in FindLinePairs(removed[0..removedIndex], added[0..addedIndex]))
             {
                 yield return linePair;
             }
@@ -55,7 +54,7 @@ internal static class LinesMatcher
         ++addedIndex;
         if (removedIndex < removed.Length && addedIndex < added.Length)
         {
-            foreach ((ISegment, ISegment) linePair in FindLinePairs(removed[removedIndex..], added[addedIndex..]))
+            foreach ((Segment, Segment) linePair in FindLinePairs(removed[removedIndex..], added[addedIndex..]))
             {
                 yield return linePair;
             }
@@ -255,7 +254,7 @@ internal static class LinesMatcher
         }
     }
 
-    internal static bool IsWordChar(char c) => TextUtilities.IsLetterDigitOrUnderscore(c);
+    internal static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     internal static string SelectWord((string Word, int StartIndex) pair) => pair.Word;
 
@@ -264,13 +263,13 @@ internal static class LinesMatcher
     [DebuggerDisplay("{Line.Offset}: {Trimmed}")]
     private readonly struct LineData
     {
-        internal ISegment Line { get; }
+        internal Segment Line { get; }
         internal string Full { get; }
         internal string Trimmed { get; }
         internal IReadOnlySet<string> Words { get; }
         internal int WordsTotalLength { get; }
 
-        internal LineData(ISegment line, string text)
+        internal LineData(Segment line, string text)
         {
             Line = line;
             Full = text;

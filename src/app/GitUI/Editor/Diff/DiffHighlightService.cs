@@ -5,7 +5,6 @@ using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Theming;
-using ICSharpCode.TextEditor.Document;
 
 namespace GitUI.Editor.Diff;
 
@@ -20,7 +19,7 @@ public abstract class DiffHighlightService : TextHighlightService
     private static readonly Color _removedForeColor = AppColor.AnsiTerminalRedForeBold.GetThemeColor();
 
     protected readonly bool _useGitColoring;
-    protected readonly List<TextMarker> _textMarkers = [];
+    protected readonly List<StyledSpan> _textMarkers = [];
     protected DiffLinesInfo _diffLinesInfo = null!;
 
     public DiffHighlightService(ref string text, bool useGitColoring)
@@ -109,11 +108,12 @@ public abstract class DiffHighlightService : TextHighlightService
         }
     }
 
-    public override void AddTextHighlighting(IDocument document)
-        => document.MarkerStrategy.AddMarkers(_textMarkers);
+    public override DiffLinesInfo DiffLinesInfo => _diffLinesInfo;
 
-    public override bool IsSearchMatch(DiffViewerLineNumberControl lineNumbersControl, int indexInText)
-        => lineNumbersControl.GetLineInfo(indexInText)?.LineType is (DiffLineType.Minus or DiffLineType.Plus or DiffLineType.MinusPlus or DiffLineType.Grep);
+    public override IReadOnlyList<StyledSpan> GetHighlighting() => _textMarkers;
+
+    public override bool IsSearchMatch(DiffLineType? lineType)
+        => lineType is (DiffLineType.Minus or DiffLineType.Plus or DiffLineType.MinusPlus or DiffLineType.Grep);
 
     public abstract string[] GetFullDiffPrefixes();
 
@@ -142,7 +142,7 @@ public abstract class DiffHighlightService : TextHighlightService
         // Apply GE word highlighting for Patch display (may apply to Difftastic setting, if not available for a repo)
         if (!_useGitColoring || AppSettings.DiffDisplayAppearance.Value != GitCommands.Settings.DiffDisplayAppearance.GitWordDiff)
         {
-            List<TextMarker> markers = _useGitColoring ? [] : _textMarkers;
+            List<StyledSpan> markers = _useGitColoring ? [] : _textMarkers;
             AddInlineDifferenceMarkers(markers, text);
             if (_useGitColoring)
             {
@@ -162,19 +162,19 @@ public abstract class DiffHighlightService : TextHighlightService
     /// This is an alternative configuration to use the Git diff coloring (that has more features).
     /// </summary>
     /// <param name="textMarkers">The markers to append to.</param>
-    private void HighlightAddedAndDeletedLines(List<TextMarker> textMarkers)
+    private void HighlightAddedAndDeletedLines(List<StyledSpan> textMarkers)
     {
-        foreach (ISegment segment in GetAllLines(DiffLineType.Minus))
+        foreach (Segment segment in GetAllLines(DiffLineType.Minus))
         {
             textMarkers.Add(CreateTextMarker(segment.Offset, segment.Length, _removedBackColor));
         }
 
-        foreach (ISegment segment in GetAllLines(DiffLineType.Plus))
+        foreach (Segment segment in GetAllLines(DiffLineType.Plus))
         {
             textMarkers.Add(CreateTextMarker(segment.Offset, segment.Length, _addedBackColor));
         }
 
-        foreach (ISegment segment in GetAllLines(DiffLineType.Header))
+        foreach (Segment segment in GetAllLines(DiffLineType.Header))
         {
             textMarkers.Add(CreateTextMarker(segment.Offset, segment.Length, AppColor.DiffSection.GetThemeColor()));
         }
@@ -183,7 +183,7 @@ public abstract class DiffHighlightService : TextHighlightService
     /// <summary>
     ///  Matches related removed and added lines in a consecutive block of a patch document and marks identical parts dimmed.
     /// </summary>
-    private void AddInlineDifferenceMarkers(List<TextMarker> textMarkers, string text)
+    private void AddInlineDifferenceMarkers(List<StyledSpan> textMarkers, string text)
     {
         int index = 0;
         DiffLineInfo[] diffLines = [.. _diffLinesInfo.DiffLines.Values.OrderBy(l => l.LineNumInDiff)];
@@ -194,19 +194,19 @@ public abstract class DiffHighlightService : TextHighlightService
         while (index < diffLines.Length)
         {
             // git-diff presents the removed lines directly followed by the added in a "block"
-            IReadOnlyList<ISegment> linesRemoved = GetBlockOfLines(diffLines, DiffLineType.Minus, ref index, found: false);
+            IReadOnlyList<Segment> linesRemoved = GetBlockOfLines(diffLines, DiffLineType.Minus, ref index, found: false);
             if (linesRemoved.Count == 0)
             {
                 continue;
             }
 
-            IReadOnlyList<ISegment> linesAdded = GetBlockOfLines(diffLines, DiffLineType.Plus, ref index, found: true);
+            IReadOnlyList<Segment> linesAdded = GetBlockOfLines(diffLines, DiffLineType.Plus, ref index, found: true);
             if (linesAdded.Count == 0)
             {
                 continue;
             }
 
-            foreach ((ISegment lineRemoved, ISegment lineAdded) in LinesMatcher.FindLinePairs(GetText, linesRemoved, linesAdded))
+            foreach ((Segment lineRemoved, Segment lineAdded) in LinesMatcher.FindLinePairs(GetText, linesRemoved, linesAdded))
             {
                 AddDifferenceMarkers(textMarkers, GetText, lineRemoved, lineAdded, diffContentOffset, dimBackground);
             }
@@ -214,13 +214,13 @@ public abstract class DiffHighlightService : TextHighlightService
 
         return;
 
-        string GetText(ISegment line)
+        string GetText(Segment line)
             => text[(line.Offset + diffContentOffset)..(line.Offset + line.Length)];
     }
 
-    private IEnumerable<ISegment> GetAllLines(DiffLineType diffLineType)
+    private IEnumerable<Segment> GetAllLines(DiffLineType diffLineType)
         => _diffLinesInfo?.DiffLines.Where(i => i.Value.LineType == diffLineType && i.Value.LineSegment is not null)
-            .Select(l => l.Value.LineSegment!)
+            .Select(l => l.Value.LineSegment!.Value)
             ?? [];
 
     /// <summary>
@@ -231,9 +231,9 @@ public abstract class DiffHighlightService : TextHighlightService
     /// <param name="index">The index in diffLines to start with.</param>
     /// <param name="found">If a lineInDiff was found. This is also used to get the added diffLines just after the removed.</param>
     /// <returns>The block of segments.</returns>
-    private static List<ISegment> GetBlockOfLines(DiffLineInfo[] diffLines, DiffLineType diffLineType, ref int index, bool found)
+    private static List<Segment> GetBlockOfLines(DiffLineInfo[] diffLines, DiffLineType diffLineType, ref int index, bool found)
     {
-        List<ISegment> result = [];
+        List<Segment> result = [];
         int gapLines = 0;
 
         for (; index < diffLines.Length; ++index)
@@ -269,13 +269,13 @@ public abstract class DiffHighlightService : TextHighlightService
 
             // In block, continue to add
             found = true;
-            result.Add(diffLine.LineSegment);
+            result.Add(diffLine.LineSegment.Value);
         }
 
         return result;
     }
 
-    internal static void AddDifferenceMarkers(List<TextMarker> markers, Func<ISegment, string> getText, ISegment lineRemoved, ISegment lineAdded, int beginOffset, bool dimBackground)
+    internal static void AddDifferenceMarkers(List<StyledSpan> markers, Func<Segment, string> getText, Segment lineRemoved, Segment lineAdded, int beginOffset, bool dimBackground)
     {
         ReadOnlySpan<char> textRemoved = LimitLength(getText(lineRemoved).AsSpan());
         ReadOnlySpan<char> textAdded = LimitLength(getText(lineAdded).AsSpan());
@@ -305,7 +305,7 @@ public abstract class DiffHighlightService : TextHighlightService
     }
 
     private static (int LengthIdenticalAtStart, int LengthIdenticalAtEnd) AddDifferenceMarkers(
-        List<TextMarker> markers, ReadOnlySpan<char> textRemoved, ReadOnlySpan<char> textAdded, int offsetRemoved, int offsetAdded, bool dimBackground)
+        List<StyledSpan> markers, ReadOnlySpan<char> textRemoved, ReadOnlySpan<char> textAdded, int offsetRemoved, int offsetAdded, bool dimBackground)
     {
         // removed:             added:              "d" stands for "deleted" / "i" for "inserted" -> anchor marker in added / removed
         // "d b R a "           " b A a i"          split at "b" (stands for "before")
@@ -404,20 +404,20 @@ public abstract class DiffHighlightService : TextHighlightService
         return (lengthIdenticalAtStart, lengthIdenticalAtEnd);
     }
 
-    private static TextMarker CreateAnchorMarker(int offset, Color color)
-        => new(offset, length: 0, TextMarkerType.InterChar, color);
+    private static StyledSpan CreateAnchorMarker(int offset, Color color)
+        => new(offset, Length: 0, Foreground: null, Background: color);
 
-    private static TextMarker CreateDimmedMarker(int offset, int length, bool isRemoved, bool dimBackground)
+    private static StyledSpan CreateDimmedMarker(int offset, int length, bool isRemoved, bool dimBackground)
         => dimBackground
             ? CreateTextMarker(offset, length, (isRemoved ? _removedBackColor : _addedBackColor).DimColor().DimColor())
-            : new(offset, length, TextMarkerType.SolidBlock, AppColor.EditorBackground.GetThemeColor(), (isRemoved ? _removedForeColor : _addedForeColor).DimColor());
+            : new(offset, length, Foreground: (isRemoved ? _removedForeColor : _addedForeColor).DimColor(), Background: AppColor.EditorBackground.GetThemeColor());
 
-    private static TextMarker CreateTextMarker(int offset, int length, Color backColor)
-        => new(offset, length, TextMarkerType.SolidBlock, backColor, backColor.GetTextColor());
+    private static StyledSpan CreateTextMarker(int offset, int length, Color backColor)
+        => new(offset, length, Foreground: backColor.GetTextColor(), Background: backColor);
 
     internal static class TestAccessor
     {
-        internal static List<ISegment> GetBlockOfLines(DiffLineInfo[] diffLines, DiffLineType diffLineType, ref int index, bool found)
+        internal static List<Segment> GetBlockOfLines(DiffLineInfo[] diffLines, DiffLineType diffLineType, ref int index, bool found)
             => DiffHighlightService.GetBlockOfLines(diffLines, diffLineType, ref index, found);
     }
 }
