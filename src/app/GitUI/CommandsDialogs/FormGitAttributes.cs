@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using GitCommands;
-using GitExtensions.Extensibility;
+using GitCommands.Editing;
 using GitExtensions.Extensibility.Git;
 using ResourceManager;
 
@@ -23,15 +23,14 @@ public partial class FormGitAttributes : GitModuleForm
     private readonly TranslationString _saveFileQuestionCaption =
         new("Save changes?");
 
-    public string GitAttributesFile = string.Empty;
-    private readonly IFullPathResolver _fullPathResolver;
+    private readonly RepoDotFileEditor _editor;
 
     public FormGitAttributes(IGitUICommands commands)
         : base(commands)
     {
         InitializeComponent();
         InitializeComplete();
-        _fullPathResolver = new FullPathResolver(() => Module.WorkingDir);
+        _editor = RepoDotFileEditor.ForWorkTreeFile(Module, ".gitattributes");
     }
 
     protected override void OnRuntimeLoad(EventArgs e)
@@ -45,10 +44,9 @@ public partial class FormGitAttributes : GitModuleForm
     {
         try
         {
-            string? path = _fullPathResolver.Resolve(".gitattributes");
-            if (File.Exists(path))
+            if (_editor.FileExists)
             {
-                _NO_TRANSLATE_GitAttributesText.ViewFileAsync(path);
+                _NO_TRANSLATE_GitAttributesText.ViewFileAsync(_editor.FilePath!);
             }
         }
         catch (Exception ex)
@@ -67,19 +65,7 @@ public partial class FormGitAttributes : GitModuleForm
     {
         try
         {
-            FileInfoExtensions
-                .MakeFileTemporaryWritable(
-                    _fullPathResolver.Resolve(".gitattributes")!, // catch NRE below
-                    x =>
-                    {
-                        GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();
-                        if (!GitAttributesFile.EndsWith(Environment.NewLine))
-                        {
-                            GitAttributesFile += Environment.NewLine;
-                        }
-
-                        File.WriteAllBytes(x, GitModule.SystemEncoding.GetBytes(GitAttributesFile));
-                    });
+            _editor.Save(_NO_TRANSLATE_GitAttributesText.GetText());
 
             return true;
         }
@@ -124,7 +110,7 @@ public partial class FormGitAttributes : GitModuleForm
 
     private void FormGitAttributesLoad(object sender, EventArgs e)
     {
-        if (!Module.IsBareRepository())
+        if (_editor.IsSupported)
         {
             return;
         }
@@ -133,13 +119,7 @@ public partial class FormGitAttributes : GitModuleForm
         Close();
     }
 
-    private bool IsFileUpToDate()
-    {
-        return GitAttributesFile == _NO_TRANSLATE_GitAttributesText.GetText();
-    }
+    private bool IsFileUpToDate() => !_editor.HasUnsavedChanges(_NO_TRANSLATE_GitAttributesText.GetText());
 
-    private void GitAttributesFileLoaded(object? sender, EventArgs e)
-    {
-        GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();
-    }
+    private void GitAttributesFileLoaded(object? sender, EventArgs e) => _editor.NotifyContentLoaded(_NO_TRANSLATE_GitAttributesText.GetText());
 }

@@ -1,5 +1,4 @@
 ﻿using GitCommands;
-using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Translations;
 using ResourceManager;
@@ -23,17 +22,12 @@ public class GitIgnoreModel : Translate, IGitIgnoreDialogModel
     private readonly TranslationString _saveFileQuestion =
         new("Save changes to .gitignore?");
 
-    private readonly IFullPathResolver _fullPathResolver;
-
     public GitIgnoreModel(IGitModule module)
     {
         Translator.Translate(this, AppSettings.CurrentTranslation);
-        _fullPathResolver = new FullPathResolver(() => module.WorkingDir);
     }
 
     public string FormCaption => _editGitignoreTitle.Text;
-
-    public string? ExcludeFile => _fullPathResolver.Resolve(".gitignore");
 
     public string FileOnlyInWorkingDirSupported => _gitignoreOnlyInWorkingDirSupported.Text;
 

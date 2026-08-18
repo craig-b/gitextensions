@@ -15,7 +15,7 @@
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
       1. GitExtensions.Extensibility   : 112 of 116 files —  4 debt
       2. GitExtUtils                   :  42 of  69 files — 27 debt, added by M1.7
-      3. GitCommands                   : 214 of 215 files —  0 debt (artefact only)
+      3. GitCommands                   : 217 of 218 files —  0 debt (artefact only)
       4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
 
     M4.4 moved the 17 pure diff-highlight files (GitUI/Editor/Diff minus the one real control,

@@ -4,6 +4,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Translations;
 using GitUI.Editor;
+using GitUI.HelperDialogs;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs;
@@ -15,7 +16,11 @@ public sealed partial class FormSparseWorkingCopy : GitModuleForm
     public FormSparseWorkingCopy(IGitUICommands commands)
         : base(commands)
     {
-        FormSparseWorkingCopyViewModel sparse = new(commands);
+        FormSparseWorkingCopyViewModel sparse = new(commands, refreshWorkingCopy: () =>
+        {
+            using FormRemoteProcess formRemoteProcess = new(commands, FormSparseWorkingCopyViewModel.RefreshWorkingCopyCommandName);
+            formRemoteProcess.ShowDialog(Form.ActiveForm);
+        });
         BindToViewModelGlobal(sparse);
         CreateView(sparse);
         InitializeComplete();

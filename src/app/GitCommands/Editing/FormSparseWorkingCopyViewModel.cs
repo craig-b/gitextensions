@@ -2,7 +2,6 @@
 using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
-using GitUI.HelperDialogs;
 
 namespace GitUI.CommandsDialogs;
 
@@ -13,6 +12,10 @@ public class FormSparseWorkingCopyViewModel : INotifyPropertyChanged
     public static readonly string SettingCoreSparseCheckout = "core.sparsecheckout";
 
     private readonly IGitUICommands _gitCommands;
+
+    // The host-supplied way to run RefreshWorkingCopyCommandName with UI (the WinForms view
+    // passes a FormRemoteProcess runner) - the one part of this model a host must provide.
+    private readonly Action _refreshWorkingCopy;
 
     private bool _isRefreshWorkingCopyOnSave = true /* on by default, otherwise index bitmap won't be updated */;
 
@@ -31,9 +34,10 @@ public class FormSparseWorkingCopyViewModel : INotifyPropertyChanged
     /// </summary>
     private string? _sRulesTextAsOnDisk;
 
-    public FormSparseWorkingCopyViewModel(IGitUICommands gitCommands)
+    public FormSparseWorkingCopyViewModel(IGitUICommands gitCommands, Action refreshWorkingCopy)
     {
         _gitCommands = gitCommands ?? throw new ArgumentNullException(nameof(gitCommands));
+        _refreshWorkingCopy = refreshWorkingCopy ?? throw new ArgumentNullException(nameof(refreshWorkingCopy));
         _isSparseCheckoutEnabled = _isSparseCheckoutEnabledAsSaved = GetCurrentSparseEnabledState();
     }
 
@@ -148,8 +152,7 @@ public class FormSparseWorkingCopyViewModel : INotifyPropertyChanged
     {
         // Re-apply tree to the index
         // TODO: check how it affects the uncommitted working copy changes
-        using FormRemoteProcess fromProcess = new(_gitCommands, RefreshWorkingCopyCommandName);
-        fromProcess.ShowDialog(Form.ActiveForm);
+        _refreshWorkingCopy();
     }
 
     /// <summary>

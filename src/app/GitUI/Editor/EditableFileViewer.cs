@@ -2,9 +2,9 @@
 
 /// <summary>
 ///  The editable variant of <see cref="FileViewer"/> - and the only way to get one: the base
-///  viewer is read-only by construction (M5.3). Embedded by the editing dialogs
-///  (FormEditor/FormEdit and, until M5.1 replaces them with plain text controls, the four
-///  plain-text config dialogs: .gitignore/.gitattributes/.mailmap/sparse working copy).
+///  viewer is read-only by construction (M5.3). Embedded by the six editing dialogs:
+///  FormEditor/FormEdit and the four plain-text config dialogs
+///  (.gitignore/.gitattributes/.mailmap/sparse working copy).
 /// </summary>
 public class EditableFileViewer : FileViewer
 {
