@@ -30,7 +30,7 @@ partial class FormMailMap
     {
         System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormMailMap));
         splitContainer1 = new SplitContainer();
-        _NO_TRANSLATE_MailMapText = new GitUI.Editor.FileViewer();
+        _NO_TRANSLATE_MailMapText = new GitUI.Editor.EditableFileViewer();
         label1 = new Label();
         Save = new Button();
 
@@ -62,7 +62,6 @@ partial class FormMailMap
         // _NO_TRANSLATE_MailMapText
         // 
         _NO_TRANSLATE_MailMapText.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _NO_TRANSLATE_MailMapText.IsReadOnly = false;
         _NO_TRANSLATE_MailMapText.Location = new Point(0, 0);
         _NO_TRANSLATE_MailMapText.Margin = new Padding(3, 2, 3, 2);
         _NO_TRANSLATE_MailMapText.Name = "_NO_TRANSLATE_MailMapText";
@@ -114,7 +113,7 @@ partial class FormMailMap
     #endregion
 
     private SplitContainer splitContainer1;
-    private GitUI.Editor.FileViewer _NO_TRANSLATE_MailMapText;
+    private GitUI.Editor.EditableFileViewer _NO_TRANSLATE_MailMapText;
     private Button Save;
     private Label label1;
 }

@@ -60,7 +60,6 @@ public sealed partial class BlameControl : GitModuleControl
         InitializeComponent();
         InitializeComplete();
 
-        BlameAuthor.IsReadOnly = true;
         BlameAuthor.EnableScrollBars(false);
         UpdateShowLineNumbers();
         BlameAuthor.HScrollPositionChanged += BlameAuthor_HScrollPositionChanged;
@@ -72,7 +71,6 @@ public sealed partial class BlameControl : GitModuleControl
         BlameAuthor.EscapePressed += () => EscapePressed?.Invoke();
         BlameAuthor.DontMarkGutterSelectedLine();
 
-        BlameFile.IsReadOnly = true;
         BlameFile.VScrollPositionChanged += BlameFile_VScrollPositionChanged;
         BlameFile.SelectedLineChanged += SelectedLineChanged;
         BlameFile.MouseMove += BlameFile_MouseMove;

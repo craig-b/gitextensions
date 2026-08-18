@@ -10,12 +10,11 @@ public partial class FormEdit : GitModuleForm
         InitializeComponent();
         InitializeComplete();
         Viewer.InvokeAndForget(() => Viewer.ViewTextAsync(filename, text));
-        Viewer.IsReadOnly = false;
     }
 
     public bool IsReadOnly
     {
-        get => Viewer.IsReadOnly;
-        set => Viewer.IsReadOnly = value;
+        get => Viewer.ReadOnly;
+        set => Viewer.ReadOnly = value;
     }
 }

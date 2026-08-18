@@ -145,7 +145,7 @@ public partial class FileViewer : GitModuleControl
 
         showGitWordColoringToolStripMenuItem.AdaptImageLightness();
 
-        IsReadOnly = true;
+        SetEditable(false);
 
         internalFileViewer.MouseMove += (_, e) =>
         {
@@ -223,16 +223,22 @@ public partial class FileViewer : GitModuleControl
         set => internalFileViewer.Font = value;
     }
 
-    [DefaultValue(true)]
-    [Category("Behavior")]
-    public bool IsReadOnly
+    /// <summary>
+    ///  Whether the viewer rejects edits. Always <see langword="true"/> for this type - a
+    ///  FileViewer is read-only by construction (M5.3); the only editable viewer is
+    ///  <see cref="EditableFileViewer"/>, which opts in via <see cref="SetEditable"/>.
+    /// </summary>
+    public bool IsReadOnly => internalFileViewer.IsReadOnly;
+
+    /// <summary>
+    ///  The single knob for editability, deliberately not public: only the
+    ///  <see cref="EditableFileViewer"/> subclass (and this class's constructor) may flip it.
+    ///  Keeps the replace UI's visibility in lockstep, as the old IsReadOnly setter did.
+    /// </summary>
+    private protected void SetEditable(bool editable)
     {
-        get => internalFileViewer.IsReadOnly;
-        set
-        {
-            internalFileViewer.IsReadOnly = value;
-            replaceToolStripMenuItem.Visible = !value;
-        }
+        internalFileViewer.IsReadOnly = !editable;
+        replaceToolStripMenuItem.Visible = editable;
     }
 
     [DefaultValue(true)]

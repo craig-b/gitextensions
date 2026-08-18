@@ -181,7 +181,7 @@ public sealed partial class FormSparseWorkingCopy : GitModuleForm
         sparse.PropertyChanged += delegate { label1.Visible = label2.Visible = sparse.IsSparseCheckoutEnabled; };
 
         // Text editor
-        FileViewer editor = new() { Dock = DockStyle.Fill, UICommandsSource = commandsSource, IsReadOnly = false };
+        FileViewer editor = new EditableFileViewer { Dock = DockStyle.Fill, UICommandsSource = commandsSource };
         editor.TextLoaded += (sender, args) => sparse.SetRulesTextAsOnDisk(editor.GetText());
         try
         {

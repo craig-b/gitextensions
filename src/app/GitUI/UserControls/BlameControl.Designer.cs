@@ -94,7 +94,6 @@ partial class BlameControl
         // 
         BlameAuthor.ContextMenuStrip = contextMenu;
         BlameAuthor.Dock = DockStyle.Fill;
-        BlameAuthor.IsReadOnly = false;
         BlameAuthor.Location = new Point(0, 0);
         BlameAuthor.Margin = new Padding(0);
         BlameAuthor.Name = "BlameAuthor";
@@ -178,7 +177,6 @@ partial class BlameControl
         // BlameFile
         // 
         BlameFile.Dock = DockStyle.Fill;
-        BlameFile.IsReadOnly = false;
         BlameFile.Location = new Point(0, 0);
         BlameFile.Margin = new Padding(0);
         BlameFile.Name = "BlameFile";
