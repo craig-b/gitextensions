@@ -1,8 +1,4 @@
-﻿using GitCommands;
-using GitExtUtils.GitUI.Theming;
-using GitUI.Theming;
-
-namespace GitUITests.Editor.Diff;
+﻿namespace GitCommandsTests.Editor.Diff;
 
 public abstract class AnsiEscapeUtilitiesTestBase
 {
@@ -56,24 +52,6 @@ public abstract class AnsiEscapeUtilitiesTestBase
         return _redAnsiThemeColors[bright ? 1 : 0, fore ? 0 : 1, bold ? 1 : 0, dim ? 1 : 0];
     }
 
-    private ThemeId _themeId;
-    private string[] _themeVariations = null!;
-
-    [OneTimeSetUp]
-    public void BaseOneTimeSetUp()
-    {
-        _themeId = AppSettings.ThemeId;
-        _themeVariations = AppSettings.ThemeVariations;
-        AppSettings.ThemeId = ThemeId.DefaultLight;
-        AppSettings.ThemeVariations = ThemeVariations.None;
-        ThemeModule.Load();
-    }
-
-    [OneTimeTearDown]
-    public void BaseOneTimeTearDown()
-    {
-        AppSettings.ThemeId = _themeId;
-        AppSettings.ThemeVariations = _themeVariations;
-        ThemeModule.Load();
-    }
+    // The expected colors above assume the default light theme, installed for this whole
+    // namespace by DefaultLightThemeSetupFixture.
 }

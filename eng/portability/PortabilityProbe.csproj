@@ -14,13 +14,19 @@
 
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
       1. GitExtensions.Extensibility   : 112 of 116 files —  4 debt
-      2. GitExtUtils                   :  39 of  67 files — 28 debt, added by M1.7
-      3. GitCommands                   : 197 of 198 files —  0 debt (artefact only)
+      2. GitExtUtils                   :  42 of  69 files — 27 debt, added by M1.7
+      3. GitCommands                   : 214 of 215 files —  0 debt (artefact only)
       4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
+
+    M4.4 moved the 17 pure diff-highlight files (GitUI/Editor/Diff minus the one real control,
+    DiffViewerLineNumberControl) into GitCommands/Editor/Diff, and AppColorExtension
+    (GetThemeColor, now fed by a host-installed ThemeSettings) into GitExtUtils — both keep their
+    original GitUI.* namespaces. The existing GitCommands/GitExtUtils globs pick all of them up:
+    no Remove entries, no new debt.
 
     An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
     (fonts), M1.5 (application paths), M1.7's splits, the UserNotification seam, M1.8's binding
-    split and M3's UI command bus, the same scope needs 34 — of which 30 have a DIRECT Windows
+    split and M3's UI command bus, the same scope needs 33 — of which 29 have a DIRECT Windows
     dependency, 2 are pure cascade (each annotated with its root), and 2 are compilation
     artefacts, see below.
 
@@ -157,12 +163,12 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\COMBOBOXINFO.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\User32\GetComboBoxInfo.cs" />
 
-    <!-- Needs a host-supplied abstraction, not a move:
-         ClipboardUtil : Clipboard
-         OtherColors   : Application.IsDarkModeEnabled (an OS query; deliberately NOT swapped
-                             for Theme.IsDark, which is the app theme and not the same thing) -->
+    <!-- Needs a host-supplied abstraction, not a move: ClipboardUtil : Clipboard.
+         M4.4 DONE: OtherColors came off this list — its Application.IsDarkModeEnabled (an OS/app
+         color-mode query, deliberately NOT the same thing as Theme.IsDark) now reads the portable
+         HostColorMode.IsDark flag, which ThemeModule.Load installs right after
+         Application.SetColorMode — the only place the color mode ever changes. -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\ClipboardUtil.cs" />
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\OtherColors.cs" />
 
 
     <!-- ===== DEBT: GitCommands, 0 of 198 files (M3 cleared GitTagController) ===== -->

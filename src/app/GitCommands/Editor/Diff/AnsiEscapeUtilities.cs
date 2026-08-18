@@ -22,7 +22,7 @@ public partial class AnsiEscapeUtilities
 
     [GeneratedRegex(@"\u001b\[((?<escNo>\d+)\s*[:;]?\s*)*m", RegexOptions.ExplicitCapture)]
     private static partial Regex EscapeRegex { get; }
-    private static readonly int _defaultForeColorId = Application.IsDarkModeEnabled ? _whiteId : _blackId;
+    private static readonly int _defaultForeColorId = HostColorMode.IsDark ? _whiteId : _blackId;
 
     // Color code definitions
     private const int _blackId = 0;

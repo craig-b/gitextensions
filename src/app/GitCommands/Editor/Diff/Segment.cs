@@ -1,3 +1,3 @@
-namespace GitUI.Editor.Diff;
+﻿namespace GitUI.Editor.Diff;
 
 public readonly record struct Segment(int Offset, int Length);

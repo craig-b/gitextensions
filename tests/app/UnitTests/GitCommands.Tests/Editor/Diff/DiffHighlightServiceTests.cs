@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Editor.Diff;
 using GitUI.Theming;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 
 [Apartment(ApartmentState.STA)]
 public class DiffHighlightServiceTests

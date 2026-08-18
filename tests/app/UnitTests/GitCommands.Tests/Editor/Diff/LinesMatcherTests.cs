@@ -1,10 +1,7 @@
 ﻿using GitUI.Editor.Diff;
-using ICSharpCode.TextEditor.Document;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 
-// NOTE: "using ICSharpCode.TextEditor.Document;" above is kept solely for TextUtilities.IsLetterDigitOrUnderscore,
-// used as an external predicate in the GetWords test - it is unrelated to the ISegment/LineSegment -> Segment change below.
 public class LinesMatcherTests
 {
     [Test]
@@ -39,7 +36,7 @@ public class LinesMatcherTests
     [TestCase("---abc---123---def_7---", new string[] { "abc", "123", "def_7" }, new int[] { 3, 9, 15 })]
     public void GetWords(string text, string[] words, int[] offsets)
     {
-        (string Word, int Offset)[] result = [.. LinesMatcher.GetWords(text, TextUtilities.IsLetterDigitOrUnderscore)];
+        (string Word, int Offset)[] result = [.. LinesMatcher.GetWords(text, LinesMatcher.IsWordChar)];
         result.Select(LinesMatcher.SelectWord).Should().BeEquivalentTo(words);
         result.Select(LinesMatcher.SelectStartIndex).Should().BeEquivalentTo(offsets);
     }
@@ -68,8 +65,8 @@ public class LinesMatcherTests
     {
         const int removedCount = 10;
         const int maxCombinations = 100 * 100;
-        Segment[] removedLines = CreateLines(removedCount);
-        Segment[] addedLines = CreateLines((maxCombinations / removedCount) + 1);
+        Segment[] removedLines = CreateLines(removedCount, start: 0);
+        Segment[] addedLines = CreateLines((maxCombinations / removedCount) + 1, start: 1000);
         Dictionary<Segment, string> lineTexts = [];
         for (int index = 0; index < removedCount; ++index)
         {
@@ -96,8 +93,8 @@ public class LinesMatcherTests
     [Test]
     public void FindLinePairs_shall_match_trimmed_lines()
     {
-        Segment[] removedLines = CreateLines(3);
-        Segment[] addedLines = CreateLines(5);
+        Segment[] removedLines = CreateLines(3, start: 0);
+        Segment[] addedLines = CreateLines(5, start: 1000);
         Dictionary<Segment, string> lineTexts = new()
         {
             { removedLines[0], "r0" },
@@ -128,8 +125,8 @@ public class LinesMatcherTests
     [Test]
     public void FindLinePairs_shall_match_lines_whose_common_words_have_maximum_summedup_length()
     {
-        Segment[] removedLines = CreateLines(4);
-        Segment[] addedLines = CreateLines(5);
+        Segment[] removedLines = CreateLines(4, start: 0);
+        Segment[] addedLines = CreateLines(5, start: 1000);
         Dictionary<Segment, string> lineTexts = new()
         {
             { removedLines[0], "line 0 had some words" },
@@ -160,14 +157,16 @@ public class LinesMatcherTests
     }
 
     // Segment has value equality (unlike the ICSharpCode LineSegment class this replaces, which used
-    // reference identity), so each line must get a distinct Offset - otherwise the Dictionary<Segment,
-    // string> lookups above and the equality assertions would collide across "placeholder" lines.
-    private static Segment[] CreateLines(int count)
+    // reference identity), so every line - across BOTH the removed and the added array of a test -
+    // must get a distinct Offset; otherwise the Dictionary<Segment, string> lookups above and the
+    // equality assertions collide across "placeholder" lines. The start offsets keep the two arrays'
+    // ranges disjoint.
+    private static Segment[] CreateLines(int count, int start)
     {
         Segment[] lines = new Segment[count];
         for (int index = 0; index < count; ++index)
         {
-            lines[index] = new Segment(Offset: index, Length: 0);
+            lines[index] = new Segment(Offset: start + index, Length: 0);
         }
 
         return lines;

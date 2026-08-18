@@ -1,6 +1,6 @@
 ﻿using GitUI.Editor.Diff;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 public class AnsiEscapeUtilitiesTryGetColorsTests : AnsiEscapeUtilitiesTestBase
 {
     private readonly Color _textColor = Color.FromArgb(0, 0, 0);

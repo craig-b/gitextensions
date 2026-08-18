@@ -1,4 +1,4 @@
-using GitExtensions.Extensibility.Git;
+﻿using GitExtensions.Extensibility.Git;
 
 namespace GitUI.Editor.Diff;
 

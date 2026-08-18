@@ -2,11 +2,9 @@
 using GitExtUtils.GitUI.Theming;
 using GitUI.Editor.Diff;
 using GitUI.Theming;
-using ICSharpCode.TextEditor;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 
-[Apartment(ApartmentState.STA)]
 public class DiffLineNumAnalyzerTests
 {
     private static readonly string _testDataDir = Path.Combine(TestContext.CurrentContext.TestDirectory, "Editor", "Diff");
@@ -16,7 +14,6 @@ public class DiffLineNumAnalyzerTests
     private readonly string _sampleCombinedDiff;
     private readonly string _sampleGitWordDiff;
     private readonly string _sampleDifftastic;
-    private readonly TextEditorControl _textEditor;
 
     public DiffLineNumAnalyzerTests()
     {
@@ -28,7 +25,6 @@ public class DiffLineNumAnalyzerTests
 
         _sampleGitWordDiff = FixGitTerminalColors("SampleGitWord.diff");
         _sampleDifftastic = File.ReadAllText(Path.Combine(_testDataDir, "SampleDifftastic.diff"));
-        _textEditor = new TextEditorControl();
 
         return;
 
@@ -44,17 +40,10 @@ public class DiffLineNumAnalyzerTests
         }
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown()
-    {
-        _textEditor.Dispose();
-    }
-
     [Test]
     public void CanGetHeaders()
     {
-        _textEditor.Text = _sampleDiff;
-        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_textEditor.Text, allTextMarkers: [], isCombinedDiff: true);
+        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_sampleDiff, allTextMarkers: [], isCombinedDiff: true);
         List<int> headerLines = [5, 17];
         foreach (int header in headerLines)
         {
@@ -67,8 +56,7 @@ public class DiffLineNumAnalyzerTests
     [Test]
     public void CanGetContextLines()
     {
-        _textEditor.Text = _sampleDiff;
-        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_textEditor.Text, allTextMarkers: [], isCombinedDiff: false);
+        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_sampleDiff, allTextMarkers: [], isCombinedDiff: false);
 
         GenericResultCheck(result);
 
@@ -96,8 +84,7 @@ public class DiffLineNumAnalyzerTests
     [Test]
     public void CanGetMinusLines()
     {
-        _textEditor.Text = _sampleDiff;
-        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_textEditor.Text, allTextMarkers: [], isCombinedDiff: false);
+        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_sampleDiff, allTextMarkers: [], isCombinedDiff: false);
 
         GenericResultCheck(result);
 
@@ -115,8 +102,7 @@ public class DiffLineNumAnalyzerTests
     [Test]
     public void CanGetPlusLines()
     {
-        _textEditor.Text = _sampleDiff;
-        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_textEditor.Text, allTextMarkers: [], isCombinedDiff: false);
+        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_sampleDiff, allTextMarkers: [], isCombinedDiff: false);
 
         GenericResultCheck(result);
 
@@ -139,8 +125,7 @@ public class DiffLineNumAnalyzerTests
     [Test]
     public void CanGetLineNumbersForCombinedDiff()
     {
-        _textEditor.Text = _sampleCombinedDiff;
-        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_textEditor.Text, allTextMarkers: [], isCombinedDiff: true);
+        DiffLinesInfo result = DiffLineNumAnalyzer.Analyze(_sampleCombinedDiff, allTextMarkers: [], isCombinedDiff: true);
 
         GenericResultCheck(result, allowNotApplicable: false);
 
@@ -177,7 +162,6 @@ public class DiffLineNumAnalyzerTests
 
         string text = _sampleAddedDiff;
         PatchHighlightService service = new(ref text, useGitColoring: true);
-        _textEditor.Text = text;
         DiffLinesInfo result = service.DiffLinesInfo;
 
         GenericResultCheck(result);
@@ -300,7 +284,6 @@ public class DiffLineNumAnalyzerTests
 
         string text = _sampleRemovedDiff;
         PatchHighlightService service = new(ref text, useGitColoring: true);
-        _textEditor.Text = text;
         DiffLinesInfo result = service.DiffLinesInfo;
 
         GenericResultCheck(result);
@@ -372,7 +355,6 @@ public class DiffLineNumAnalyzerTests
 
         string text = _sampleGitWordDiff;
         PatchHighlightService service = new(ref text, useGitColoring: true);
-        _textEditor.Text = text;
         DiffLinesInfo result = service.DiffLinesInfo;
 
         GenericResultCheck(result);
@@ -429,7 +411,6 @@ public class DiffLineNumAnalyzerTests
         AppSettings.ReverseGitColoring.Value = false;
 
         DifftasticHighlightService service = new(ref text, out int vrulerpos);
-        _textEditor.Text = text;
         DiffLinesInfo result = service.DiffLinesInfo;
 
         GenericResultCheck(result, allowNotApplicable: false);

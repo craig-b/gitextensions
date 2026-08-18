@@ -22,8 +22,16 @@
 
     SCOPE: the two portable-layer unit test suites, plus the shared test infrastructure both use.
       1. GitExtensions.Extensibility.Tests :  4 of  5 files —  1 artefact
-      2. GitCommands.Tests                 : 85 of 89 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
+      2. GitCommands.Tests                 : 92 of 96 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
       3. CommonTestUtils (shared infra)    : 21 of 25 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
+
+      M4.4: the seven Editor/Diff test files (LinesMatcherTests, DiffLineNumAnalyzerTests,
+      DiffHighlightServiceTests and the four AnsiEscapeUtilities* files) moved here from
+      GitUI.Tests along with the code under test, freed of their vestigial ICSharpCode/ThemeModule
+      couplings (a TextEditorControl used as a plain string holder; ThemeModule.Load() replaced by
+      installing ThemeSettings.Default, which is value-identical to the DefaultLight palette the
+      expectations encode). They ride the existing GitCommands.Tests glob; their .diff test data is
+      declared below.
 
       History: this list used to be dominated by two genuine product PORTABILITY-BUGs, both since
       fixed: AppSettings' static constructor touching the Windows registry unconditionally
@@ -288,6 +296,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\TestData\README.blame" Link="TestData\README.blame">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- M4.4: the Editor/Diff tests locate their sample diffs via
+         TestContext.CurrentContext.TestDirectory + "Editor/Diff", so Link must reproduce that
+         layout (mirrors the None glob in GitCommands.Tests.csproj). -->
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Editor\Diff\*.diff" Link="Editor\Diff\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

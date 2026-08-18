@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using GitUI.Editor.Diff;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 public class AnsiEscapeUtilitiesParseEscapeTests : AnsiEscapeUtilitiesTestBase
 {
     private const string _escape_sequence = "\u001b[";

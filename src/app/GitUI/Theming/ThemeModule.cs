@@ -14,7 +14,9 @@ public static class ThemeModule
     public static void Load()
     {
         Settings = LoadThemeSettings(Repository);
+        AppColorExtension.ThemeSettings = Settings;
         Application.SetColorMode(Settings.Theme.ToSystemColorMode());
+        HostColorMode.IsDark = Application.IsDarkModeEnabled;
         UpdateEditorSettings();
         ColorHelper.ThemeSettings = Settings;
         ThemeFix.ThemeSettings = Settings;

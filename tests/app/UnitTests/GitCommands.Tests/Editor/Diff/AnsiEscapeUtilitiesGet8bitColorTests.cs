@@ -1,6 +1,6 @@
 ﻿using GitUI.Editor.Diff;
 
-namespace GitUITests.Editor.Diff;
+namespace GitCommandsTests.Editor.Diff;
 public class AnsiEscapeUtilitiesGet8bitColorTests : AnsiEscapeUtilitiesTestBase
 {
     [Test]

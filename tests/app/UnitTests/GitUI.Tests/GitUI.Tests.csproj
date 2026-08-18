@@ -20,10 +20,4 @@
     <ProjectReference Include="..\..\..\CommonTestUtils\CommonTestUtils.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="Editor\Diff\*.diff">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>
