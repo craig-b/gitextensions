@@ -5,7 +5,6 @@ using GitUI.Theming;
 
 namespace GitCommandsTests.Editor.Diff;
 
-[Apartment(ApartmentState.STA)]
 public class DiffHighlightServiceTests
 {
     [Test]
