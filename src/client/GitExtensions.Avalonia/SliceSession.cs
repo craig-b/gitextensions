@@ -9,6 +9,7 @@ using GitExtUtils;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUIPluginInterfaces;
+using GitUI;
 using GitUI.Editor.Diff;
 using ResourceManager;
 using ResourceManager.CommitDataRenders;
@@ -129,6 +130,61 @@ public sealed class SliceSession
         }
 
         return (result.ExitedSuccessfully, result.AllOutput);
+    }
+
+    /// <summary>
+    ///  The revision's changed files, grouped exactly as the WinForms file list shows them -
+    ///  the real FileStatusDiffCalculator, so merge commits get per-parent groups.
+    /// </summary>
+    public IReadOnlyList<FileStatusWithDescription> GetRevisionFileGroups(GitRevision revision, CancellationToken cancellationToken)
+    {
+        FileStatusDiffCalculator calculator = new(() => _module);
+        calculator.SetDiff([revision], headId: default(ObjectId), allowMultiDiff: false);
+        return calculator.Calculate(prevList: [], refreshDiff: true, refreshGrep: false, cancellationToken);
+    }
+
+    /// <summary>
+    ///  One file's diff between two revisions of a diff group, through the M4 highlight pipeline.
+    /// </summary>
+    public (string Text, IReadOnlyList<StyledSpan> Spans, DiffLinesInfo LineNumbers) GetRevisionFileDiff(ObjectId? firstId, ObjectId secondId, GitItemStatus file)
+    {
+        GitArgumentBuilder args;
+        if (firstId is null)
+        {
+            // Root commit: show the whole file as added.
+            args = new GitArgumentBuilder("show")
+            {
+                "--format=",
+                "--patch",
+                "--color=always",
+                "--no-ext-diff",
+                secondId.ToString(),
+                "--",
+                file.Name.QuoteNE()
+            };
+        }
+        else
+        {
+            args = new GitArgumentBuilder("diff")
+            {
+                "--no-ext-diff",
+                "--color=always",
+                "--find-renames",
+                "--find-copies",
+                firstId.ToString(),
+                secondId.ToString(),
+                "--",
+                file.Name.QuoteNE(),
+                { !string.IsNullOrEmpty(file.OldName), file.OldName.QuoteNE() }
+            };
+        }
+
+        string text = _module.GitExecutable.GetOutput(args, outputEncoding: _module.LogOutputEncoding, stripAnsiEscapeCodes: false);
+
+        PatchHighlightService highlightService = new(ref text, useGitColoring: true);
+        IReadOnlyList<StyledSpan> spans = highlightService.GetHighlighting();
+        DiffLinesInfo lineNumbers = DiffLineNumAnalyzer.Analyze(text, spans, isCombinedDiff: false);
+        return (text, spans, lineNumbers);
     }
 
     /// <summary>

@@ -283,6 +283,9 @@ public partial class MainWindow : Window
             }
         });
 
+    private readonly Dictionary<GitItemStatus, GitUI.FileStatusWithDescription> _fileGroups = new(ReferenceEqualityComparer.Instance);
+    private CancellationTokenSource? _fileDiffCts;
+
     private async Task ShowRevisionAsync(GitRevision revision)
     {
         _selectionCts?.Cancel();
@@ -292,7 +295,8 @@ public partial class MainWindow : Window
         try
         {
             var (header, body) = await Task.Run(() => _session.GetCommitInfo(revision), cancellationToken);
-            var (diffText, spans, lineNumbers) = await Task.Run(() => _session.GetDiff(revision), cancellationToken);
+            IReadOnlyList<GitUI.FileStatusWithDescription> groups =
+                await Task.Run(() => _session.GetRevisionFileGroups(revision, cancellationToken), cancellationToken);
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -307,10 +311,7 @@ public partial class MainWindow : Window
                 CommitBody.Inlines!.Clear();
                 CommitBody.Inlines.AddRange(InlineRendering.ToInlines(body, HandleCommitInfoLink));
 
-                DiffText.Inlines!.Clear();
-                DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
-
-                DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
+                ShowFileGroups(groups);
             });
         }
         catch (OperationCanceledException)
@@ -319,6 +320,93 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             CommitBody.Text = ex.ToString();
+        }
+    }
+
+    private void ShowFileGroups(IReadOnlyList<GitUI.FileStatusWithDescription> groups)
+    {
+        _fileGroups.Clear();
+        foreach (GitUI.FileStatusWithDescription group in groups)
+        {
+            foreach (GitItemStatus status in group.Statuses)
+            {
+                _fileGroups[status] = group;
+            }
+        }
+
+        // The same policy as the WinForms list: show group headers only for multiple groups.
+        (bool showDiffGroups, _, _, _) = GitCommands.FileStatus.FileStatusGroupPolicy.ComputeFlags(groups, groupByRevision: false, GitCommands.FileStatus.GitGrepState.None);
+
+        List<StatusNode> roots = [];
+        foreach (GitUI.FileStatusWithDescription group in groups)
+        {
+            StatusNode groupTree = StatusNode.BuildTree(group.Statuses);
+            if (showDiffGroups)
+            {
+                groupTree.Text = GitCommands.FileStatus.FileStatusGroupPolicy.GetGroupName(group, group.Statuses.Count);
+                roots.Add(groupTree);
+            }
+            else
+            {
+                roots.AddRange(groupTree.Children);
+            }
+        }
+
+        FileTree.ItemsSource = roots;
+
+        StatusNode? firstLeaf = roots.SelectMany(Leaves).FirstOrDefault();
+        if (firstLeaf is not null)
+        {
+            FileTree.SelectedItems!.Clear();
+            FileTree.SelectedItems.Add(firstLeaf);
+        }
+        else
+        {
+            DiffText.Inlines!.Clear();
+            DiffGutter.Text = "";
+        }
+
+        static IEnumerable<StatusNode> Leaves(StatusNode node)
+            => node.Status is not null ? [node] : node.Children.SelectMany(Leaves);
+    }
+
+    private void OnFileTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        GitItemStatus? file = FileTree.SelectedItems!.OfType<StatusNode>().FirstOrDefault()?.Status;
+        if (file is null || !_fileGroups.TryGetValue(file, out GitUI.FileStatusWithDescription? group))
+        {
+            return;
+        }
+
+        _fileDiffCts?.Cancel();
+        _fileDiffCts = new CancellationTokenSource();
+        _ = ShowRevisionFileDiffAsync(group.FirstRev?.ObjectId, group.SecondRev.ObjectId, file, _fileDiffCts.Token);
+    }
+
+    private async Task ShowRevisionFileDiffAsync(ObjectId? firstId, ObjectId secondId, GitItemStatus file, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (diffText, spans, lineNumbers) = await Task.Run(() => _session.GetRevisionFileDiff(firstId, secondId, file), cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                DiffText.Inlines!.Clear();
+                DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
+                DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            DiffText.Text = ex.ToString();
         }
     }
 }
