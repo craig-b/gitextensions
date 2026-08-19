@@ -2,6 +2,14 @@ using GitExtensions.Extensibility.Git;
 
 namespace GitCommands.LeftPanel;
 
+public enum RefTreeNodeKind
+{
+    Folder,
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+}
+
 /// <summary>A node of the left panel's ref hierarchy: a folder, or a ref leaf carrying its ObjectId.</summary>
 public sealed class RefTreeNode
 {
@@ -13,6 +21,8 @@ public sealed class RefTreeNode
     public ObjectId? ObjectId { get; init; }
 
     public bool IsCurrent { get; init; }
+
+    public RefTreeNodeKind Kind { get; init; } = RefTreeNodeKind.Folder;
 
     public List<RefTreeNode> Children { get; } = [];
 }
@@ -26,7 +36,7 @@ public sealed class RefTreeNode
 /// </summary>
 public static class RefTreeBuilder
 {
-    public static IReadOnlyList<RefTreeNode> Build(IEnumerable<IGitRef> refs, Func<IGitRef, string> getDisplayName, string prioritySetting, string? currentRefName = null)
+    public static IReadOnlyList<RefTreeNode> Build(IEnumerable<IGitRef> refs, Func<IGitRef, string> getDisplayName, string prioritySetting, string? currentRefName = null, RefTreeNodeKind leafKind = RefTreeNodeKind.LocalBranch)
     {
         List<IGitRef> ordered = [.. refs];
         List<RefTreeNode> roots = [];
@@ -58,6 +68,7 @@ public static class RefTreeBuilder
                 FullPath = fullPath,
                 ObjectId = gitRef.ObjectId,
                 IsCurrent = fullPath == currentRefName,
+                Kind = leafKind,
             });
         }
 

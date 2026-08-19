@@ -32,6 +32,25 @@ public partial class MainWindow : Window
         Loaded += (_, _) => StartLogStream();
         Closed += (_, _) => _logCts.Cancel();
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_OPSTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                async Task Report(string name, Task<(bool Success, string Output)> operation)
+                {
+                    (bool success, string output) = await operation;
+                    Console.Error.WriteLine($"[ops] {name}: {(success ? "OK" : "FAIL")} | {output.Replace("\n", " / ").Trim()}");
+                }
+
+                await Report("create-branch", _session.CreateBranchAsync("harness-branch", checkout: true));
+                await Report("push", _session.PushAsync(forceWithLease: false));
+                await Report("checkout", _session.CheckoutBranchAsync("main"));
+                await Report("fetch", _session.FetchAsync());
+                await Report("pull", _session.PullAsync(rebase: false));
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_COMMITTEST") is string snapshotDirectory)
         {
             Loaded += async (_, _) =>
@@ -110,6 +129,76 @@ public partial class MainWindow : Window
         {
             LogControl.TryJumpTo(objectId);
         }
+    }
+
+    private async void OnRefTreeDoubleTapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
+    {
+        if (RefTree.SelectedItem is GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.LocalBranch, IsCurrent: false } branch)
+        {
+            await RunOperationAsync($"Checkout {branch.FullPath}", () => _session.CheckoutBranchAsync(branch.FullPath));
+        }
+    }
+
+    private async void OnFetchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await RunOperationAsync("Fetch", _session.FetchAsync);
+
+    private async void OnPullClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await RunOperationAsync("Pull", () => _session.PullAsync(rebase: false));
+
+    private async void OnPushClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await RunOperationAsync("Push", () => _session.PushAsync(forceWithLease: false));
+
+    private async void OnNewBranchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        string? name = await ConfirmDialog.InputAsync(this, "Create branch", "Branch name (created at the current checkout):", "feature/my-branch");
+        if (name is null)
+        {
+            return;
+        }
+
+        await RunOperationAsync($"Create branch {name}", () => _session.CreateBranchAsync(name, checkout: true));
+    }
+
+    /// <summary>
+    ///  Runs a git operation with the toolbar disabled, then refreshes everything history-shaped
+    ///  (log, refs, branch info) - all four operations can move HEAD or the remote refs.
+    /// </summary>
+    private async Task RunOperationAsync(string title, Func<Task<(bool Success, string Output)>> operation)
+    {
+        SetToolbarEnabled(false);
+        OperationStatus.Text = $"{title}…";
+        try
+        {
+            (bool success, string output) = await operation();
+
+            if (!success)
+            {
+                OperationStatus.Text = $"{title} failed";
+                await ConfirmDialog.ErrorAsync(this, $"{title} failed", string.IsNullOrWhiteSpace(output) ? "The operation failed." : output);
+                return;
+            }
+
+            OperationStatus.Text = $"{title}: done";
+            await ReloadLogAsync();
+        }
+        catch (Exception ex)
+        {
+            OperationStatus.Text = $"{title} failed";
+            await ConfirmDialog.ErrorAsync(this, $"{title} failed", ex.Message);
+        }
+        finally
+        {
+            SetToolbarEnabled(true);
+        }
+    }
+
+    private void SetToolbarEnabled(bool enabled)
+    {
+        CommitToolButton.IsEnabled = enabled;
+        FetchButton.IsEnabled = enabled;
+        PullButton.IsEnabled = enabled;
+        PushButton.IsEnabled = enabled;
+        NewBranchButton.IsEnabled = enabled;
     }
 
     private void ShowBranchInfo()

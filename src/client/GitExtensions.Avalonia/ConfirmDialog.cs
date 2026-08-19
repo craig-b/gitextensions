@@ -64,4 +64,53 @@ internal static class ConfirmDialog
 
     public static Task ErrorAsync(Window owner, string caption, string text)
         => ShowAsync(owner, caption, text, "OK");
+
+    /// <returns>The entered text, or null when cancelled.</returns>
+    public static async Task<string?> InputAsync(Window owner, string caption, string prompt, string watermark = "")
+    {
+        string? result = null;
+
+        Window dialog = new()
+        {
+            Title = caption,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+        };
+
+        TextBox input = new() { Watermark = watermark, MinWidth = 320 };
+
+        Button okButton = new() { Content = "OK", MinWidth = 80, IsDefault = true };
+        okButton.Click += (_, _) =>
+        {
+            result = input.Text;
+            dialog.Close();
+        };
+
+        Button cancelButton = new() { Content = "Cancel", MinWidth = 80, IsCancel = true };
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 12,
+            Children =
+            {
+                new TextBlock { Text = prompt },
+                input,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children = { okButton, cancelButton },
+                },
+            },
+        };
+
+        dialog.Opened += (_, _) => input.Focus();
+
+        await dialog.ShowDialog(owner);
+        return string.IsNullOrWhiteSpace(result) ? null : result.Trim();
+    }
 }

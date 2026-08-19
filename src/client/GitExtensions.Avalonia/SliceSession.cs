@@ -76,10 +76,74 @@ public sealed class SliceSession
         string currentBranch = SelectedBranch;
 
         return (
-            RefTreeBuilder.Build(refs.Where(r => r.IsHead), r => r.LocalName, AppSettings.PrioritizedBranchNames, currentBranch),
-            RefTreeBuilder.Build(refs.Where(r => r.IsRemote), r => r.LocalName, AppSettings.PrioritizedRemoteNames),
-            RefTreeBuilder.Build(refs.Where(r => r.IsTag), r => r.LocalName, prioritySetting: ""));
+            RefTreeBuilder.Build(refs.Where(r => r.IsHead), r => r.LocalName, AppSettings.PrioritizedBranchNames, currentBranch, RefTreeNodeKind.LocalBranch),
+            RefTreeBuilder.Build(refs.Where(r => r.IsRemote), r => r.LocalName, AppSettings.PrioritizedRemoteNames, leafKind: RefTreeNodeKind.RemoteBranch),
+            RefTreeBuilder.Build(refs.Where(r => r.IsTag), r => r.LocalName, prioritySetting: "", leafKind: RefTreeNodeKind.Tag));
     }
+
+    private (bool Success, string Output) RunGitOperation(ArgumentString arguments)
+    {
+        ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);
+        return (result.ExitedSuccessfully, result.AllOutput);
+    }
+
+    /// <summary>Fetches the default remote (plain "git fetch", via the module's FetchCmd).</summary>
+    public Task<(bool Success, string Output)> FetchAsync()
+        => Task.Run(() => RunGitOperation(_module.FetchCmd(remote: null, remoteBranch: null, localBranch: null)));
+
+    /// <summary>Pulls the current branch from its tracking remote (or the default remote).</summary>
+    public Task<(bool Success, string Output)> PullAsync(bool rebase)
+    {
+        var (remote, remoteBranch, _) = ResolvePushSpec();
+        if (remote is null)
+        {
+            return Task.FromResult((false, "No remote configured."));
+        }
+
+        return Task.Run(() => RunGitOperation(_module.PullCmd(remote, remoteBranch, rebase)));
+    }
+
+    /// <summary>Pushes the current branch to its tracking remote, or creates it on the default remote.</summary>
+    public Task<(bool Success, string Output)> PushAsync(bool forceWithLease)
+    {
+        var (remote, remoteBranch, track) = ResolvePushSpec();
+        if (remote is null)
+        {
+            return Task.FromResult((false, "No remote configured."));
+        }
+
+        ArgumentString arguments = Commands.Push(
+            remote,
+            SelectedBranch,
+            remoteBranch,
+            forceWithLease ? ForcePushOptions.ForceWithLease : ForcePushOptions.DoNotForce,
+            track,
+            recursiveSubmodules: 0);
+
+        return Task.Run(() => RunGitOperation(arguments));
+    }
+
+    /// <summary>The same resolution as <see cref="PushTarget"/>, but with the parts separated for command building.</summary>
+    private (string? Remote, string? RemoteBranch, bool Track) ResolvePushSpec()
+    {
+        string currentBranch = SelectedBranch;
+        IGitRef? branchRef = _module.GetRefs(RefsFilter.Heads).FirstOrDefault(r => r.LocalName == currentBranch);
+
+        if (branchRef is not null && !string.IsNullOrEmpty(branchRef.TrackingRemote) && !string.IsNullOrEmpty(branchRef.MergeWith))
+        {
+            return (branchRef.TrackingRemote, branchRef.MergeWith, Track: false);
+        }
+
+        IReadOnlyList<string> remotes = [.. _module.GetRemoteNames()];
+        string? defaultRemote = remotes.FirstOrDefault(r => r == "origin") ?? remotes.OrderBy(r => r).FirstOrDefault();
+        return (defaultRemote, currentBranch, Track: true);
+    }
+
+    public Task<(bool Success, string Output)> CheckoutBranchAsync(string branchName)
+        => Task.Run(() => RunGitOperation(Commands.Checkout(branchName, LocalChangesAction.DontChange)));
+
+    public Task<(bool Success, string Output)> CreateBranchAsync(string branchName, bool checkout)
+        => Task.Run(() => RunGitOperation(Commands.Branch(branchName, CurrentCheckout, checkout)));
 
     /// <summary>
     ///  The work-tree status, partitioned exactly as FormCommit.LoadUnstagedOutput does:
