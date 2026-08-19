@@ -34,9 +34,26 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     private bool _canScroll;
     private int _selectedIndex = -1;
 
-    private static readonly IBrush _selectionBrush = new SolidColorBrush(AvColor.FromRgb(0xd6, 0xe6, 0xf7));
     private readonly Typeface _typeface = new("monospace");
     private readonly Typeface _textTypeface = Typeface.Default;
+
+    // Theme-variant palette; FormattedText bakes its brush, so the text cache clears on change.
+    private sealed record Palette(IBrush Background, IBrush Selection, IBrush Text, IBrush DimText);
+
+    private static readonly Palette _lightPalette = new(
+        Brushes.White,
+        new SolidColorBrush(AvColor.FromRgb(0xd6, 0xe6, 0xf7)),
+        Brushes.Black,
+        Brushes.DimGray);
+
+    private static readonly Palette _darkPalette = new(
+        new SolidColorBrush(AvColor.FromRgb(0x1e, 0x1e, 0x1e)),
+        new SolidColorBrush(AvColor.FromRgb(0x26, 0x4f, 0x78)),
+        new SolidColorBrush(AvColor.FromRgb(0xf0, 0xf0, 0xf0)),
+        new SolidColorBrush(AvColor.FromRgb(0x9d, 0x9d, 0x9d)));
+
+    private Palette CurrentPalette => ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Dark ? _darkPalette : _lightPalette;
+
 
     public event EventHandler<GitRevision>? RevisionSelected;
 
@@ -203,6 +220,11 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     public RevisionLogControl()
     {
         Focusable = true;
+        ActualThemeVariantChanged += (_, _) =>
+        {
+            _textCache.Clear();
+            InvalidateVisual();
+        };
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -286,7 +308,8 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+        Palette palette = CurrentPalette;
+        context.FillRectangle(palette.Background, new Rect(Bounds.Size));
 
         int count = _graph.Count;
         if (count == 0)
@@ -318,7 +341,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
 
             if (row == _selectedIndex)
             {
-                context.FillRectangle(_selectionBrush, new Rect(0, yTop, Bounds.Width, RowHeight));
+                context.FillRectangle(palette.Selection, new Rect(0, yTop, Bounds.Width, RowHeight));
             }
 
             IRevisionGraphRow? graphRow = _graph.GetSegmentsForRow(row);
@@ -331,7 +354,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
             IRevisionGraphRow? nextRow = row < count - 1 ? _graph.GetSegmentsForRow(row + 1) : null;
 
             DrawGraphRow(context, graphRow, previousRow, nextRow, yTop, yMid);
-            DrawTextColumns(context, graphRow, graphWidth, yMid);
+            DrawTextColumns(context, graphRow, graphWidth, yMid, palette);
         }
 
         stopwatch.Stop();
@@ -423,7 +446,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         }
     }
 
-    private void DrawTextColumns(DrawingContext context, IRevisionGraphRow row, double graphWidth, double yMid)
+    private void DrawTextColumns(DrawingContext context, IRevisionGraphRow row, double graphWidth, double yMid, Palette palette)
     {
         GitRevision? revision = row.Revision.GitRevision;
         if (revision is null)
@@ -436,9 +459,9 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         double dateWidth = 120;
         double subjectWidth = Math.Max(50, Bounds.Width - textX - authorWidth - dateWidth - 24);
 
-        DrawCachedText(context, 0, revision.Subject, _textTypeface, 13, Brushes.Black, new Point(textX, yMid), subjectWidth);
-        DrawCachedText(context, 1, revision.Author ?? "", _textTypeface, 12, Brushes.DimGray, new Point(textX + subjectWidth + 8, yMid), authorWidth);
-        DrawCachedText(context, 2, revision.AuthorDate.ToString("yyyy-MM-dd HH:mm"), _typeface, 12, Brushes.DimGray, new Point(textX + subjectWidth + 8 + authorWidth + 8, yMid), dateWidth);
+        DrawCachedText(context, 0, revision.Subject, _textTypeface, 13, palette.Text, new Point(textX, yMid), subjectWidth);
+        DrawCachedText(context, 1, revision.Author ?? "", _textTypeface, 12, palette.DimText, new Point(textX + subjectWidth + 8, yMid), authorWidth);
+        DrawCachedText(context, 2, revision.AuthorDate.ToString("yyyy-MM-dd HH:mm"), _typeface, 12, palette.DimText, new Point(textX + subjectWidth + 8 + authorWidth + 8, yMid), dateWidth);
     }
 
     // FormattedText construction (text shaping) dominates frame cost if done per frame; cache it
