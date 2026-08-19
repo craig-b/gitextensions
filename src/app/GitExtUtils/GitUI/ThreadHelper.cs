@@ -18,7 +18,7 @@ public static class ThreadHelper
         _taskManager ?? throw new InvalidOperationException($"{nameof(ThreadHelper)}.{nameof(JoinableTaskContext)} has not been initialized.");
 
     /// <summary>
-    ///  The ambient task manager. Exposed to <see cref="ControlThreadingExtensions"/> only, which owns the
+    ///  The ambient task manager. Exposed to <c>ControlThreadingExtensions</c> only, which owns the
     ///  <c>InvokeAndForget(this Control, ...)</c> overloads that used to live here.
     /// </summary>
     internal static TaskManager AmbientTaskManager => TaskManager;

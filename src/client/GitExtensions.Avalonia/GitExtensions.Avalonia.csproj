@@ -6,11 +6,10 @@
     commit info from the M6 RichContent model, and view a colored diff from the M4 StyledSpan
     model.
 
-    It references PortabilityProbe.csproj - the portable core compiled as plain net10.0 - because
-    the real projects still target net10.0-windows. That is deliberate slice scaffolding: the
-    probe IS the portable core, and proving a client can live on it is the probe's whole thesis.
-    Productizing means multi-targeting the four core projects and swapping this reference; the
-    client code itself will not change.
+    It references the REAL core projects' plain-net10.0 flavor (PortableCore.props multi-targets
+    them); the probe remains the file-by-file portability ratchet but is no longer the client's
+    runtime. This replaced the original probe-assembly scaffolding once the core was productized -
+    and as predicted, the client code did not change when the reference swapped.
 
     Toolkit: Avalonia 11 (plan §3 - default candidate, chosen at the slice). Views here are
     deliberately thin; all logic they bind to lives in the portable core.
@@ -49,7 +48,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\eng\portability\PortabilityProbe.csproj" />
+    <ProjectReference Include="..\..\app\GitExtensions.Extensibility\GitExtensions.Extensibility.csproj" />
+    <ProjectReference Include="..\..\app\GitExtUtils\GitExtUtils.csproj" />
+    <ProjectReference Include="..\..\app\GitCommands\GitCommands.csproj" />
+    <ProjectReference Include="..\..\plugins\GitUIPluginInterfaces\GitUIPluginInterfaces.csproj" />
   </ItemGroup>
 
 

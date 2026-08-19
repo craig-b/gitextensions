@@ -1,0 +1,36 @@
+<Project>
+
+  <!--
+    PRODUCTIZING THE PORTABLE CORE (plan §19.1a / §20 follow-on).
+
+    The four projects below GitUI compile for BOTH net10.0 (platform-neutral, consumed by the
+    Linux client) and net10.0-windows (WinForms app, unchanged). Importing this file:
+
+      - replaces the repo-wide single TargetFramework with the dual list,
+      - turns WinForms off for the neutral flavor,
+      - restores the System.Drawing global using there (System.Drawing.Primitives - Color,
+        Point, Rectangle - is cross-platform and in the box; only Common is Windows-only).
+
+    The PortabilityProbe stays the RATCHET: it still source-includes these projects with
+    EnableDefaultCompileItems=false and fails on new Windows dependencies file-by-file. A
+    Windows-only file missing from a project's net10.0 Compile Remove list fails that project's
+    own net10.0 build, so the two exclusion lists (probe + csproj) cannot silently drift.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <UseWindowsForms Condition="'$(TargetFramework)' == 'net10.0'">false</UseWindowsForms>
+
+    <!-- The trim ANALYZER would turn the recorded AOT gates (translation walk reflection, the
+         xlf XmlSerializer, ConfigurationManager - see plan §19.1a) into errors under the
+         repo-wide TreatWarningsAsErrors. The publish-time linker still reports them as the
+         counted baseline warnings; new portable models stay reflection-free by doctrine. -->
+    <EnableTrimAnalyzer Condition="'$(TargetFramework)' == 'net10.0'">false</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Using Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>

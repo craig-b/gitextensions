@@ -27,7 +27,7 @@ public class ExclusiveTaskRunner : IDisposable
     }
 
     /// <summary>
-    /// Exclusivly run <paramref name="asyncAction"/> asynchronously on the current thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// Exclusivly run <paramref name="asyncAction"/> asynchronously on the current thread and forward all exceptions to <c>Application.OnThreadException</c> except for <see cref="OperationCanceledException"/>, which is ignored.
     /// A previous task is cancelled and its termination is awaited before.
     /// </summary>
     public JoinableTask RunDetached(Func<CancellationToken, Task> asyncAction)
