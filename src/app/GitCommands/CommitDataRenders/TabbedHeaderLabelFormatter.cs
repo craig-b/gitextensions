@@ -1,6 +1,4 @@
-using System.Net;
-
-namespace ResourceManager.CommitDataRenders;
+﻿namespace ResourceManager.CommitDataRenders;
 
 /// <summary>
 /// Formats the commit information heading labels with tabs.
@@ -9,7 +7,8 @@ public sealed class TabbedHeaderLabelFormatter : IHeaderLabelFormatter
 {
     public string FormatLabel(string label, int desiredLength)
     {
-        return FillToLength(WebUtility.HtmlEncode(label) + ":");
+        // M6: RAW text, tab count from the visible label (see MonospacedHeaderLabelFormatter).
+        return FillToLength(label + ":");
 
         string FillToLength(string input)
         {

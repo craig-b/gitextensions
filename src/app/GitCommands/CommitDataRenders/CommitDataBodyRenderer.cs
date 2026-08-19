@@ -1,4 +1,4 @@
-﻿using System.Net;
+﻿using GitCommands.RichText;
 using GitExtensions.Extensibility.Extensions;
 using GitExtensions.Extensibility.Git;
 using GitUIPluginInterfaces;
@@ -13,7 +13,7 @@ public interface ICommitDataBodyRenderer
     /// <summary>
     /// Render the body of a commit message.
     /// </summary>
-    string Render(CommitData commitData, bool showRevisionsAsLinks);
+    RichContent Render(CommitData commitData, bool showRevisionsAsLinks);
 }
 
 /// <summary>
@@ -33,34 +33,44 @@ public sealed class CommitDataBodyRenderer : ICommitDataBodyRenderer
     /// <summary>
     /// Render the body of a commit message.
     /// </summary>
-    public string Render(CommitData commitData, bool showRevisionsAsLinks)
+    public RichContent Render(CommitData commitData, bool showRevisionsAsLinks)
     {
         ArgumentNullException.ThrowIfNull(commitData);
 
-        string body = WebUtility.HtmlEncode((UIExtensions.FormatBodyAndNotes(commitData.Body, commitData.Notes) ?? "").Trim());
+        // M6: the hash regex now runs over the RAW body - the old code matched over the
+        // HTML-ENCODED body, where an entity adjacent to a hash could shift a match boundary.
+        // Identical for bodies without &/</>/quotes next to hash candidates.
+        string body = (UIExtensions.FormatBodyAndNotes(commitData.Body, commitData.Notes) ?? "").Trim();
 
-        if (showRevisionsAsLinks)
+        RichContent content = new();
+
+        if (!showRevisionsAsLinks)
         {
-            body = GitRevision.Sha1HashShortRegex.Replace(body, match => ProcessHashCandidate(match.Value));
+            return content.AddText(body);
         }
 
-        return body;
+        int position = 0;
+        foreach (System.Text.RegularExpressions.Match match in GitRevision.Sha1HashShortRegex.Matches(body))
+        {
+            content.AddText(body[position..match.Index]);
+            AddHashCandidate(content, match.Value);
+            position = match.Index + match.Length;
+        }
+
+        content.AddText(body[position..]);
+        return content;
     }
 
-    private string ProcessHashCandidate(string hash)
+    private void AddHashCandidate(RichContent content, string hash)
     {
         IGitModule module = _getModule();
 
-        if (module is null)
+        if (module is null || !module.TryResolvePartialCommitId(hash, out ObjectId fullHash))
         {
-            return hash;
+            content.AddText(hash);
+            return;
         }
 
-        if (!module.TryResolvePartialCommitId(hash, out ObjectId fullHash))
-        {
-            return hash;
-        }
-
-        return _linkFactory.CreateCommitLink(fullHash, hash, true);
+        content.Add(_linkFactory.CreateCommitLink(fullHash, hash, true));
     }
 }

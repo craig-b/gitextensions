@@ -2,21 +2,22 @@
 using System.Net;
 using GitCommands;
 using GitCommands.Git;
+using GitCommands.RichText;
 using GitExtensions.Extensibility.Git;
 
 namespace ResourceManager;
 
 public interface ILinkFactory
 {
-    string CreateLink(string? caption, string uri);
+    RichTextSegment CreateLink(string? caption, string uri);
 
-    string CreateTagLink(string tag);
+    RichTextSegment CreateTagLink(string tag);
 
-    string CreateBranchLink(string noPrefixBranch);
+    RichTextSegment CreateBranchLink(string noPrefixBranch);
 
-    string CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false);
+    RichTextSegment CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false);
 
-    string CreateShowAllLink(string what);
+    RichTextSegment CreateShowAllLink(string what);
 
     void ExecuteLink(string? linkUri, Action<CommandEventArgs>? handleInternalLink = null, Action<string?>? showAll = null);
 }
@@ -26,25 +27,20 @@ public sealed class LinkFactory : ILinkFactory
     private const string InternalScheme = "gitext";
     private const string ShowAll = "showall";
 
-    public string CreateLink(string? caption, string uri)
-    {
-        string htmlUri = WebUtility.HtmlEncode(uri);
+    public RichTextSegment CreateLink(string? caption, string uri)
+        => new(caption ?? "", LinkTarget: uri);
 
-        string htmlLink = "<a href=" + htmlUri.Quote("'") + ">" + WebUtility.HtmlEncode(caption) + "</a>";
-        return htmlLink;
-    }
-
-    public string CreateTagLink(string tag)
+    public RichTextSegment CreateTagLink(string tag)
     {
         if (tag != "…")
         {
             return CreateLink(tag, $"{InternalScheme}://gototag/" + tag);
         }
 
-        return WebUtility.HtmlEncode(tag);
+        return new RichTextSegment(tag);
     }
 
-    public string CreateBranchLink(string noPrefixBranch)
+    public RichTextSegment CreateBranchLink(string noPrefixBranch)
     {
         if (noPrefixBranch != "…")
         {
@@ -52,10 +48,10 @@ public sealed class LinkFactory : ILinkFactory
             return CreateLink(noPrefixBranch, $"{InternalScheme}://gotobranch/{linkTarget}");
         }
 
-        return WebUtility.HtmlEncode(noPrefixBranch);
+        return new RichTextSegment(noPrefixBranch);
     }
 
-    public string CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false)
+    public RichTextSegment CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false)
     {
         if (linkText is null)
         {
@@ -80,7 +76,7 @@ public sealed class LinkFactory : ILinkFactory
         return CreateLink(linkText, $"{InternalScheme}://gotocommit/" + objectId);
     }
 
-    public string CreateShowAllLink(string what)
+    public RichTextSegment CreateShowAllLink(string what)
         => CreateLink($"[ {TranslatedStrings.ShowAll} ]", $"{InternalScheme}://{ShowAll}/{what}");
 
     public void ExecuteLink(string? linkUri, Action<CommandEventArgs>? handleInternalLink = null, Action<string?>? showAll = null)

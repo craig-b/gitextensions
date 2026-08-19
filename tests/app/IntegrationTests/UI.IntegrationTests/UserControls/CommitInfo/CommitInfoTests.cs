@@ -2,6 +2,7 @@
 using CommonTestUtils;
 using GitCommands;
 using GitCommands.Git;
+using GitCommands.RichText;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -371,19 +372,19 @@ public class CommitInfoTests
 
         public string? LastExecutedLinkUri { get; private set; }
 
-        public string CreateBranchLink(string noPrefixBranch)
+        public RichTextSegment CreateBranchLink(string noPrefixBranch)
             => _linkFactory.CreateBranchLink(noPrefixBranch);
 
-        public string CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false)
+        public RichTextSegment CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false)
             => _linkFactory.CreateCommitLink(objectId, linkText, preserveGuidInLinkText);
 
-        public string CreateLink(string? caption, string uri)
+        public RichTextSegment CreateLink(string? caption, string uri)
             => _linkFactory.CreateLink(caption, uri);
 
-        public string CreateShowAllLink(string what)
+        public RichTextSegment CreateShowAllLink(string what)
             => _linkFactory.CreateShowAllLink(what);
 
-        public string CreateTagLink(string tag)
+        public RichTextSegment CreateTagLink(string tag)
             => _linkFactory.CreateTagLink(tag);
 
         public void ExecuteLink(string? linkUri, Action<CommandEventArgs>? handleInternalLink = null, Action<string?>? showAll = null)

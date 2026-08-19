@@ -54,11 +54,22 @@ public class RichContentTests
     }
 
     [Test]
-    public void AddLine_appends_newline()
+    public void AddLine_appends_environment_newline()
     {
         RichContent content = new RichContent().AddLine("first").AddLine().AddText("second");
-        content.ToPlainText().Should().Be("first\n\nsecond");
-        content.ToXhtml().Should().Be("first\n\nsecond");
+        content.ToPlainText().Should().Be($"first{Environment.NewLine}{Environment.NewLine}second");
+        content.ToXhtml().Should().Be($"first{Environment.NewLine}{Environment.NewLine}second");
+    }
+
+    [Test]
+    public void SegmentsEqual_compares_by_value()
+    {
+        RichContent left = new RichContent().AddText("a").AddLink("b", "gitext://gototag/b");
+        RichContent right = new RichContent().AddText("a").AddLink("b", "gitext://gototag/b");
+        left.SegmentsEqual(right).Should().BeTrue();
+        right.AddText("x");
+        left.SegmentsEqual(right).Should().BeFalse();
+        left.SegmentsEqual(null).Should().BeFalse();
     }
 
     [Test]

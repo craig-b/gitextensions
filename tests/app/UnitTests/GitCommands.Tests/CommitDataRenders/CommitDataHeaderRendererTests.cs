@@ -46,7 +46,7 @@ public class CommitDataHeaderRendererTests
         _labelFormatter.FormatLabel(TranslatedStrings.GetChildren(3), Arg.Any<int>()).Returns(x => "Children:      ");
 
         _headerRendererStyleProvider = Substitute.For<IHeaderRenderStyleProvider>();
-        _linkFactory = Substitute.For<ILinkFactory>();
+        _linkFactory = new LinkFactory();
         _dateFormatter = Substitute.For<IDateFormatter>();
 
         _renderer = new CommitDataHeaderRenderer(_labelFormatter, _dateFormatter, _headerRendererStyleProvider, _linkFactory);
@@ -71,12 +71,11 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
-        string result = _renderer.Render(data, false);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Author, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Date, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.CommitHash, Arg.Any<int>());
@@ -98,13 +97,11 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
-        _linkFactory.CreateLink(committer, Arg.Any<string>()).Returns(x => committer);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
-        string result = _renderer.Render(data, false);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Committer:     John Doe <John.Doe@test.com>{Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Committer:     <a href='mailto:John.Doe@test.com'>John Doe &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Author, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Date, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Committer, Arg.Any<int>());
@@ -126,13 +123,12 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
         _dateFormatter.FormatDateAsRelativeLocal(commitDate).Returns("2 months ago (10/23/2017 12:17:11)");
 
-        string result = _renderer.Render(data, false);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}Author date:   6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit date:   2 months ago (10/23/2017 12:17:11){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Author date:   6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit date:   2 months ago (10/23/2017 12:17:11){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c");
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Author, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.AuthorDate, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.CommitDate, Arg.Any<int>());
@@ -157,12 +153,11 @@ public class CommitDataHeaderRendererTests
             ChildIds = _childrenHashes
         };
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
-        string result = _renderer.Render(data, false);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c{Environment.NewLine}" +
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c{Environment.NewLine}" +
             $"Children:      {_childrenHashes[0].ToShortString()} " +
             $"{_childrenHashes[1].ToShortString()} " +
             $"{_childrenHashes[2].ToShortString()}");
@@ -187,12 +182,11 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
-        string result = _renderer.Render(data, false);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c{Environment.NewLine}" +
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}Date:          6 months ago (06/17/2017 23:38:40){Environment.NewLine}Commit hash:   7fa3109989e0523aeacb178995a2a3aa6c302a2c{Environment.NewLine}" +
             $"Parents:       {_parentHashes[0].ToShortString()} {_parentHashes[1].ToShortString()} {_parentHashes[2].ToShortString()}");
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Author, Arg.Any<int>());
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Date, Arg.Any<int>());
@@ -216,11 +210,9 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
+        string result = _renderer.Render(data, false).ToXhtml();
 
-        string result = _renderer.Render(data, false);
-
-        result.Should().Be($"Author:        John Doe (Acme Inc) <John.Doe@test.com>{Environment.NewLine}" +
+        result.Should().Be($"Author:        <a href='mailto:John.Doe@test.com'>John Doe (Acme Inc) &lt;John.Doe@test.com&gt;</a>{Environment.NewLine}" +
                            $"Parents:       {_parentHashes[0].ToShortString()} {_parentHashes[1].ToShortString()} {_parentHashes[2].ToShortString()}");
         _labelFormatter.Received(1).FormatLabel(TranslatedStrings.Author, Arg.Any<int>());
         _labelFormatter.DidNotReceive().FormatLabel(TranslatedStrings.Date, Arg.Any<int>());
@@ -249,7 +241,6 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
         string result = _renderer.RenderPlain(data);
@@ -276,8 +267,6 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
-        _linkFactory.CreateLink(committer, Arg.Any<string>()).Returns(x => committer);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
 
         string result = _renderer.RenderPlain(data);
@@ -304,7 +293,6 @@ public class CommitDataHeaderRendererTests
             author, authorDate,
             committer, commitDate, "");
 
-        _linkFactory.CreateLink(author, Arg.Any<string>()).Returns(x => author);
         _dateFormatter.FormatDateAsRelativeLocal(authorDate).Returns("6 months ago (06/17/2017 23:38:40)");
         _dateFormatter.FormatDateAsRelativeLocal(commitDate).Returns("2 months ago (10/23/2017 12:17:11)");
 

@@ -59,13 +59,28 @@ public sealed class RichContent
         return this;
     }
 
-    /// <summary>Appends <paramref name="text"/> (optional) followed by a newline.</summary>
+    /// <summary>
+    ///  Appends <paramref name="text"/> (optional) followed by <see cref="Environment.NewLine"/> -
+    ///  matching what the commit-info producers have always emitted via StringBuilder.AppendLine.
+    ///  Newlines embedded in data (e.g. git message bodies with \n) arrive via
+    ///  <see cref="AddText"/> untouched.
+    /// </summary>
     public RichContent AddLine(string? text = null)
     {
         AddText(text);
-        _segments.Add(new RichTextSegment("\n"));
+        _segments.Add(new RichTextSegment(Environment.NewLine));
         return this;
     }
+
+    public RichContent Add(RichTextSegment segment)
+    {
+        _segments.Add(segment);
+        return this;
+    }
+
+    /// <summary>Segment-wise value equality - the model's replacement for comparing serialized strings.</summary>
+    public bool SegmentsEqual(RichContent? other)
+        => other is not null && _segments.SequenceEqual(other._segments);
 
     public RichContent Append(RichContent? other)
     {

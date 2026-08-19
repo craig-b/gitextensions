@@ -1,6 +1,5 @@
-﻿using System.Net;
-using System.Text;
-using GitCommands;
+﻿using GitCommands;
+using GitCommands.RichText;
 using ResourceManager;
 
 namespace GitUI.CommitInfo;
@@ -27,37 +26,37 @@ public sealed class RefsFormatter
         _linkFactory = linkFactory ?? throw new ArgumentNullException(nameof(linkFactory), "RefsFormatter requires an ILinkFactory instance");
     }
 
-    public string FormatBranches(IEnumerable<string>? branches, bool showAsLinks, bool limit)
+    public RichContent FormatBranches(IEnumerable<string>? branches, bool showAsLinks, bool limit)
     {
         if (branches is null)
         {
-            return string.Empty;
+            return new RichContent();
         }
 
-        (IEnumerable<string> formattedBranches, bool truncated) = FilterAndFormatBranches(branches, showAsLinks, limit);
-        return ToString(formattedBranches, TranslatedStrings.ContainedInBranches, TranslatedStrings.ContainedInNoBranch, "branches", truncated);
+        (IReadOnlyList<RichTextSegment> formattedBranches, bool truncated) = FilterAndFormatBranches(branches, showAsLinks, limit);
+        return ToContent(formattedBranches, TranslatedStrings.ContainedInBranches, TranslatedStrings.ContainedInNoBranch, "branches", truncated);
     }
 
-    public string FormatTags(IReadOnlyList<string> tags, bool showAsLinks, bool limit)
+    public RichContent FormatTags(IReadOnlyList<string> tags, bool showAsLinks, bool limit)
     {
         if (tags is null)
         {
-            return string.Empty;
+            return new RichContent();
         }
 
         bool truncate = limit && tags.Count > MaximumDisplayedLinesIfLimited;
-        IEnumerable<string> formattedTags = FormatTags(truncate ? tags.Take(MaximumDisplayedRefsIfLimited) : tags);
-        return ToString(formattedTags, TranslatedStrings.ContainedInTags, TranslatedStrings.ContainedInNoTag, "tags", truncate);
+        List<RichTextSegment> formattedTags = [.. FormatTags(truncate ? tags.Take(MaximumDisplayedRefsIfLimited) : tags)];
+        return ToContent(formattedTags, TranslatedStrings.ContainedInTags, TranslatedStrings.ContainedInNoTag, "tags", truncate);
 
-        IEnumerable<string> FormatTags(IEnumerable<string> selectedTags)
+        IEnumerable<RichTextSegment> FormatTags(IEnumerable<string> selectedTags)
         {
-            return selectedTags.Select(s => showAsLinks ? _linkFactory.CreateTagLink(s ?? string.Empty) : WebUtility.HtmlEncode(s));
+            return selectedTags.Select(s => showAsLinks ? _linkFactory.CreateTagLink(s ?? string.Empty) : new RichTextSegment(s ?? string.Empty));
         }
     }
 
-    private (IEnumerable<string> formattedBranches, bool truncated) FilterAndFormatBranches(IEnumerable<string> branches, bool showAsLinks, bool limit)
+    private (IReadOnlyList<RichTextSegment> formattedBranches, bool truncated) FilterAndFormatBranches(IEnumerable<string> branches, bool showAsLinks, bool limit)
     {
-        List<string> formattedBranches = [];
+        List<RichTextSegment> formattedBranches = [];
         bool truncated = false;
 
         const string remotesPrefix = "remotes/";
@@ -96,9 +95,9 @@ public sealed class RefsFormatter
 
             if ((branchIsLocal && allowLocal) || (!branchIsLocal && allowRemote))
             {
-                string branchText = showAsLinks
+                RichTextSegment branchText = showAsLinks
                     ? _linkFactory.CreateBranchLink(noPrefixBranch)
-                    : WebUtility.HtmlEncode(noPrefixBranch);
+                    : new RichTextSegment(noPrefixBranch);
 
                 if (limit && formattedBranches.Count == MaximumDisplayedLinesIfLimited)
                 {
@@ -119,23 +118,32 @@ public sealed class RefsFormatter
         return (formattedBranches, truncated);
     }
 
-    private string ToString(IEnumerable<string> formattedRefs, string prefix, string textIfEmpty, string refsType, bool truncated)
+    private RichContent ToContent(IReadOnlyList<RichTextSegment> formattedRefs, string prefix, string textIfEmpty, string refsType, bool truncated)
     {
-        string? linksJoined = formattedRefs?.Join(Environment.NewLine);
-        if (string.IsNullOrEmpty(linksJoined))
+        if (formattedRefs.Count == 0)
         {
-            return WebUtility.HtmlEncode(textIfEmpty);
+            return RichContent.From(textIfEmpty);
         }
 
-        StringBuilder sb = new StringBuilder()
-            .AppendLine(WebUtility.HtmlEncode(prefix))
-            .Append(linksJoined);
+        RichContent content = new RichContent().AddLine(prefix);
+        bool first = true;
+        foreach (RichTextSegment segment in formattedRefs)
+        {
+            if (!first)
+            {
+                content.AddLine();
+            }
+
+            first = false;
+            content.Add(segment);
+        }
+
         if (truncated)
         {
-            sb.AppendLine()
-              .Append(_linkFactory.CreateShowAllLink(refsType));
+            content.AddLine();
+            content.Add(_linkFactory.CreateShowAllLink(refsType));
         }
 
-        return sb.ToString();
+        return content;
     }
 }

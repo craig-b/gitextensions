@@ -1,5 +1,6 @@
 ﻿using System.Reactive.Linq;
 using GitCommands;
+using GitCommands.RichText;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitUI.Editor.RichTextBoxExtension;
@@ -57,12 +58,12 @@ public partial class CommitInfoHeader : GitModuleControl
         this.InvokeAndForget(() =>
         {
             CommitData data = _commitDataManager.CreateFromRevision(revision, children);
-            string header = _commitDataHeaderRenderer.Render(data, showRevisionsAsLinks: CommandClicked is not null);
+            RichContent header = _commitDataHeaderRenderer.Render(data, showRevisionsAsLinks: CommandClicked is not null);
 
             rtbRevisionHeader.SuspendLayout();
 
             rtbRevisionHeader.Clear();
-            rtbRevisionHeader.SetXHTMLText(header);
+            rtbRevisionHeader.SetRichContent(header);
 
             rtbRevisionHeader.SelectionStart = 0; // scroll up
             rtbRevisionHeader.ScrollToCaret();    // scroll up
