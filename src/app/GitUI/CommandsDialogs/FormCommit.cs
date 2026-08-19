@@ -1069,14 +1069,24 @@ public sealed partial class FormCommit : GitModuleForm
 
         bool ConfirmOrStageCommit()
         {
-            if (createAmendCommit)
+            foreach (CommitDialogGate gate in CommitDialogGates.EvaluateStagePhase(
+                isAmend: createAmendCommit,
+                dontConfirmAmend: AppSettings.DontConfirmAmend,
+                stagedIsEmpty: Staged.IsEmpty,
+                isMergeCommit: _isMergeCommit))
             {
-                return ConfirmAmendCommit();
-            }
+                bool proceed = gate switch
+                {
+                    CommitDialogGate.ConfirmAmend => ConfirmAmendCommit(),
+                    CommitDialogGate.ConfirmEmptyMergeCommit => ConfirmEmptyMergeCommit(),
+                    CommitDialogGate.ResolveNoStagedChanges => ConfirmAndStageAllUnstaged(),
+                    _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(gate), (int)gate, typeof(CommitDialogGate)),
+                };
 
-            if (Staged.IsEmpty)
-            {
-                return _isMergeCommit ? ConfirmEmptyMergeCommit() : ConfirmAndStageAllUnstaged();
+                if (!proceed)
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -1085,15 +1095,7 @@ public sealed partial class FormCommit : GitModuleForm
             {
                 // This is an amend commit.  Confirm the user understands the implications.  We don't want to prompt for an empty
                 // commit, because amend may be used just to change the commit message or timestamp.
-                if (!AppSettings.DontConfirmAmend)
-                {
-                    if (MessageBoxes.Show(this, _amendCommit.Text, _amendCommitCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
+                return MessageBoxes.Show(this, _amendCommit.Text, _amendCommitCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
             }
 
             bool ConfirmEmptyMergeCommit()
@@ -1157,24 +1159,46 @@ public sealed partial class FormCommit : GitModuleForm
 
         void DoCommit()
         {
-            if (Module.InTheMiddleOfConflictedMerge())
+            foreach (CommitDialogGate gate in CommitDialogGates.EvaluateCommitPhase(
+                inConflictedMerge: Module.InTheMiddleOfConflictedMerge(),
+                useFormCommitMessage: _useFormCommitMessage,
+                messageIsEmptyOrTemplate: string.IsNullOrEmpty(Message.Text) || Message.Text == _commitTemplate,
+                dontConfirmCommitIfNoBranch: AppSettings.DontConfirmCommitIfNoBranch,
+                isDetachedHead: Module.IsDetachedHead(),
+                inRebase: Module.InTheMiddleOfRebase()))
             {
-                MessageBoxes.Show(this, _mergeConflicts.Text, _mergeConflictsCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                switch (gate)
+                {
+                    case CommitDialogGate.BlockConflictedMerge:
+                        MessageBoxes.Show(this, _mergeConflicts.Text, _mergeConflictsCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+
+                    case CommitDialogGate.BlockEmptyMessage:
+                        MessageBoxes.Show(this, _enterCommitMessage.Text, _enterCommitMessageCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+                        return;
+
+                    case CommitDialogGate.ValidateMessage:
+                        if (!IsCommitMessageValid())
+                        {
+                            return;
+                        }
+
+                        break;
+
+                    case CommitDialogGate.ConfirmDetachedHead:
+                        if (!ConfirmDetachedHead())
+                        {
+                            return;
+                        }
+
+                        break;
+
+                    default:
+                        throw new System.ComponentModel.InvalidEnumArgumentException(nameof(gate), (int)gate, typeof(CommitDialogGate));
+                }
             }
 
-            if (_useFormCommitMessage && (string.IsNullOrEmpty(Message.Text) || Message.Text == _commitTemplate))
-            {
-                MessageBoxes.Show(this, _enterCommitMessage.Text, _enterCommitMessageCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-                return;
-            }
-
-            if (_useFormCommitMessage && !IsCommitMessageValid())
-            {
-                return;
-            }
-
-            if (!AppSettings.DontConfirmCommitIfNoBranch && Module.IsDetachedHead() && !Module.InTheMiddleOfRebase())
+            bool ConfirmDetachedHead()
             {
                 TaskDialogPage page = new()
                 {
@@ -1196,7 +1220,7 @@ public sealed partial class FormCommit : GitModuleForm
                 TaskDialogButton result = TaskDialog.ShowDialog(Handle, page);
                 if (result == TaskDialogButton.Cancel)
                 {
-                    return;
+                    return false;
                 }
 
                 if (result == btnCheckout)
@@ -1204,16 +1228,18 @@ public sealed partial class FormCommit : GitModuleForm
                     ObjectId[]? objectIds = _editedCommit is not null ? [_editedCommit.ObjectId] : null;
                     if (!UICommands.Execute(new UICmd.CheckoutBranch(ContainObjectIds: objectIds), this))
                     {
-                        return;
+                        return false;
                     }
                 }
                 else if (result == btnCreate)
                 {
                     if (!UICommands.Execute(new UICmd.CreateBranch(_editedCommit?.ObjectId ?? default), this))
                     {
-                        return;
+                        return false;
                     }
                 }
+
+                return true;
             }
 
             try
