@@ -175,6 +175,11 @@ jobs:
       # from portability refactors without a Windows runner.
       run: dotnet build GitExtensions.slnx -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-solution.binlog
 
+    - name: Build the Linux client
+      # The Avalonia client consumes the portable core; building it here keeps the s19/s20
+      # client track from being silently broken by engine extractions.
+      run: dotnet build src/client/GitExtensions.Avalonia/GitExtensions.Avalonia.csproj --nologo --verbosity q /bl:artifacts/log/portability-client.binlog
+
     - name: Run portable tests
       run: dotnet test eng/portability/PortabilityProbe.Tests.csproj --nologo --verbosity q --logger:trx /bl:artifacts/log/portability-tests.binlog
 
