@@ -245,9 +245,23 @@ public sealed class SliceSession
     /// </summary>
     public void StreamLog(Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
     {
+        // Refs are looked up per revision, the same way the WinForms grid attaches them.
+        ILookup<ObjectId, IGitRef> refsByObjectId = _module.GetRefs(RefsFilter.NoFilter).ToLookup(gitRef => gitRef.ObjectId);
+
         RevisionReader reader = new(_module, allBodies: false);
         reader.GetLog(
-            new BatchObserver(onBatch, onCompleted, onError),
+            new BatchObserver(
+                revisions =>
+                {
+                    foreach (GitRevision revision in revisions)
+                    {
+                        revision.Refs = [.. refsByObjectId[revision.ObjectId]];
+                    }
+
+                    onBatch(revisions);
+                },
+                onCompleted,
+                onError),
             revisionFilter: "HEAD",
             pathFilter: "",
             hasNotes: false,

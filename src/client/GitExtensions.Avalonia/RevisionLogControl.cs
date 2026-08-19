@@ -458,7 +458,21 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         double authorWidth = 170;
         double dateWidth = 120;
         double subjectWidth = Math.Max(50, Bounds.Width - textX - authorWidth - dateWidth - 24);
+        double subjectRight = textX + subjectWidth;
 
+        // Ref chips (branch/tag labels) before the subject, taking at most half the subject room.
+        double chipLimit = textX + (subjectWidth / 2);
+        foreach (IGitRef gitRef in revision.Refs)
+        {
+            if (textX >= chipLimit)
+            {
+                break;
+            }
+
+            textX += DrawRefChip(context, gitRef, textX, yMid, chipLimit - textX);
+        }
+
+        subjectWidth = Math.Max(20, subjectRight - textX);
         DrawCachedText(context, 0, revision.Subject, _textTypeface, 13, palette.Text, new Point(textX, yMid), subjectWidth);
         DrawCachedText(context, 1, revision.Author ?? "", _textTypeface, 12, palette.DimText, new Point(textX + subjectWidth + 8, yMid), authorWidth);
         DrawCachedText(context, 2, revision.AuthorDate.ToString("yyyy-MM-dd HH:mm"), _typeface, 12, palette.DimText, new Point(textX + subjectWidth + 8 + authorWidth + 8, yMid), dateWidth);
@@ -495,6 +509,52 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         }
 
         context.DrawText(formatted, position - new Vector(0, formatted.Height / 2));
+    }
+
+    private sealed record ChipStyle(IBrush Background, IBrush Text);
+
+    private static readonly ChipStyle _localBranchChipLight = new(new SolidColorBrush(AvColor.FromRgb(0xc8, 0xe6, 0xc9)), new SolidColorBrush(AvColor.FromRgb(0x1b, 0x5e, 0x20)));
+    private static readonly ChipStyle _remoteBranchChipLight = new(new SolidColorBrush(AvColor.FromRgb(0xff, 0xe0, 0xb2)), new SolidColorBrush(AvColor.FromRgb(0x8a, 0x50, 0x00)));
+    private static readonly ChipStyle _tagChipLight = new(new SolidColorBrush(AvColor.FromRgb(0xe1, 0xbe, 0xe7)), new SolidColorBrush(AvColor.FromRgb(0x6a, 0x1b, 0x9a)));
+    private static readonly ChipStyle _localBranchChipDark = new(new SolidColorBrush(AvColor.FromRgb(0x1f, 0x45, 0x22)), new SolidColorBrush(AvColor.FromRgb(0xa5, 0xd6, 0xa7)));
+    private static readonly ChipStyle _remoteBranchChipDark = new(new SolidColorBrush(AvColor.FromRgb(0x4e, 0x34, 0x0e)), new SolidColorBrush(AvColor.FromRgb(0xff, 0xcc, 0x80)));
+    private static readonly ChipStyle _tagChipDark = new(new SolidColorBrush(AvColor.FromRgb(0x42, 0x1f, 0x4a)), new SolidColorBrush(AvColor.FromRgb(0xce, 0x93, 0xd8)));
+
+    /// <returns>The width consumed, including trailing spacing.</returns>
+    private double DrawRefChip(DrawingContext context, IGitRef gitRef, double x, double yMid, double maxWidth)
+    {
+        bool dark = ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Dark;
+        ChipStyle style = gitRef.IsTag
+            ? dark ? _tagChipDark : _tagChipLight
+            : gitRef.IsRemote
+                ? dark ? _remoteBranchChipDark : _remoteBranchChipLight
+                : dark ? _localBranchChipDark : _localBranchChipLight;
+
+        const double padding = 5;
+        const double chipHeight = 16;
+
+        (string, int, int) key = (gitRef.Name, dark ? 4 : 3, (int)maxWidth);
+        if (!_textCache.TryGetValue(key, out FormattedText? formatted))
+        {
+            if (_textCache.Count > 6000)
+            {
+                _textCache.Clear();
+            }
+
+            formatted = new FormattedText(gitRef.Name, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, _textTypeface, 11, style.Text)
+            {
+                MaxTextWidth = Math.Max(10, maxWidth - (2 * padding)),
+                MaxLineCount = 1,
+                Trimming = TextTrimming.CharacterEllipsis,
+            };
+            _textCache.Add(key, formatted);
+        }
+
+        double chipWidth = formatted.Width + (2 * padding);
+        context.DrawRectangle(style.Background, null, new RoundedRect(new Rect(x, yMid - (chipHeight / 2), chipWidth, chipHeight), 3));
+        context.DrawText(formatted, new Point(x + padding, yMid - (formatted.Height / 2)));
+
+        return chipWidth + 4;
     }
 
     private static double LaneX(int lane) => GraphPadding + ((lane + 0.5) * LaneWidth);
