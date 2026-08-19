@@ -1873,70 +1873,17 @@ public sealed partial class FormCommit : GitModuleForm
             return;
         }
 
-        Dictionary<string, string> modules = stagedFiles
-            .Where(item => item.IsSubmodule
-                           && Directory.Exists(_fullPathResolver.Resolve(item.Name))
-                           && configFile.ConfigSections.FirstOrDefault(section => section.GetValue("path").Trim() == item.Name)?.SubSection is not null)
-            .Select(item => item.Name)
-            .ToDictionary(localPath =>
-            {
-                IConfigSection? submodule = configFile.ConfigSections.FirstOrDefault(section => section.GetValue("path").Trim() == localPath);
-                Validates.NotNull(submodule?.SubSection);
-                return submodule.SubSection.Trim();
-            });
+        string? message = SubmoduleUpdateMessageBuilder.Build(
+            Module,
+            configFile,
+            _fullPathResolver,
+            path => new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), path),
+            stagedFiles);
 
-        if (modules.Count == 0)
+        if (message is not null)
         {
-            return;
+            ReplaceMessage(message);
         }
-
-        StringBuilder sb = new();
-        sb.AppendLine("Submodule" + (modules.Count == 1 ? " " : "s ") +
-            string.Join(", ", modules.Keys) + " updated");
-        sb.AppendLine();
-
-        foreach ((string path, string name) in modules)
-        {
-            GitArgumentBuilder args = new("diff")
-            {
-                "--no-ext-diff",
-                "--cached",
-                "-z",
-                "--",
-                name.QuoteNE()
-            };
-            string diff = Module.GitExecutable.GetOutput(args);
-            string[] lines = diff.Split(Delimiters.LineFeed, StringSplitOptions.RemoveEmptyEntries);
-            const string subprojectCommit = "Subproject commit ";
-            string from = lines.Single(s => s.StartsWith("-" + subprojectCommit))[(subprojectCommit.Length + 1)..];
-            string to = lines.Single(s => s.StartsWith("+" + subprojectCommit))[(subprojectCommit.Length + 1)..];
-            if (!string.IsNullOrEmpty(from) && !string.IsNullOrEmpty(to))
-            {
-                sb.AppendLine("Submodule " + path + ":");
-                GitModule module = new(UICommands.GetRequiredService<IGitExecutorProvider>(), _fullPathResolver.Resolve(name.EnsureTrailingPathSeparator()));
-                args = new GitArgumentBuilder("log")
-                {
-                    "--pretty=format:\"    %m %h - %s\"",
-                    "--no-merges",
-                    $"{from}...{to}".Quote()
-                };
-
-                string log = module.GitExecutable.GetOutput(args);
-
-                if (log.Length != 0)
-                {
-                    sb.AppendLine(log);
-                }
-                else
-                {
-                    sb.AppendLine("    * Revision changed to " + to[..7]);
-                }
-
-                sb.AppendLine();
-            }
-        }
-
-        ReplaceMessage(sb.ToString().TrimEnd());
     }
 
     private void SelectedDiffExtraDiffArgumentsChanged(object sender, EventArgs e)
