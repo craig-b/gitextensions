@@ -1,17 +1,20 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:GitExtensions.Avalonia"
         x:Class="GitExtensions.Avalonia.MainWindow"
         Title="Git Extensions"
-        Width="1400" Height="900">
-    <Grid ColumnDefinitions="420,4,*">
+        Width="1500" Height="950">
+    <Grid ColumnDefinitions="*,4,520">
 
-        <ListBox x:Name="RevisionList" Grid.Column="0" SelectionChanged="OnRevisionSelected" />
+        <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Disabled">
+            <local:RevisionLogControl x:Name="LogControl" />
+        </ScrollViewer>
 
         <GridSplitter Grid.Column="1" Background="#40808080" ResizeDirection="Columns" />
 
         <Grid Grid.Column="2" RowDefinitions="Auto,4,*" Margin="8,4,4,4">
 
-            <ScrollViewer Grid.Row="0" MaxHeight="320" HorizontalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="0" MaxHeight="340" HorizontalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <SelectableTextBlock x:Name="CommitHeader" FontFamily="monospace" FontSize="13" />
                     <SelectableTextBlock x:Name="CommitBody" FontSize="13" TextWrapping="Wrap" />
@@ -21,7 +24,10 @@
             <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
 
             <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto">
-                <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                <StackPanel Orientation="Horizontal">
+                    <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
+                    <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                </StackPanel>
             </ScrollViewer>
         </Grid>
     </Grid>
