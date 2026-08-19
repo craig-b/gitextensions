@@ -178,7 +178,10 @@ jobs:
     - name: Build the Linux client
       # The Avalonia client consumes the portable core; building it here keeps the s19/s20
       # client track from being silently broken by engine extractions.
-      run: dotnet build src/client/GitExtensions.Avalonia/GitExtensions.Avalonia.csproj --nologo --verbosity q /bl:artifacts/log/portability-client.binlog
+      # EnableWindowsTargeting is needed since productizing: restore evaluates the referenced
+      # core projects for BOTH their flavors, and evaluating net10.0-windows on Linux requires
+      # the flag - only the net10.0 flavors actually build here.
+      run: dotnet build src/client/GitExtensions.Avalonia/GitExtensions.Avalonia.csproj -p:EnableWindowsTargeting=true --nologo --verbosity q /bl:artifacts/log/portability-client.binlog
 
     - name: Run portable tests
       run: dotnet test eng/portability/PortabilityProbe.Tests.csproj --nologo --verbosity q --logger:trx /bl:artifacts/log/portability-tests.binlog
