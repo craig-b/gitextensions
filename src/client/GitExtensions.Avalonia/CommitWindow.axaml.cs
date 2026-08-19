@@ -338,6 +338,15 @@ public partial class CommitWindow : Window
         Snapshot(System.IO.Path.Combine(snapshotDirectory, "commit_before.png"));
 
         await StageAsync(AllStatuses(UnstagedTree));
+
+        // Exercise the formatter's over-limit highlighting with a temporarily tight rule.
+        int savedLimit = AppSettings.CommitValidationMaxCntCharsFirstLine;
+        AppSettings.CommitValidationMaxCntCharsFirstLine = 30;
+        MessageBox.Text = "a subject line that runs well past the thirty character limit";
+        await Task.Delay(400);
+        Snapshot(System.IO.Path.Combine(snapshotDirectory, "commit_highlight.png"));
+        AppSettings.CommitValidationMaxCntCharsFirstLine = savedLimit;
+
         MessageBox.Text = "feat: change committed from the Avalonia client";
         await Task.Delay(200);
         await ExecuteCommitAsync();

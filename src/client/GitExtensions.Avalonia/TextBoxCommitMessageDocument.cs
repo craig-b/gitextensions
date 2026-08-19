@@ -1,29 +1,31 @@
 using System.Collections.Generic;
 using System.Linq;
-using Avalonia.Controls;
 using GitCommands.Commit;
 
 namespace GitExtensions.Avalonia;
 
 /// <summary>
-///  <see cref="ICommitMessageDocument"/> over a plain Avalonia TextBox, mirroring the WinForms
-///  spell-check editor's line semantics: EnsureEmptyLine inserts before the line's content and
-///  pushes it down (optionally with a bullet). A plain TextBox cannot color text ranges, so
-///  <see cref="SetLineHighlight"/> is a no-op until the client gains a highlighting editor -
-///  the formatter's text edits (empty second line, auto-wrap) all apply.
+///  <see cref="ICommitMessageDocument"/> over the client's <see cref="MessageEditor"/>,
+///  mirroring the WinForms spell-check editor's line semantics: EnsureEmptyLine inserts before
+///  the line's content and pushes it down (optionally with a bullet); highlights land on the
+///  editor's highlight layer.
 /// </summary>
 internal sealed class TextBoxCommitMessageDocument : ICommitMessageDocument
 {
-    private readonly TextBox _textBox;
+    private readonly MessageEditor _textBox;
 
-    public TextBoxCommitMessageDocument(TextBox textBox)
+    public TextBoxCommitMessageDocument(MessageEditor textBox)
     {
         _textBox = textBox;
     }
 
     private string[] Lines => (_textBox.Text ?? "").Replace("\r\n", "\n").Split('\n');
 
-    private void SetLines(string[] lines) => _textBox.Text = string.Join('\n', lines);
+    private void SetLines(string[] lines)
+    {
+        _textBox.Text = string.Join('\n', lines);
+        _textBox.TrimHighlightsTo(lines.Length);
+    }
 
     public int LineCount() => Lines.Length;
 
@@ -61,7 +63,5 @@ internal sealed class TextBoxCommitMessageDocument : ICommitMessageDocument
     }
 
     public void SetLineHighlight(int line, int offset, int length, CommitMessageHighlight highlight)
-    {
-        // Plain TextBox: no range coloring available.
-    }
+        => _textBox.SetLineHighlight(line, offset, length, highlight);
 }

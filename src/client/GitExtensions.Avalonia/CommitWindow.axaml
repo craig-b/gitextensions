@@ -55,8 +55,7 @@
             <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
 
             <Grid Grid.Row="2" RowDefinitions="*,Auto">
-                <TextBox x:Name="MessageBox" Grid.Row="0" AcceptsReturn="True" FontFamily="monospace" FontSize="13"
-                         Watermark="Commit message" TextWrapping="NoWrap" />
+                <local:MessageEditor x:Name="MessageBox" Grid.Row="0" Watermark="Commit message" />
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
                     <Button x:Name="CommitButton" Content="Commit" FontWeight="Bold" Click="OnCommitClick" />
                     <CheckBox x:Name="AmendCheckBox" Content="Amend last commit" />
