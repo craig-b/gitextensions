@@ -4,7 +4,7 @@ using NSubstitute;
 using ResourceManager;
 using ResourceManager.CommitDataRenders;
 
-namespace ResourceManagerTests.CommitDataRenders;
+namespace GitCommandsTests.CommitDataRenders;
 
 [SetCulture("en-US")]
 [SetUICulture("en-US")]
@@ -50,24 +50,6 @@ public class CommitDataHeaderRendererTests
         _dateFormatter = Substitute.For<IDateFormatter>();
 
         _renderer = new CommitDataHeaderRenderer(_labelFormatter, _dateFormatter, _headerRendererStyleProvider, _linkFactory);
-    }
-
-    [Test]
-    public void GetFont_should_get_font_from_style_provider()
-    {
-        using Control c = new();
-        using Graphics g = c.CreateGraphics();
-        _renderer.GetFont(g);
-
-        _headerRendererStyleProvider.Received().GetFont(g);
-    }
-
-    [Test]
-    public void GetTabStops_should_get_stops_from_style_provider()
-    {
-        _renderer.GetTabStops();
-
-        _headerRendererStyleProvider.Received().GetTabStops();
     }
 
     [Test]

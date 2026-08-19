@@ -27,8 +27,6 @@ public sealed class TabbedHeaderRenderStyleProvider : IHeaderRenderStyleProvider
         _tabStops = new[] { tabStop, tabStop + 1, tabStop + 2, tabStop + 3 };
     }
 
-    public Font GetFont(Graphics g) => AppFonts.App;
-
     public int GetMaxWidth() => 16;
 
     public IEnumerable<int> GetTabStops() => _tabStops;

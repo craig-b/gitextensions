@@ -4,7 +4,7 @@ using NSubstitute;
 using ResourceManager;
 using ResourceManager.CommitDataRenders;
 
-namespace ResourceManagerTests.CommitDataRenders;
+namespace GitCommandsTests.CommitDataRenders;
 public class CommitDataBodyRendererTests
 {
     private IGitModule _module = null!;

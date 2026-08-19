@@ -24,10 +24,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _buttonViewDetails = new("View details");
 
     private readonly TranslationString _containedInCurrentCommitText = new("'{0}' is contained in the currently selected commit");
-    private readonly TranslationString _containedInBranchesText = new("Contained in branches:");
-    private readonly TranslationString _containedInNoBranchText = new("Contained in no branch");
-    private readonly TranslationString _containedInTagsText = new("Contained in tags:");
-    private readonly TranslationString _containedInNoTagText = new("Contained in no tag");
     private readonly TranslationString _invisibleCommitText = new("'{0}' is not currently visible");
     private readonly TranslationString _addUpstreamRemote = new("Add upstream remote");
     private readonly TranslationString _viewPullRequest = new("View pull requests");
@@ -229,10 +225,6 @@ Copy error details to clipboard?");
     public static string ButtonViewDetails => _instance.Value._buttonViewDetails.Text;
 
     public static string ContainedInCurrentCommit => _instance.Value._containedInCurrentCommitText.Text;
-    public static string ContainedInBranches => _instance.Value._containedInBranchesText.Text;
-    public static string ContainedInNoBranch => _instance.Value._containedInNoBranchText.Text;
-    public static string ContainedInTags => _instance.Value._containedInTagsText.Text;
-    public static string ContainedInNoTag => _instance.Value._containedInNoTagText.Text;
     public static string InvisibleCommit => _instance.Value._invisibleCommitText.Text;
 
     public static string CreatePullRequest => _instance.Value._createPullRequest.Text;

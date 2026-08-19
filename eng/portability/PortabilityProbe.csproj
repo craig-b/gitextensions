@@ -13,9 +13,13 @@
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
-      1. GitExtensions.Extensibility   : 116 of 117 files —  1 debt (UIExtensions, M1.4 residue)
+      1. GitExtensions.Extensibility   : 117 of 118 files —  1 debt (UIExtensions, M1.4 residue;
+                                          M6 split its portable FormatBodyAndNotes into a partial)
       2. GitExtUtils                   :  42 of  69 files — 27 debt, added by M1.7
-      3. GitCommands                   : 217 of 218 files —  0 debt (artefact only)
+      3. GitCommands                   : 233 of 234 files —  0 debt (artefact only; M6 stage 1
+                                          moved the commit-info renderers, LinkFactory,
+                                          TranslatedStrings/Translate/TranslationString,
+                                          LocalizationHelpers and RefsFormatter here)
       4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
 
     M4.4 moved the 17 pure diff-highlight files (GitUI/Editor/Diff minus the one real control,
@@ -72,6 +76,7 @@
     <PackageReference Include="StrongOf" />
     <PackageReference Include="Ben.Demystifier" />
     <PackageReference Include="JetBrains.Annotations" />
+    <PackageReference Include="SmartFormat" />
     <PackageReference Include="System.IO.Abstractions" />
     <PackageReference Include="System.Reactive.Linq" />
     <PackageReference Include="System.Configuration.ConfigurationManager" />

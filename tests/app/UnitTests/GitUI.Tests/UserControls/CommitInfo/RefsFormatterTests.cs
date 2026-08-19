@@ -41,10 +41,10 @@ public class RefsFormatterTests
         IReadOnlyList<string> refs = new List<string>();
 
         _refsFormatter.FormatBranches(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInNoBranch);
+            .Should().Be(TranslatedStrings.ContainedInNoBranch);
 
         _refsFormatter.FormatTags(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInNoTag);
+            .Should().Be(TranslatedStrings.ContainedInNoTag);
     }
 
     [Test]
@@ -56,12 +56,12 @@ public class RefsFormatterTests
         IEnumerable<string> formattedTags = refs.Select(r => FormatRef(r, "tag", showAsLinks));
 
         _refsFormatter.FormatBranches(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInBranches
+            .Should().Be(TranslatedStrings.ContainedInBranches
                          + Environment.NewLine
                          + formattedBranches.Join(Environment.NewLine));
 
         _refsFormatter.FormatTags(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInTags
+            .Should().Be(TranslatedStrings.ContainedInTags
                          + Environment.NewLine
                          + formattedTags.Join(Environment.NewLine));
     }
@@ -73,13 +73,13 @@ public class RefsFormatterTests
         IEnumerable<string> formattedTags = _refs.Take(10).Select(r => FormatRef(r, "tag", showAsLinks));
 
         _refsFormatter.FormatBranches(_refs, showAsLinks, limit: true)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInBranches
+            .Should().Be(TranslatedStrings.ContainedInBranches
                          + Environment.NewLine
                          + formattedBranches.Join(Environment.NewLine)
                          + GetShowAllLink("branches"));
 
         _refsFormatter.FormatTags(_refs, showAsLinks, limit: true)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInTags
+            .Should().Be(TranslatedStrings.ContainedInTags
                          + Environment.NewLine
                          + formattedTags.Join(Environment.NewLine)
                          + GetShowAllLink("tags"));

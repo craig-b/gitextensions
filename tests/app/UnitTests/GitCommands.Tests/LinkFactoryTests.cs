@@ -1,6 +1,6 @@
 ﻿using ResourceManager;
 
-namespace ResourceManagerTests;
+namespace GitCommandsTests;
 internal class LinkFactoryTests
 {
     [TestCase(null)]

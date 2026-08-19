@@ -1,8 +1,10 @@
-using System.Text;
-
 namespace GitExtensions.Extensibility.Extensions;
 
-public static class UIExtensions
+/// <summary>
+///  WinForms-typed control helpers. Platform-neutral (M6): <see cref="FormatBodyAndNotes"/> needs no
+///  WinForms types, so it lives in the portable half of this partial class, UIExtensions.FormatBodyAndNotes.cs.
+/// </summary>
+public static partial class UIExtensions
 {
     public static bool? GetNullableChecked(this CheckBox chx)
     {
@@ -42,39 +44,5 @@ public static class UIExtensions
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// bodyOrSubject
-    /// Notes:
-    ///     notes
-    /// </summary>
-    public static string FormatBodyAndNotes(string bodyOrSubject, string? notes)
-    {
-        if (string.IsNullOrEmpty(notes))
-        {
-            return bodyOrSubject;
-        }
-
-        const string notesPrefix = "Notes:";
-        const string indent = "    ";
-
-        // trying to avoid buffer re-allocation during Append()
-        StringBuilder sb = new(bodyOrSubject.Length + 4 + notesPrefix.Length + 2 + indent.Length + notes.Length + 1);
-        if (bodyOrSubject.Length > 0)
-        {
-            sb.AppendLine(bodyOrSubject);
-        }
-
-        sb.AppendLine().AppendLine(notesPrefix);
-
-        ReadOnlySpan<char> notesAsSpan = notes.AsSpan();
-        foreach (Range range in notesAsSpan.Split('\n'))
-        {
-            sb.Append(indent).Append(notesAsSpan[range]).Append('\n');
-        }
-
-        --sb.Length; // removing the last artificially appended \n
-        return sb.ToString();
     }
 }

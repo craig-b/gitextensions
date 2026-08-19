@@ -17,10 +17,6 @@ public interface ICommitDataHeaderRenderer
     /// </summary>
     string GetPlainText(string header);
 
-    Font GetFont(Graphics g);
-
-    IEnumerable<int> GetTabStops();
-
     /// <summary>
     /// Generate header.
     /// </summary>
@@ -63,16 +59,6 @@ public sealed partial class CommitDataHeaderRenderer : ICommitDataHeaderRenderer
         header = RemoveAgoRegex.Replace(header, "$1$2");
         header = Regex.Replace(header, @$"\n({children}|{parents})[^\n]*", "");
         return header;
-    }
-
-    public Font GetFont(Graphics g)
-    {
-        return _headerRendererStyleProvider.GetFont(g);
-    }
-
-    public IEnumerable<int> GetTabStops()
-    {
-        return _headerRendererStyleProvider.GetTabStops();
     }
 
     /// <summary>

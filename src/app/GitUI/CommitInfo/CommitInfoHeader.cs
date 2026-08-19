@@ -33,10 +33,10 @@ public partial class CommitInfoHeader : GitModuleControl
 
         using (Graphics g = CreateGraphics())
         {
-            rtbRevisionHeader.Font = _commitDataHeaderRenderer.GetFont(g);
+            rtbRevisionHeader.Font = CommitInfoHeaderFonts.GetFont(headerRenderer, g);
         }
 
-        rtbRevisionHeader.SelectionTabs = [.. _commitDataHeaderRenderer.GetTabStops()];
+        rtbRevisionHeader.SelectionTabs = [.. headerRenderer.GetTabStops()];
 
         _rtbResizedSubscription = Observable
             .FromEventPattern<ContentsResizedEventHandler, ContentsResizedEventArgs>(

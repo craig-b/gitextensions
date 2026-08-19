@@ -26,16 +26,6 @@ public sealed class MonospacedHeaderRenderStyleProvider : IHeaderRenderStyleProv
         _maxLength = strings.Select(s => s.Length).Max() + 2;
     }
 
-    public Font GetFont(Graphics g)
-    {
-        if (!AppFonts.App.IsFixedWidth(g))
-        {
-            return new Font(FontFamily.GenericMonospace, AppFonts.App.Size);
-        }
-
-        return AppFonts.App;
-    }
-
     public int GetMaxWidth() => _maxLength;
 
     public IEnumerable<int> GetTabStops() => [];

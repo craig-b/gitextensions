@@ -49,6 +49,11 @@ Yes, I allow telemetry!");
 
     private readonly TranslationString _disableMenuItem = new("Disable this dropdown");
 
+    private readonly TranslationString _containedInBranchesText = new("Contained in branches:");
+    private readonly TranslationString _containedInNoBranchText = new("Contained in no branch");
+    private readonly TranslationString _containedInTagsText = new("Contained in tags:");
+    private readonly TranslationString _containedInNoTagText = new("Contained in no tag");
+
     // public only because of FormTranslate
     public TranslatedStrings()
     {
@@ -92,6 +97,11 @@ Yes, I allow telemetry!");
     public static string GeneralGitConfigExceptionMessage => _instance.Value._generalGitConfigExceptionMessage.Text;
     public static string GeneralGitConfigExceptionCaption => _instance.Value._generalGitConfigExceptionCaption.Text;
     public static string DisableMenuItem => _instance.Value._disableMenuItem.Text;
+
+    public static string ContainedInBranches => _instance.Value._containedInBranchesText.Text;
+    public static string ContainedInNoBranch => _instance.Value._containedInNoBranchText.Text;
+    public static string ContainedInTags => _instance.Value._containedInTagsText.Text;
+    public static string ContainedInNoTag => _instance.Value._containedInNoTagText.Text;
 
     public static string GetParents(int value)
     {
