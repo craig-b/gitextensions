@@ -922,7 +922,7 @@ public sealed partial class FileStatusList : GitModuleControl
             new(
                 firstRev: firstRev,
                 secondRev: secondRev,
-                summary: TranslatedStrings.DiffWithParent + GetDescriptionForRevision(firstRev?.ObjectId ?? default(ObjectId)),
+                summary: ResourceManager.TranslatedStrings.DiffWithParent + GetDescriptionForRevision(firstRev?.ObjectId ?? default(ObjectId)),
                 statuses: items)
         });
     }

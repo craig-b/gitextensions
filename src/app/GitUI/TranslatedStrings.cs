@@ -77,10 +77,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _sortOrder = new("&Sort order");
 
     private readonly TranslationString _diffSelectedWithRememberedFile = new("&Diff with \"{0}\"");
-    private readonly TranslationString _diffWithParent = new("Diff with A ");
-    private readonly TranslationString _diffBaseWith = new("Diff BASE with");
-    private readonly TranslationString _diffRange = new("Range diff");
-    private readonly TranslationString _combinedDiff = new("Combined diff");
 
     private readonly TranslationString _showDiffForAllParentsText = new("Show file differences for all parents in browse dialog");
     private readonly TranslationString _showDiffForAllParentsTooltip = new(@"Show all differences between the selected commits, not limiting to only one difference.
@@ -289,10 +285,6 @@ Copy error details to clipboard?");
     public static string SortOrder => _instance.Value._sortOrder.Text;
 
     public static string DiffSelectedWithRememberedFile => _instance.Value._diffSelectedWithRememberedFile.Text;
-    public static string DiffWithParent => _instance.Value._diffWithParent.Text;
-    public static string DiffBaseWith => _instance.Value._diffBaseWith.Text;
-    public static string DiffRange => _instance.Value._diffRange.Text;
-    public static string CombinedDiff => _instance.Value._combinedDiff.Text;
     public static string ShowDiffForAllParentsText => _instance.Value._showDiffForAllParentsText.Text;
     public static string ShowDiffForAllParentsTooltip => _instance.Value._showDiffForAllParentsTooltip.Text;
 

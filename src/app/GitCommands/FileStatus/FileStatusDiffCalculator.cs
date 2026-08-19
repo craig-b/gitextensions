@@ -1,14 +1,15 @@
 ﻿using GitCommands;
+using GitCommands.FileStatus;
 using GitCommands.Git;
 using GitExtensions.Extensibility.Git;
-using GitUI.Properties;
 using GitUIPluginInterfaces;
+using ResourceManager;
 
 namespace GitUI;
 
 public sealed partial class FileStatusDiffCalculator
 {
-    internal const string GitGrepIconName = nameof(GitGrepIconName);
+    public const string GitGrepIconName = nameof(GitGrepIconName);
 
     private readonly Func<IGitModule> _getModule;
 
@@ -139,7 +140,7 @@ public sealed partial class FileStatusDiffCalculator
                 {
                     // Create an artificial commit
                     fileStatusDescs.Add(new FileStatusWithDescription(
-                        firstRev: new GitRevision(ObjectId.CombinedDiffId), secondRev: selectedRev, summary: TranslatedStrings.CombinedDiff, statuses: conflicts, iconName: nameof(Images.DiffC)));
+                        firstRev: new GitRevision(ObjectId.CombinedDiffId), secondRev: selectedRev, summary: TranslatedStrings.CombinedDiff, statuses: conflicts, iconName: FileStatusIconNames.DiffC));
                 }
             }
 
@@ -276,13 +277,13 @@ public sealed partial class FileStatusDiffCalculator
             secondRev: selectedRev,
             summary: $"{TranslatedStrings.DiffBaseWith} B {GetDescriptionForRevision(selectedRev.ObjectId)}",
             statuses: allBaseToB,
-            iconName: nameof(Images.DiffB)));
+            iconName: FileStatusIconNames.DiffB));
         fileStatusDescs.Add(new FileStatusWithDescription(
             firstRev: revBase,
             secondRev: firstRev,
             summary: $"{TranslatedStrings.DiffBaseWith} A {GetDescriptionForRevision(firstRev.ObjectId)}",
             statuses: allBaseToA,
-            iconName: nameof(Images.DiffA)));
+            iconName: FileStatusIconNames.DiffA));
 
         if (!module.GitVersion.SupportRangeDiffTool)
         {
@@ -302,7 +303,7 @@ public sealed partial class FileStatusDiffCalculator
             secondRev: selectedRev,
             summary: desc,
             statuses: [new GitItemStatus(name: desc) { IsRangeDiff = true }],
-            iconName: nameof(Images.DiffR)));
+            iconName: FileStatusIconNames.DiffR));
 
         return fileStatusDescs;
 

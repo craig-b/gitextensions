@@ -19,6 +19,10 @@ public sealed class TranslatedStrings : Translate
     private readonly TranslationString _monthsAgo = new("{0} {1:month|months} ago");
     private readonly TranslationString _yearsAgo = new("{0} {1:year|years} ago");
     private readonly TranslationString _dateText = new("Date");
+    private readonly TranslationString _diffWithParent = new("Diff with A ");
+    private readonly TranslationString _diffBaseWith = new("Diff BASE with");
+    private readonly TranslationString _diffRange = new("Range diff");
+    private readonly TranslationString _combinedDiff = new("Combined diff");
     private readonly TranslationString _authorText = new("{0:Author|Authors}");
 
     private readonly TranslationString _telemetryPermissionCaption = new("Allow Capture Telemetry?");
@@ -89,6 +93,10 @@ Yes, I allow telemetry!");
     public static string TelemetryPermissionMessage => _instance.Value._telemetryPermissionMessage.Text;
 
     public static string Date => _instance.Value._dateText.Text;
+    public static string DiffWithParent => _instance.Value._diffWithParent.Text;
+    public static string DiffBaseWith => _instance.Value._diffBaseWith.Text;
+    public static string DiffRange => _instance.Value._diffRange.Text;
+    public static string CombinedDiff => _instance.Value._combinedDiff.Text;
     public static string Author => GetAuthor(1);
     public static string AuthorDate => GetAuthorDate(1);
     public static string Committer => _instance.Value._committerText.Text;
