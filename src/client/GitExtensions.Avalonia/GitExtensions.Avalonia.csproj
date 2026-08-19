@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    THE VERTICAL SLICE (cross-platform-plan.md §19.1): the first non-WinForms client, proving the
+    portable core is consumable end-to-end on Linux - open a repository, browse the log, read
+    commit info from the M6 RichContent model, and view a colored diff from the M4 StyledSpan
+    model.
+
+    It references PortabilityProbe.csproj - the portable core compiled as plain net10.0 - because
+    the real projects still target net10.0-windows. That is deliberate slice scaffolding: the
+    probe IS the portable core, and proving a client can live on it is the probe's whole thesis.
+    Productizing means multi-targeting the four core projects and swapping this reference; the
+    client code itself will not change.
+
+    Toolkit: Avalonia 11 (plan §3 - default candidate, chosen at the slice). Views here are
+    deliberately thin; all logic they bind to lives in the portable core.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>true</IsPublishable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- Slice scaffolding: same diagnostics posture as the probe. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableStyleCopAnalyzers>false</EnableStyleCopAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1416;NU1701</NoWarn>
+  </PropertyGroup>
+
+  <!-- Root Directory.Build.props injects CommonAssemblyInfo.cs, which carries
+       [SupportedOSPlatform("windows7.0")] - meant for the net10.0-windows projects. Same removal
+       as PortabilityProbe.Tests.csproj, same reason. -->
+  <ItemGroup>
+    <Compile Remove="$(RepoRoot)CommonAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\eng\portability\PortabilityProbe.csproj" />
+  </ItemGroup>
+
+</Project>

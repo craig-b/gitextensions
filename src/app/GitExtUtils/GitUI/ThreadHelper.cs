@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -28,7 +28,10 @@ public static class ThreadHelper
     public static JoinableTaskContext JoinableTaskContext
     {
         get => TaskManager.JoinableTaskContext;
-        internal set => _taskManager = value is null ? null : new(value);
+
+        // Public since the vertical slice: initializing the context is a HOST responsibility
+        // (the WinForms Program, the test hosts, the Avalonia client) - not an internal detail.
+        set => _taskManager = value is null ? null : new(value);
     }
 
     public static JoinableTaskFactory JoinableTaskFactory => TaskManager.JoinableTaskFactory;
