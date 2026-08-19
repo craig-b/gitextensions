@@ -1559,52 +1559,7 @@ public sealed partial class FormCommit : GitModuleForm
                 _skipUpdate = true;
                 InitializedStaged();
                 List<GitItemStatus> stagedFiles = [.. Staged.GitItemStatuses];
-                List<GitItemStatus> unstagedFiles = [.. Unstaged.GitItemStatuses];
-                foreach (GitItemStatus item in allFiles)
-                {
-                    GitItemStatus item1 = item;
-                    if (stagedFiles.Exists(i => i.Name == item1.Name))
-                    {
-                        continue;
-                    }
-
-                    item.IsTracked = !item.IsNew || item.IsChanged || item.IsDeleted;
-                    int index = unstagedFiles.FindIndex(i => i.Name == item.Name);
-
-                    if (index >= 0)
-                    {
-                        unstagedFiles[index].IsNew = item.IsNew;
-                        unstagedFiles[index].IsDeleted = item.IsDeleted;
-                        unstagedFiles[index].IsTracked = item.IsTracked;
-                        unstagedFiles[index].IsChanged = item.IsChanged;
-
-                        // if this is a submodule, update the status, may be dirty
-                        Module.GetSubmoduleCurrentStatus([unstagedFiles[index]]);
-
-                        continue;
-                    }
-
-                    if (item.IsRenamed)
-                    {
-                        Validates.NotNull(item.OldName);
-
-                        GitItemStatus clone = new(item.OldName)
-                        {
-                            IsDeleted = true,
-                            IsTracked = true,
-                            Staged = StagedStatus.WorkTree
-                        };
-                        unstagedFiles.Add(clone);
-
-                        item.IsRenamed = false;
-                        item.IsNew = true;
-                        item.IsTracked = false;
-                        item.OldName = string.Empty;
-                    }
-
-                    item.Staged = StagedStatus.WorkTree;
-                    unstagedFiles.Add(item);
-                }
+                List<GitItemStatus> unstagedFiles = StagedListReconciler.ReconcileAfterUnstage(allFiles, stagedFiles, [.. Unstaged.GitItemStatuses], Module);
 
                 (GitRevision? headRev, GitRevision indexRev, GitRevision workTreeRev) = GetHeadRevisions();
                 Unstaged.SetDiffs(indexRev, workTreeRev, unstagedFiles);
@@ -1794,37 +1749,8 @@ public sealed partial class FormCommit : GitModuleForm
                 else
                 {
                     InitializedStaged();
-                    List<GitItemStatus> unstagedFiles = [.. Unstaged.GitItemStatuses];
                     _skipUpdate = true;
-                    HashSet<string?> names = [];
-                    foreach (GitItemStatus item in files)
-                    {
-                        names.Add(item.Name);
-                        names.Add(item.OldName);
-                    }
-
-                    HashSet<GitItemStatus> unstagedItems = [];
-
-                    foreach (GitItemStatus item in unstagedFiles)
-                    {
-                        if (names.Contains(item.Name))
-                        {
-                            unstagedItems.Add(item);
-                        }
-                    }
-
-                    // Dirty submodules need to be kept in unstaged, update the status
-                    unstagedFiles.RemoveAll(
-                        item =>
-                        {
-                            if ((!item.IsSubmodule || !item.IsDirty) && unstagedItems.Contains(item))
-                            {
-                                return true;
-                            }
-
-                            Module.GetSubmoduleCurrentStatus([item]);
-                            return false;
-                        });
+                    List<GitItemStatus> unstagedFiles = StagedListReconciler.ReconcileAfterStage([.. Unstaged.GitItemStatuses], files, Module);
                     (GitRevision? _, GitRevision indexRev, GitRevision workTreeRev) = GetHeadRevisions();
                     Unstaged.SetDiffs(indexRev, workTreeRev, unstagedFiles);
                     Unstaged.ClearSelected();
