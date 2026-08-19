@@ -7,10 +7,10 @@ public sealed class CommitTemplateItem
 {
     public string Name { get; set; }
     public string Text { get; set; }
-    public Image? Icon { get; set; }
+    public object? Icon { get; set; }
     public bool IsRegex { get; set; }
 
-    public CommitTemplateItem(string name, string text, Image? icon, bool isRegex)
+    public CommitTemplateItem(string name, string text, object? icon, bool isRegex)
     {
         Name = name;
         Text = text;

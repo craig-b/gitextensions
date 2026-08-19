@@ -6,7 +6,7 @@ using GitExtensions.Extensibility.Git;
 using GitUI;
 using NSubstitute;
 
-namespace GitUITests;
+namespace GitCommandsTests.Commit;
 public class CommitTemplateManagerTests
 {
     private readonly string _workingDir = @"c:\dev\repo";
