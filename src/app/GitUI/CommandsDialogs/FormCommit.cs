@@ -144,7 +144,7 @@ public sealed partial class FormCommit : GitModuleForm
     private readonly SplitterManager _splitterManager = new(new AppSettingsPath("CommitDialog"));
     private readonly Subject<string> _selectionFilterSubject = new();
     private readonly IFullPathResolver _fullPathResolver;
-    private readonly List<string> _formattedLines = [];
+    private readonly CommitMessageFormatter _messageFormatter;
 
     private bool _insertScopeParentheses;
     private CommitKind _commitKind;
@@ -208,6 +208,7 @@ public sealed partial class FormCommit : GitModuleForm
         splitRight.Panel2MinSize = DpiUtil.Scale(100);
 
         _commitMessageManager = new CommitMessageManager(new ControlUserInteraction(this), Module.WorkingDirGitDir, Module.CommitEncoding, commitMessage);
+        _messageFormatter = new CommitMessageFormatter(new MessageDocumentAdapter(Message));
 
         Message.TextChanged += Message_TextChanged;
         Message.TextAssigned += Message_TextAssigned;
@@ -2056,140 +2057,39 @@ public sealed partial class FormCommit : GitModuleForm
     }
 
     private void FormatAllText(int startLine)
+        => _messageFormatter.FormatAllText(startLine, CommitMessageFormattingRules.FromSettings());
+
+    /// <summary>
+    ///  The 1:1 bridge from the portable formatter's document interface to the spell-check
+    ///  editor; the highlight-to-color mapping is the only view decision.
+    /// </summary>
+    private sealed class MessageDocumentAdapter : ICommitMessageDocument
     {
-        int limit1 = AppSettings.CommitValidationMaxCntCharsFirstLine;
-        int limitX = AppSettings.CommitValidationMaxCntCharsPerLine;
-        bool empty2 = AppSettings.CommitValidationSecondLineMustBeEmpty;
-        bool commitValidationAutoWrap = AppSettings.CommitValidationAutoWrap;
-        bool commitValidationIndentAfterFirstLine = AppSettings.CommitValidationIndentAfterFirstLine;
+        private readonly EditNetSpell _editor;
 
-        int lineCount = Message.LineCount();
-
-        TrimFormattedLines();
-
-        for (int line = startLine; line < lineCount; line++)
+        public MessageDocumentAdapter(EditNetSpell editor)
         {
-            if (DidFormattedLineChange(line))
-            {
-                bool lineChanged = FormatLine(line);
-                SetFormattedLine(line);
-                if (lineChanged)
-                {
-                    FormatAllText(line);
-                }
-            }
+            _editor = editor;
         }
 
-        return;
+        public int LineCount() => _editor.LineCount();
 
-        void TrimFormattedLines()
-        {
-            if (_formattedLines.Count > lineCount)
+        public string Line(int line) => _editor.Line(line);
+
+        public int LineLength(int line) => _editor.LineLength(line);
+
+        public void ReplaceLine(int line, string withText) => _editor.ReplaceLine(line, withText);
+
+        public void EnsureEmptyLine(bool addBullet, int afterLine) => _editor.EnsureEmptyLine(addBullet, afterLine);
+
+        public void SetLineHighlight(int line, int offset, int length, CommitMessageHighlight highlight)
+            => _editor.ChangeTextColor(line, offset, length, highlight switch
             {
-                _formattedLines.RemoveRange(lineCount, _formattedLines.Count - lineCount);
-            }
-        }
-
-        bool DidFormattedLineChange(int lineNumber)
-        {
-            return _formattedLines.Count <= lineNumber ||
-                   !_formattedLines[lineNumber].Equals(Message.Line(lineNumber), StringComparison.OrdinalIgnoreCase);
-        }
-
-        bool FormatLine(int line)
-        {
-            bool changed = false;
-
-            if (limit1 > 0 && line == 0)
-            {
-                ColorTextAsNecessary(limit1, fullRefresh: false);
-            }
-
-            if (empty2 && line == 1)
-            {
-                // Ensure next line. Optionally add a bullet.
-                Message.EnsureEmptyLine(commitValidationIndentAfterFirstLine, 1);
-                Message.ChangeTextColor(2, 0, Message.LineLength(2), SystemColors.ControlText);
-                if (FormatLine(2))
-                {
-                    changed = true;
-                }
-            }
-
-            if (limitX > 0 && line >= (empty2 ? 2 : 1))
-            {
-                if (commitValidationAutoWrap && WrapIfNecessary())
-                {
-                    changed = true;
-                }
-
-                ColorTextAsNecessary(limitX, changed);
-            }
-
-            return changed;
-
-            void ColorTextAsNecessary(int lineLimit, bool fullRefresh)
-            {
-                int lineLength = Message.LineLength(line);
-                int offset = 0;
-                bool textAppended = false;
-                if (!fullRefresh && _formattedLines.Count > line)
-                {
-                    offset = _formattedLines[line].CommonPrefix(Message.Line(line)).Length;
-                    textAppended = offset > 0 && offset == _formattedLines[line].Length;
-                }
-
-                int len = Math.Min(lineLimit, lineLength) - offset;
-
-                if (!textAppended && len > 0)
-                {
-                    Message.ChangeTextColor(line, offset, len, SystemColors.WindowText);
-                }
-
-                if (lineLength > lineLimit)
-                {
-                    if (offset <= lineLimit || !textAppended)
-                    {
-                        offset = Math.Max(offset, lineLimit);
-                        len = lineLength - offset;
-                        if (len > 0)
-                        {
-                            Message.ChangeTextColor(line, offset, len, Color.Red.AdaptForeColor(Message.BackColor));
-                        }
-                    }
-                }
-            }
-
-            bool WrapIfNecessary()
-            {
-                if (Message.LineLength(line) > limitX)
-                {
-                    string oldText = Message.Line(line);
-                    string newText = WordWrapper.WrapSingleLine(oldText, limitX);
-                    if (!string.Equals(oldText, newText))
-                    {
-                        Message.ReplaceLine(line, newText);
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-        }
-
-        void SetFormattedLine(int lineNumber)
-        {
-            // line not formatted yet
-            if (_formattedLines.Count <= lineNumber)
-            {
-                DebugHelpers.Assert(_formattedLines.Count == lineNumber, $"{_formattedLines.Count}:{lineNumber}");
-                _formattedLines.Add(Message.Line(lineNumber));
-            }
-            else
-            {
-                _formattedLines[lineNumber] = Message.Line(lineNumber);
-            }
-        }
+                CommitMessageHighlight.Normal => SystemColors.WindowText,
+                CommitMessageHighlight.Reset => SystemColors.ControlText,
+                CommitMessageHighlight.Overlimit => Color.Red.AdaptForeColor(_editor.BackColor),
+                _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(highlight), (int)highlight, typeof(CommitMessageHighlight)),
+            });
     }
 
     private void Message_SelectionChanged(object sender, EventArgs e)
