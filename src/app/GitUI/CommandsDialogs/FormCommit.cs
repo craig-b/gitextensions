@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using GitCommands;
+using GitCommands.Commit;
 using GitCommands.Config;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
@@ -145,11 +146,6 @@ public sealed partial class FormCommit : GitModuleForm
     private readonly IFullPathResolver _fullPathResolver;
     private readonly List<string> _formattedLines = [];
 
-    private const string _feat = "feat";
-
-    private static readonly string[] _headerCommitTypes = ["build", "chore", "ci", "docs", _feat, "fix", "perf", "refactor", "style", "test"];
-    private static readonly string[] _footerKeywords = ["BREAKING CHANGE", "Co-authored-by", "Reviewed-by"];
-
     private bool _insertScopeParentheses;
     private CommitKind _commitKind;
     private FileStatusList _currentFilesList;
@@ -168,12 +164,6 @@ public sealed partial class FormCommit : GitModuleForm
     private int _alreadyLoadedTemplatesCount = -1;
     private EventHandler? _branchNameLabelOnClick;
     private ToolStripMenuItem? _conventionalCommitItem;
-
-    /// <summary>
-    /// Regex to find message replace pattern: {{ group1 }}[ group2 ]
-    /// </summary>
-    [GeneratedRegex(@"\{\{(?<pattern>.*?)\}\}(?:\[(?<index>\d+)\])?", RegexOptions.ExplicitCapture)]
-    private static partial Regex ReplaceMessageRegex();
 
     private CommitKind CommitKind
     {
@@ -1331,74 +1321,24 @@ public sealed partial class FormCommit : GitModuleForm
 
             bool IsCommitMessageValid()
             {
-                if (AppSettings.CommitValidationMaxCntCharsFirstLine > 0)
+                foreach (CommitMessageViolation violation in CommitMessageValidator.Validate(Message.Text, CommitMessageValidationRules.FromSettings()))
                 {
-                    string firstLine = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.RemoveEmptyEntries)[0];
-                    if (firstLine.Length > AppSettings.CommitValidationMaxCntCharsFirstLine &&
-                        MessageBoxes.Show(this, _commitMsgFirstLineInvalid.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
+                    string warningText = violation.Kind switch
+                    {
+                        CommitMessageViolationKind.FirstLineTooLong => _commitMsgFirstLineInvalid.Text,
+                        CommitMessageViolationKind.LineTooLong => string.Format(_commitMsgLineInvalid.Text, violation.OffendingLine),
+                        CommitMessageViolationKind.SecondLineNotEmpty => _commitMsgSecondLineNotEmpty.Text,
+                        CommitMessageViolationKind.RegexNotMatched => _commitMsgRegExNotMatched.Text,
+                        _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(violation.Kind), (int)violation.Kind, typeof(CommitMessageViolationKind)),
+                    };
+
+                    if (MessageBoxes.Show(this, warningText, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
                     {
                         return false;
-                    }
-                }
-
-                if (AppSettings.CommitValidationMaxCntCharsPerLine > 0)
-                {
-                    string[] lines = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (string line in lines)
-                    {
-                        if (line.Length > AppSettings.CommitValidationMaxCntCharsPerLine &&
-                            MessageBoxes.Show(this, string.Format(_commitMsgLineInvalid.Text, line), _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                        {
-                            return false;
-                        }
-                    }
-                }
-
-                if (AppSettings.CommitValidationSecondLineMustBeEmpty)
-                {
-                    string[] lines = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.None);
-                    if (lines.Length > 2 &&
-                        lines[1].Length != 0 &&
-                        MessageBoxes.Show(this, _commitMsgSecondLineNotEmpty.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                    {
-                        return false;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(AppSettings.CommitValidationRegEx))
-                {
-                    try
-                    {
-                        if (!Message.Text.StartsWith(CommitKind.Fixup.GetPrefix()) &&
-                            !Message.Text.StartsWith(CommitKind.Squash.GetPrefix()) &&
-                            !Regex.IsMatch(GetTextToValidate(Message.Text), AppSettings.CommitValidationRegEx) &&
-                            MessageBoxes.Show(this, _commitMsgRegExNotMatched.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                        {
-                            return false;
-                        }
-                    }
-                    catch
-                    {
                     }
                 }
 
                 return true;
-            }
-
-            static string GetTextToValidate(string text)
-            {
-                if (!text.StartsWith(CommitKind.Amend.GetPrefix()) || !text.ContainsAny(Delimiters.LineFeedAndCarriageReturnSearchValues))
-                {
-                    return text;
-                }
-
-                string[] lines = text.Split(Delimiters.NewLines, StringSplitOptions.None);
-                if (lines.Length > 2 && lines[1].Length == 0)
-                {
-                    return string.Join(Environment.NewLine, lines.AsSpan(2));
-                }
-
-                return text;
             }
         }
     }
@@ -1423,44 +1363,12 @@ public sealed partial class FormCommit : GitModuleForm
     /// <param name="regexEnabled">regex replace is enabled</param>
     private void ReplaceMessage(string message, bool regexEnabled)
     {
-        try
+        if (regexEnabled)
         {
-            if (!regexEnabled)
-            {
-                return;
-            }
-
-            foreach (Match regexMatch in ReplaceMessageRegex().Matches(message))
-            {
-                string pattern = regexMatch.Groups["pattern"].Value;
-                int groupIndex = 1;
-
-                if (int.TryParse(regexMatch.Groups["index"].ValueSpan, out int parsedIndex))
-                {
-                    groupIndex = parsedIndex;
-                }
-
-                Regex regex = new(pattern);
-                string currentBranchName = Module.GetSelectedBranch();
-                MatchCollection matches = regex.Matches(currentBranchName);
-                string replaceText = "";
-
-                if (matches.Count > 0 && matches[0].Groups.Count > groupIndex)
-                {
-                    replaceText = matches[0].Groups[groupIndex].Value;
-                }
-
-                message = message.Replace(regexMatch.Groups[0].Value, replaceText);
-            }
+            message = CommitMessageTemplateExpander.Expand(message, () => Module.GetSelectedBranch());
         }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"ReplaceMessage with regex replace exception: {ex}");
-        }
-        finally
-        {
-            ReplaceMessage(message);
-        }
+
+        ReplaceMessage(message);
     }
 
     private void RescanChanges()
@@ -2266,7 +2174,7 @@ public sealed partial class FormCommit : GitModuleForm
     {
         commitTemplatesToolStripMenuItem.ShowDropDown();
         _conventionalCommitItem!.ShowDropDown();
-        _conventionalCommitItem.DropDownItems.Cast<ToolStripItem>().First(i => i.Text == _feat).Select();
+        _conventionalCommitItem.DropDownItems.Cast<ToolStripItem>().First(i => i.Text == ConventionalCommitMessage.FeatureKeyword).Select();
         _insertScopeParentheses = insertScope;
     }
 
@@ -2589,7 +2497,7 @@ public sealed partial class FormCommit : GitModuleForm
             {
                 _conventionalCommitItem = new(_conventionalCommit.Text, Images.GitCommandLog);
 
-                foreach (string conventionKeyword in _headerCommitTypes)
+                foreach (string conventionKeyword in ConventionalCommitMessage.HeaderCommitTypes)
                 {
                     ToolStripMenuItem commitTypeMenuItem = new(conventionKeyword, null, (_, _) =>
                     {
@@ -2608,7 +2516,7 @@ public sealed partial class FormCommit : GitModuleForm
                         Message.Focus();
                     });
 
-                    if (commitTypeMenuItem.Text == _feat)
+                    if (commitTypeMenuItem.Text == ConventionalCommitMessage.FeatureKeyword)
                     {
                         string hotkey1 = GetShortcutKeyDisplayString(Command.ConventionalCommit_PrefixMessage);
                         string hotkey2 = GetShortcutKeyDisplayString(Command.ConventionalCommit_PrefixMessageWithScope);
@@ -2628,7 +2536,7 @@ public sealed partial class FormCommit : GitModuleForm
 
                 _conventionalCommitItem.DropDownItems.Add(new ToolStripSeparator());
 
-                foreach (string footerKeyword in _footerKeywords)
+                foreach (string footerKeyword in ConventionalCommitMessage.FooterKeywords)
                 {
                     AddFooter(footerKeyword, $"{footerKeyword}: ");
                 }
@@ -2672,59 +2580,12 @@ public sealed partial class FormCommit : GitModuleForm
     }
 
     private (string message, int selectionStart) PrefixOrReplaceKeyword(string keyword)
-    {
-        int currentPosition = Message.SelectionStart;
-        string scope = _insertScopeParentheses ? "()" : "";
-        int scopePosition = keyword.Length + 1;
-        int titlePosition = keyword.Length + (scope.Length / 2) + 2;
-
-        string currentTitle = string.IsNullOrWhiteSpace(Message.Text) ? string.Empty : Message.Line(0);
-
-        // Replacing current keyword
-        foreach (string key in _headerCommitTypes)
-        {
-            if (!currentTitle.StartsWith(key))
-            {
-                continue;
-            }
-
-            if (currentTitle.Length == key.Length)
-            {
-                return ($"{keyword}{scope}: ", _insertScopeParentheses ? scopePosition : titlePosition);
-            }
-
-            char nextChar = currentTitle[key.Length];
-            if (!_insertScopeParentheses)
-            {
-                if (nextChar == ':' || nextChar == '(' || nextChar == '!')
-                {
-                    return ReplaceKeyword(_ => titlePosition);
-                }
-            }
-            else
-            {
-                if (nextChar == ':' || nextChar == '!')
-                {
-                    return ($"{keyword}(){currentTitle[key.Length..]}", scopePosition);
-                }
-
-                if (nextChar == '(')
-                {
-                    return ReplaceKeyword(newTitle => 2 + Math.Max(newTitle.IndexOf(':'), newTitle.IndexOf('(')));
-                }
-            }
-
-            (string message, int selectionStart) ReplaceKeyword(Func<string, int> maxPosition)
-            {
-                string newTitle = $"{keyword}{currentTitle[key.Length..]}";
-                int newMessageLength = Message.Text.Length + newTitle.Length - currentTitle.Length;
-                return (newTitle, Math.Min(newMessageLength, Math.Max(maxPosition(newTitle), currentPosition + keyword.Length - key.Length)));
-            }
-        }
-
-        // Append current keyword
-        return ($"{keyword}{scope}: {currentTitle}", _insertScopeParentheses ? scopePosition : titlePosition + currentPosition);
-    }
+        => ConventionalCommitMessage.PrefixOrReplaceKeyword(
+            keyword,
+            Message.Text,
+            firstLine: string.IsNullOrWhiteSpace(Message.Text) ? string.Empty : Message.Line(0),
+            Message.SelectionStart,
+            _insertScopeParentheses);
 
     private void Amend_CheckedChanged(object sender, EventArgs e)
     {
@@ -2888,42 +2749,5 @@ public sealed partial class FormCommit : GitModuleForm
         internal Button ResetSoft => _formCommit.ResetSoft;
 
         internal void RescanChanges() => _formCommit.RescanChanges();
-
-        internal (string message, int selectionStart) PrefixOrReplaceKeyword(string keyword)
-            => _formCommit.PrefixOrReplaceKeyword(keyword);
-
-        internal bool IncludeFeatureParentheses { set => _formCommit._insertScopeParentheses = value; }
-
-        internal void ReplaceMessage(string message, bool regexEnabled) => _formCommit.ReplaceMessage(message, regexEnabled);
-
-        internal void SetMessageState(string text, int position)
-        {
-            _formCommit.Message.Text = text;
-            _formCommit.Message.SelectionStart = position;
-        }
     }
-}
-
-/// <summary>
-/// Indicates the kind of commit being prepared. Used for adjusting the behavior of FormCommit.
-/// </summary>
-public enum CommitKind
-{
-    Normal,
-    Fixup,
-    Squash,
-    Amend,
-}
-
-public static class CommitKindExtensions
-{
-    public static string GetPrefix(this CommitKind commitKind)
-        => commitKind switch
-        {
-            CommitKind.Fixup => "fixup!",
-            CommitKind.Squash => "squash!",
-            CommitKind.Amend => "amend!",
-            CommitKind.Normal => string.Empty,
-            _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(commitKind), (int)commitKind, typeof(CommitKind)),
-        };
 }
