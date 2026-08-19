@@ -52,13 +52,5 @@
     <ProjectReference Include="..\..\..\eng\portability\PortabilityProbe.csproj" />
   </ItemGroup>
 
-  <!-- Trim-publish support (plan: AOT/trimming doctrine). ConfigurationManager reflection-
-       activates its configuration host, which the trimmer removes and AppSettings' static ctor
-       then dies on (IsPortable reads Properties.Settings). Rooting the assembly is scaffolding;
-       the real fix is a host-supplied IsPortable seam so the portable core never touches
-       System.Configuration off the WinForms host. -->
-  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
-    <TrimmerRootAssembly Include="System.Configuration.ConfigurationManager" />
-  </ItemGroup>
 
 </Project>

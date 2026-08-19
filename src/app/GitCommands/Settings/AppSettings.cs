@@ -2137,7 +2137,9 @@ public static partial class AppSettings
 
     // There is a bug in .NET/.NET Designer that fails to execute Properties.Settings.Default call.
     // Return false whilst we're in the designer.
-    public static bool IsPortable() => !IsDesignMode && Properties.Settings.Default.IsPortable;
+    // HostPortability.IsPortableOverride short-circuits the ConfigurationManager path entirely -
+    // that mechanism is reflection-based and unavailable to trimmed clients (plan §19.1a).
+    public static bool IsPortable() => HostPortability.IsPortableOverride ?? (!IsDesignMode && Properties.Settings.Default.IsPortable);
 
     // Currently not configurable in UI (Set manually in settings file)
     public static bool WriteErrorLog

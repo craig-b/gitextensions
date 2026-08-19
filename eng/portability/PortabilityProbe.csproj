@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     PORTABILITY PROBE — produces no shipping artefact.
@@ -13,9 +13,10 @@
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
-      1. GitExtensions.Extensibility   : 117 of 118 files —  1 debt (UIExtensions, M1.4 residue;
-                                          M6 split its portable FormatBodyAndNotes into a partial)
-      2. GitExtUtils                   :  42 of  69 files — 27 debt, added by M1.7
+      1. GitExtensions.Extensibility   : 117 of 117 files —  0 debt (ZERO — the straggler sweep
+                                          moved UIExtensions' WinForms half to Extensibility.WinForms)
+      2. GitExtUtils                   :  42 of  68 files — 26 debt (all M1.7 Stage-3 render/
+                                          interop; ClipboardUtil moved to Extensibility.WinForms)
       3. GitCommands                   : 233 of 234 files —  0 debt (artefact only; M6 stage 1
                                           moved the commit-info renderers, LinkFactory,
                                           TranslatedStrings/Translate/TranslationString,
@@ -118,8 +119,10 @@
          PseudoSetting, CredentialsControl) moved to GitExtensions.Extensibility.WinForms; the
          setting models lost their never-assigned CustomControl properties and are portable. -->
 
-    <!-- M1.4 residue: IsFixedWidth(Font, Graphics) is inherently a rendering concern; move to GitUI -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Extensions\UIExtensions.cs" />
+    <!-- M1.4 residue DONE (straggler sweep 2026-08-19): UIExtensions' WinForms half
+         (GetNullableChecked/SetNullableChecked/IsFixedWidth) moved to Extensibility.WinForms'
+         UIWinFormsExtensions, same namespace; the portable FormatBodyAndNotes is the sole
+         UIExtensions now. Extensibility debt: ZERO. -->
 
     <!-- M7 DONE (2026-08-19): TranslationUtil, TranslationUtils and GitPluginBase came off this
          list. The translation walk itself was ~90% portable (fields, string properties by name,
@@ -171,12 +174,10 @@
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\COMBOBOXINFO.cs" />
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\User32\GetComboBoxInfo.cs" />
 
-    <!-- Needs a host-supplied abstraction, not a move: ClipboardUtil : Clipboard.
-         M4.4 DONE: OtherColors came off this list — its Application.IsDarkModeEnabled (an OS/app
-         color-mode query, deliberately NOT the same thing as Theme.IsDark) now reads the portable
-         HostColorMode.IsDark flag, which ThemeModule.Load installs right after
-         Application.SetColorMode — the only place the color mode ever changes. -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\ClipboardUtil.cs" />
+    <!-- Straggler sweep 2026-08-19: ClipboardUtil moved to Extensibility.WinForms (clipboard is
+         inherently host UI; no portable-layer consumers existed, so no seam was needed).
+         M4.4: OtherColors' Application.IsDarkModeEnabled became the portable HostColorMode.IsDark
+         flag, installed by ThemeModule.Load right after Application.SetColorMode. -->
 
 
     <!-- ===== DEBT: GitCommands, 0 of 198 files (M3 cleared GitTagController) ===== -->
