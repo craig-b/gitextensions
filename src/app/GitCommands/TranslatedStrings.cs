@@ -1,4 +1,4 @@
-using GitCommands;
+﻿using GitCommands;
 using GitExtensions.Extensibility.Translations;
 using SmartFormat;
 using SmartFormat.Core.Settings;
@@ -9,6 +9,8 @@ namespace ResourceManager;
 public sealed class TranslatedStrings : Translate
 {
     private readonly TranslationString _autostash = new("Autostash");
+    private readonly TranslationString _bodyNotLoaded = new("\n\nFull message text is not present in older commits.\nSelect this commit to populate the full message.");
+    private readonly TranslationString _branchText = new("Branch");
     private readonly TranslationString _secondsAgo = new("{0} {1:second|seconds} ago");
     private readonly TranslationString _minutesAgo = new("{0} {1:minute|minutes} ago");
     private readonly TranslationString _hoursAgo = new("{0} {1:hour|hours} ago");
@@ -77,6 +79,8 @@ Yes, I allow telemetry!");
     }
 
     public static string Autostash => _instance.Value._autostash.Text;
+    public static string BodyNotLoaded => _instance.Value._bodyNotLoaded.Text;
+    public static string Branch => _instance.Value._branchText.Text;
     public static string FindGitExecutable => _instance.Value._findGitExecutable.Text;
     public static string InstallGitInstructions => _instance.Value._installGitInstructions.Text;
     public static string GitExecutableNotFound => _instance.Value._gitExecutableNotFoundText.Text;

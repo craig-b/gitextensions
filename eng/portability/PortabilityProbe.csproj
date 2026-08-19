@@ -17,10 +17,10 @@
                                           moved UIExtensions' WinForms half to Extensibility.WinForms)
       2. GitExtUtils                   :  42 of  68 files — 26 debt (all M1.7 Stage-3 render/
                                           interop; ClipboardUtil moved to Extensibility.WinForms)
-      3. GitCommands                   : 233 of 234 files —  0 debt (artefact only; M6 stage 1
-                                          moved the commit-info renderers, LinkFactory,
-                                          TranslatedStrings/Translate/TranslationString,
-                                          LocalizationHelpers and RefsFormatter here)
+      3. GitCommands                   : 246 of 247 files —  0 debt (artefact only; M6 moved the
+                                          commit-info renderers + TranslatedStrings cascade here;
+                                          the §19.2 spike moved the RevisionGraph model — 12 files,
+                                          laning/topology, zero WinForms — into RevisionGrid/Graph)
       4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
 
     M4.4 moved the 17 pure diff-highlight files (GitUI/Editor/Diff minus the one real control,

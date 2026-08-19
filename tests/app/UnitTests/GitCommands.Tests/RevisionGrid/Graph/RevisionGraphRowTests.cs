@@ -1,7 +1,7 @@
 ﻿using GitExtensions.Extensibility.Git;
 using GitUI.UserControls.RevisionGrid.Graph;
 
-namespace GitUITests.UserControls.RevisionGrid.Graph;
+namespace GitCommandsTests.RevisionGrid.Graph;
 public class RevisionGraphRowTests
 {
     private RevisionGraphSegment _segment = new(parent: new(ObjectId.IndexId, guessScore: 0), child: new(ObjectId.WorkTreeId, guessScore: 0));

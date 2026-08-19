@@ -1,11 +1,12 @@
-using GitCommands;
+﻿using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI;
 using GitUI.UserControls.RevisionGrid.Graph;
 using GitUIPluginInterfaces;
 using NSubstitute;
+using ResourceManager;
 
-namespace GitUITests.UserControls.RevisionGrid.Graph;
+namespace GitCommandsTests.RevisionGrid.Graph;
 public class LaneInfoProviderTests
 {
     /// <summary>

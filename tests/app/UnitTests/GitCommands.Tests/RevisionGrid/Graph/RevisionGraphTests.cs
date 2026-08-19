@@ -4,7 +4,7 @@ using GitExtensions.Extensibility.Git;
 using GitUI.UserControls.RevisionGrid.Graph;
 using GitUIPluginInterfaces;
 
-namespace GitUITests.UserControls.RevisionGrid;
+namespace GitCommandsTests.RevisionGrid.Graph;
 public class RevisionGraphTests
 {
     private RevisionGraph _revisionGraph = null!;

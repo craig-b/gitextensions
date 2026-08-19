@@ -4,18 +4,20 @@ using GitUI.Theming;
 
 namespace GitUI.UserControls.RevisionGrid.Graph;
 
+/// <summary>
+///  Lane color assignment for the revision graph - PORTABLE (colors come from the theme model;
+///  the WinForms brush cache lives render-side in RevisionGraphLaneBrushes).
+/// </summary>
 public static class RevisionGraphLaneColor
 {
     public static int GetColorForLane(int seed)
     {
-        return Math.Abs(seed) % PresetGraphBrushes.Count;
+        return Math.Abs(seed) % PresetGraphColors.Count;
     }
 
     public static Color NonRelativeColor { get; } = AppColor.GraphNonRelativeBranch.GetThemeColor();
 
-    internal static Brush NonRelativeBrush { get; }
-
-    internal static readonly List<Brush> PresetGraphBrushes = [];
+    public static readonly IReadOnlyList<Color> PresetGraphColors;
 
     static RevisionGraphLaneColor()
     {
@@ -32,16 +34,11 @@ public static class RevisionGraphLaneColor
             branchColors = [Color.Cyan, Color.Magenta, Color.Yellow, Color.Lime];
         }
 
-        foreach (Color color in branchColors)
-        {
-            PresetGraphBrushes.Add(new SolidBrush(color));
-        }
-
-        NonRelativeBrush = new SolidBrush(NonRelativeColor);
+        PresetGraphColors = branchColors;
     }
 
-    public static Brush GetBrushForLane(int laneColor)
+    public static Color GetColorForIndex(int laneColor)
     {
-        return PresetGraphBrushes[laneColor];
+        return PresetGraphColors[laneColor];
     }
 }

@@ -2,7 +2,7 @@
 
 namespace GitUI.UserControls.RevisionGrid.Graph;
 
-internal readonly struct RevisionGraphConfig
+public readonly struct RevisionGraphConfig
 {
     public bool MergeGraphLanesHavingCommonParent { get; }
 

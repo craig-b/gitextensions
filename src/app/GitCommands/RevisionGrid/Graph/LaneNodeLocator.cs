@@ -1,11 +1,11 @@
 ﻿namespace GitUI.UserControls.RevisionGrid.Graph;
 
-internal interface ILaneNodeLocator
+public interface ILaneNodeLocator
 {
     (RevisionGraphRevision? revision, bool isAtNode, RevisionGraphRevision? singleChild) FindPrevNode(int rowIndex, int lane);
 }
 
-internal sealed class LaneNodeLocator : ILaneNodeLocator
+public sealed class LaneNodeLocator : ILaneNodeLocator
 {
     private readonly IRevisionGraphRowProvider _revisionGraphRowProvider;
 

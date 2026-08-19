@@ -29,14 +29,12 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _viewPullRequest = new("View pull requests");
     private readonly TranslationString _createPullRequest = new("Create pull request");
     private readonly TranslationString _forkCloneRepo = new("Fork or clone a repository");
-    private readonly TranslationString _branchText = new("Branch");
     private readonly TranslationString _branchesText = new("Branches");
     private readonly TranslationString _remotesText = new("Remotes");
     private readonly TranslationString _tagsText = new("Tags");
     private readonly TranslationString _stashesText = new("Stashes");
     private readonly TranslationString _submodulesText = new("Submodules");
     private readonly TranslationString _worktreesText = new("Worktrees");
-    private readonly TranslationString _bodyNotLoaded = new("\n\nFull message text is not present in older commits.\nSelect this commit to populate the full message.");
     private readonly TranslationString _searchingFor = new("Searching for: ");
     private readonly TranslationString _loadingDataText = new("Loading data...");
     private readonly TranslationString _uninterestingDiffOmitted = new("Uninteresting diff hunks are omitted.");
@@ -232,7 +230,6 @@ Copy error details to clipboard?");
     public static string ViewPullRequest => _instance.Value._viewPullRequest.Text;
     public static string AddUpstreamRemote => _instance.Value._addUpstreamRemote.Text;
 
-    public static string Branch => _instance.Value._branchText.Text;
     public static string Branches => _instance.Value._branchesText.Text;
     public static string Remotes => _instance.Value._remotesText.Text;
     public static string Tags => _instance.Value._tagsText.Text;
@@ -240,7 +237,6 @@ Copy error details to clipboard?");
     public static string Submodules => _instance.Value._submodulesText.Text;
     public static string Worktrees => _instance.Value._worktreesText.Text;
 
-    public static string BodyNotLoaded => _instance.Value._bodyNotLoaded.Text;
     public static string SearchingFor => _instance.Value._searchingFor.Text;
 
     public static string LoadingData => _instance.Value._loadingDataText.Text;

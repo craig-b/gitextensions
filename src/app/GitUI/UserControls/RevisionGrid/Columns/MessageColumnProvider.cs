@@ -476,7 +476,7 @@ internal sealed class MessageColumnProvider : ColumnProvider
         {
             // The body is not stored for older commits (to save memory)
             string bodySummary = _gitRevisionSummaryBuilder.BuildSummary(GetBody(revision))
-                ?? revision.Subject + (revision.HasMultiLineMessage ? TranslatedStrings.BodyNotLoaded : "");
+                ?? revision.Subject + (revision.HasMultiLineMessage ? ResourceManager.TranslatedStrings.BodyNotLoaded : "");
             int initialLength = bodySummary.Length + 10;
             _toolTipBuilder.EnsureCapacity(initialLength);
 

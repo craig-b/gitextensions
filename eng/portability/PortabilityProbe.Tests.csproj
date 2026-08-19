@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     PORTABILITY PROBE TEST HOST — runs the platform-neutral layers' unit tests on Linux.
@@ -22,7 +22,7 @@
 
     SCOPE: the two portable-layer unit test suites, plus the shared test infrastructure both use.
       1. GitExtensions.Extensibility.Tests :  4 of  5 files —  1 artefact
-      2. GitCommands.Tests                 : 100 of 104 files — 4 debt (1 artefact, 3 WINDOWS-ONLY)
+      2. GitCommands.Tests                 : 104 of 108 files — 4 debt (1 artefact, 3 WINDOWS-ONLY)
       3. CommonTestUtils (shared infra)    : 21 of 25 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
 
       M4.4: the seven Editor/Diff test files (LinesMatcherTests, DiffLineNumAnalyzerTests,

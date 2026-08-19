@@ -4,7 +4,7 @@ using ResourceManager;
 
 namespace GitUI.UserControls.RevisionGrid.Graph;
 
-internal sealed class LaneInfoProvider
+public sealed class LaneInfoProvider
 {
     private static readonly TranslationString NoInfoText = new("Sorry, this commit seems to be not loaded.");
     private static readonly TranslationString MergedWithText = new(" (merged with {0})");

@@ -354,10 +354,10 @@ internal static class GraphRenderer
         if (laneInfo is null
             || (!isRelative && (revisionGraphDrawStyle is RevisionGraphDrawStyle.DrawNonRelativesGray or RevisionGraphDrawStyle.HighlightSelected)))
         {
-            return RevisionGraphLaneColor.NonRelativeBrush;
+            return RevisionGraphLaneBrushes.NonRelativeBrush;
         }
 
-        return RevisionGraphLaneColor.GetBrushForLane(laneInfo.Color);
+        return RevisionGraphLaneBrushes.GetBrushForLane(laneInfo.Color);
     }
 
     private static int GetLaneForRow(IRevisionGraphRow? row, RevisionGraphSegment revisionGraphRevision)

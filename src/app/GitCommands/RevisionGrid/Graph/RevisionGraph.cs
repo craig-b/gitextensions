@@ -9,7 +9,7 @@ using GitUIPluginInterfaces;
 
 namespace GitUI.UserControls.RevisionGrid.Graph;
 
-internal interface IRevisionGraphRowProvider
+public interface IRevisionGraphRowProvider
 {
     IRevisionGraphRow? GetSegmentsForRow(int row);
 }
@@ -17,11 +17,11 @@ internal interface IRevisionGraphRowProvider
 // The RevisionGraph contains all the basic structures needed to render the graph.
 public class RevisionGraph : IRevisionGraphRowProvider
 {
-    internal const int MaxLanes = 40;
+    public const int MaxLanes = 40;
     private const int _orderSegmentsLookAhead = 50;
     private const int _straightenLanesLookAhead = 20;
 
-    internal RevisionGraphConfig Config { get; private set; } = new();
+    public RevisionGraphConfig Config { get; private set; } = new();
 
     /// <summary>
     /// GitRevision which can be displayed.

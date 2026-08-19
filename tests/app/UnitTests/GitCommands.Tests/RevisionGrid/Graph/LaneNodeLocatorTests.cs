@@ -2,7 +2,7 @@
 using GitUI.UserControls.RevisionGrid.Graph;
 using NSubstitute;
 
-namespace GitUITests.UserControls.RevisionGrid.Graph;
+namespace GitCommandsTests.RevisionGrid.Graph;
 public class LaneNodeLocatorTests
 {
     private IRevisionGraphRowProvider _revisionGraphRowProvider = null!;
