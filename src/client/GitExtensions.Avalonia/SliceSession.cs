@@ -1,9 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using GitCommands;
+using GitCommands.Commit;
 using GitCommands.Git;
 using GitCommands.RichText;
 using GitExtUtils;
+using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUIPluginInterfaces;
 using GitUI.Editor.Diff;
@@ -39,6 +42,144 @@ public sealed class SliceSession
     public bool IsValidRepository => _module.IsValidGitWorkingDir();
 
     public ObjectId CurrentCheckout => _module.GetCurrentCheckout();
+
+    public string SelectedBranch => _module.GetSelectedBranch();
+
+    public bool IsMergeCommitPending => !_module.RevParse("MERGE_HEAD").IsZero;
+
+    public bool InConflictedMerge => _module.InTheMiddleOfConflictedMerge();
+
+    public bool IsDetachedHead => _module.IsDetachedHead();
+
+    public bool InRebase => _module.InTheMiddleOfRebase();
+
+    /// <summary>
+    ///  The status-bar push target: the model resolves where the branch would push, the view
+    ///  words the annotations - same split as the WinForms dialog.
+    /// </summary>
+    public BranchPushTarget PushTarget => BranchPushTarget.Resolve(
+        _module.GetRefs(RefsFilter.Heads).FirstOrDefault(r => r.LocalName == SelectedBranch),
+        _module.GetRemoteNames(),
+        SelectedBranch);
+
+    /// <summary>
+    ///  The work-tree status, partitioned exactly as FormCommit.LoadUnstagedOutput does:
+    ///  work-tree changes and status-only errors are unstaged, index changes are staged.
+    /// </summary>
+    public (IReadOnlyList<GitItemStatus> Unstaged, IReadOnlyList<GitItemStatus> Staged) GetWorkTreeStatus(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<GitItemStatus> allChangedFiles = _module.GetAllChangedFilesWithSubmodulesStatus(cancellationToken);
+
+        List<GitItemStatus> unstagedFiles = [];
+        List<GitItemStatus> stagedFiles = [];
+        foreach (GitItemStatus fileStatus in allChangedFiles)
+        {
+            if (fileStatus.Staged == StagedStatus.WorkTree || fileStatus.IsStatusOnly)
+            {
+                unstagedFiles.Add(fileStatus);
+            }
+            else if (fileStatus.Staged == StagedStatus.Index)
+            {
+                stagedFiles.Add(fileStatus);
+            }
+        }
+
+        return (unstagedFiles, stagedFiles);
+    }
+
+    public (bool Success, string Output) StageFiles(IReadOnlyList<GitItemStatus> files)
+    {
+        bool success = _module.StageFiles(files, out string output);
+        return (success, output);
+    }
+
+    public void UnstageFiles(IReadOnlyList<GitItemStatus> files)
+        => _module.BatchUnstageFiles(files);
+
+    /// <summary>
+    ///  Commits through the same portable pipeline as the WinForms dialog: the message goes
+    ///  through CommitMessageManager (COMMITMESSAGE file, second-line rule), the arguments
+    ///  through Commands.Commit.
+    /// </summary>
+    public async Task<(bool Success, string Output)> CommitAsync(string message, bool amend, bool resetAuthor, bool allowEmpty)
+    {
+        CommitMessageManager commitMessageManager = new(new TraceUserInteraction(), _module.WorkingDirGitDir, _module.CommitEncoding);
+        await commitMessageManager.WriteCommitMessageToFileAsync(
+            message,
+            CommitMessageType.Normal,
+            usingCommitTemplate: false,
+            ensureCommitMessageSecondLineEmpty: AppSettings.EnsureCommitMessageSecondLineEmpty);
+
+        ArgumentString arguments = Commands.Commit(
+            amend,
+            signOff: false,
+            author: "",
+            useExplicitCommitMessage: true,
+            commitMessageManager.CommitMessagePath,
+            _module.GetPathForGitExecution,
+            allowEmpty: allowEmpty,
+            resetAuthor: resetAuthor);
+
+        ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);
+        if (result.ExitedSuccessfully)
+        {
+            await commitMessageManager.ResetCommitMessageAsync();
+        }
+
+        return (result.ExitedSuccessfully, result.AllOutput);
+    }
+
+    /// <summary>
+    ///  The work-tree or index diff of one file, through the same M4 highlight pipeline as
+    ///  revision diffs.
+    /// </summary>
+    public (string Text, IReadOnlyList<StyledSpan> Spans, DiffLinesInfo LineNumbers) GetWorkTreeFileDiff(GitItemStatus file, bool staged)
+    {
+        string text;
+        if (file.IsNew && !file.IsTracked && !staged)
+        {
+            // Untracked: git diff knows nothing about the file; render its content as an
+            // all-added diff (exit code 1 is "differences found", not an error).
+            GitArgumentBuilder noIndexArgs = new("diff")
+            {
+                "--no-ext-diff",
+                "--color=always",
+                "--no-index",
+                "--",
+                "/dev/null",
+                file.Name.QuoteNE()
+            };
+
+            text = _module.GitExecutable.Execute(noIndexArgs, outputEncoding: _module.LogOutputEncoding, stripAnsiEscapeCodes: false, throwOnErrorExit: false).StandardOutput;
+        }
+        else
+        {
+            GitArgumentBuilder args = new("diff")
+            {
+                "--no-ext-diff",
+                "--color=always",
+                { staged, "--cached" },
+                "--",
+                file.Name.QuoteNE()
+            };
+
+            text = _module.GitExecutable.GetOutput(args, outputEncoding: _module.LogOutputEncoding, stripAnsiEscapeCodes: false);
+        }
+
+        PatchHighlightService highlightService = new(ref text, useGitColoring: true);
+        IReadOnlyList<StyledSpan> spans = highlightService.GetHighlighting();
+        DiffLinesInfo lineNumbers = DiffLineNumAnalyzer.Analyze(text, spans, isCombinedDiff: false);
+        return (text, spans, lineNumbers);
+    }
+
+    private sealed class TraceUserInteraction : IUserInteraction
+    {
+        public Task ShowErrorAsync(string text, string caption, CancellationToken cancellationToken = default)
+        {
+            Console.Error.WriteLine($"[commit] {caption}: {text}");
+            return Task.CompletedTask;
+        }
+    }
 
     /// <summary>
     ///  Streams the full log the way the WinForms grid does: RevisionReader.GetLog batches

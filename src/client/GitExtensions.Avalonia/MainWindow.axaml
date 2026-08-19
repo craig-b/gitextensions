@@ -4,15 +4,20 @@
         x:Class="GitExtensions.Avalonia.MainWindow"
         Title="Git Extensions"
         Width="1500" Height="950">
-    <Grid ColumnDefinitions="*,4,520">
+    <Grid ColumnDefinitions="*,4,520" RowDefinitions="Auto,*">
 
-        <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="12" Margin="8,6">
+            <Button Content="Commit..." Click="OnOpenCommitClick" />
+            <TextBlock x:Name="BranchInfo" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Column="0" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
             <local:RevisionLogControl x:Name="LogControl" />
         </ScrollViewer>
 
-        <GridSplitter Grid.Column="1" Background="#40808080" ResizeDirection="Columns" />
+        <GridSplitter Grid.Column="1" Grid.Row="1" Background="#40808080" ResizeDirection="Columns" />
 
-        <Grid Grid.Column="2" RowDefinitions="Auto,4,*" Margin="8,4,4,4">
+        <Grid Grid.Column="2" Grid.Row="1" RowDefinitions="Auto,4,*" Margin="8,4,4,4">
 
             <ScrollViewer Grid.Row="0" MaxHeight="340" HorizontalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">

@@ -155,6 +155,28 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         base.OnDetachedFromVisualTree(e);
     }
 
+    /// <summary>
+    ///  Empties the graph for a reload: parks the cache pump (the single writer) and waits for
+    ///  it before clearing, so no lane build races the reset.
+    /// </summary>
+    public async Task ResetAsync()
+    {
+        Task pump;
+        lock (_cacheLock)
+        {
+            _cacheTarget = -1;
+            pump = _cacheTask;
+        }
+
+        await pump;
+
+        _graph.Clear();
+        _selectedIndex = -1;
+        _offset = default;
+        _textCache.Clear();
+        NotifyRowsChanged();
+    }
+
     public void ScrollToRow(int row)
     {
         double y = Math.Clamp(row * RowHeight, 0, Math.Max(0, _extent.Height - _viewport.Height));

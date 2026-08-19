@@ -18,7 +18,7 @@ public partial class MainWindow : Window
 {
     private readonly SliceSession _session;
     private CancellationTokenSource? _selectionCts;
-    private readonly CancellationTokenSource _logCts = new();
+    private CancellationTokenSource _logCts = new();
 
     public MainWindow(string repositoryPath)
     {
@@ -31,6 +31,56 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) => StartLogStream();
         Closed += (_, _) => _logCts.Cancel();
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_COMMITTEST") is string snapshotDirectory)
+        {
+            Loaded += async (_, _) =>
+            {
+                CommitWindow commitWindow = new(_session);
+                Task harness = null!;
+                commitWindow.Loaded += (_, _) => harness = commitWindow.RunHarnessAsync(snapshotDirectory);
+                await commitWindow.ShowDialog(this);
+                await harness;
+                Environment.Exit(0);
+            };
+        }
+    }
+
+    private void ShowBranchInfo()
+    {
+        GitCommands.Commit.BranchPushTarget pushTarget = _session.PushTarget;
+        string pushTo = pushTarget.Kind switch
+        {
+            GitCommands.Commit.PushTargetKind.Tracked => pushTarget.Target!,
+            GitCommands.Commit.PushTargetKind.DefaultRemoteUntracked => $"{pushTarget.Target} (untracked)",
+            _ => "(remote not configured)",
+        };
+
+        BranchInfo.Text = $"{_session.SelectedBranch} → {pushTo}";
+    }
+
+    private async void OnOpenCommitClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        CommitWindow commitWindow = new(_session);
+        await commitWindow.ShowDialog(this);
+
+        if (commitWindow.Committed)
+        {
+            await ReloadLogAsync();
+        }
+    }
+
+    /// <summary>
+    ///  Restarts the log stream after history changed (a commit): stop the reader, let any
+    ///  in-flight batch drain, park the lane pump, clear, stream again.
+    /// </summary>
+    private async Task ReloadLogAsync()
+    {
+        _logCts.Cancel();
+        _logCts = new CancellationTokenSource();
+        await Task.Delay(200);
+        await LogControl.ResetAsync();
+        StartLogStream();
     }
 
     private void StartLogStream()
@@ -41,7 +91,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        ShowBranchInfo();
+
         Stopwatch loadStopwatch = Stopwatch.StartNew();
+        CancellationToken cancellationToken = _logCts.Token;
 
         _ = Task.Run(() =>
         {
@@ -94,7 +147,7 @@ public partial class MainWindow : Window
                         });
                     },
                     onError: ex => Dispatcher.UIThread.Post(() => CommitBody.Text = ex.ToString()),
-                    _logCts.Token);
+                    cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -191,29 +244,6 @@ public partial class MainWindow : Window
             }
         });
 
-    /// <summary>
-    ///  One left/right line-number pair per diff-view line, from the real (M4-portable)
-    ///  DiffLineNumAnalyzer - the same data the WinForms FileViewer margin paints.
-    /// </summary>
-    private static string BuildLineNumberGutter(string diffText, DiffLinesInfo lineNumbers)
-    {
-        int lineCount = diffText.Length == 0 ? 0 : diffText.Count(c => c == '\n') + (diffText.EndsWith('\n') ? 0 : 1);
-        System.Text.StringBuilder gutter = new();
-        for (int line = 1; line <= lineCount; line++)
-        {
-            if (lineNumbers.DiffLines.TryGetValue(line, out DiffLineInfo? info))
-            {
-                string left = info.LeftLineNumber == DiffLineInfo.NotApplicableLineNum ? "" : info.LeftLineNumber.ToString();
-                string right = info.RightLineNumber == DiffLineInfo.NotApplicableLineNum ? "" : info.RightLineNumber.ToString();
-                gutter.Append($"{left,5} {right,5}");
-            }
-
-            gutter.Append('\n');
-        }
-
-        return gutter.ToString();
-    }
-
     private async Task ShowRevisionAsync(GitRevision revision)
     {
         _selectionCts?.Cancel();
@@ -241,7 +271,7 @@ public partial class MainWindow : Window
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
 
-                DiffGutter.Text = BuildLineNumberGutter(diffText, lineNumbers);
+                DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
             });
         }
         catch (OperationCanceledException)
