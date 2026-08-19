@@ -1,4 +1,6 @@
-﻿using GitCommands.Git;
+﻿using GitCommands;
+using GitCommands.Git;
+using GitCommands.LeftPanel;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUI.CommandsDialogs;
@@ -54,31 +56,49 @@ internal sealed class LocalBranchTree : BaseRefTree
         Nodes nodes = new(this);
         IReadOnlyDictionary<string, AheadBehindData>? aheadBehindData = _aheadBehindDataProvider?.GetData();
         string currentBranch = _revisionGridInfo.GetCurrentBranch();
-        Dictionary<string, BaseRevisionNode> pathToNode = [];
-        foreach (IGitRef branch in PrioritizedBranches(branches))
-        {
-            token.ThrowIfCancellationRequested();
 
+        foreach (IGitRef branch in branches)
+        {
             if (branch.ObjectId.IsZero)
             {
                 throw new InvalidOperationException($"Branch '{branch.Name}' has no ObjectId.");
             }
+        }
 
-            LocalBranchNode localBranchNode = new(this, branch.ObjectId, branch.Name, branch.Name == currentBranch, visible: true);
+        // The portable builder folds the hierarchy with the same pathToNode semantics
+        // CreateRootNode had. (Ordering key: branch.Name equals LocalName for local heads.)
+        IReadOnlyList<RefTreeNode> roots = RefTreeBuilder.Build(branches, branch => branch.Name, AppSettings.PrioritizedBranchNames);
+        foreach (RefTreeNode root in roots)
+        {
+            nodes.AddNode(Convert(root));
+        }
+
+        return nodes;
+
+        BaseRevisionNode Convert(RefTreeNode node)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (node.ObjectId is not ObjectId objectId)
+            {
+                BranchPathNode folder = new(this, node.FullPath);
+                foreach (RefTreeNode child in node.Children)
+                {
+                    folder.Nodes.AddNode(Convert(child));
+                }
+
+                return folder;
+            }
+
+            LocalBranchNode localBranchNode = new(this, objectId, node.FullPath, node.FullPath == currentBranch, visible: true);
 
             if (aheadBehindData?.TryGetValue(localBranchNode.FullPath, out AheadBehindData aheadBehind) is true)
             {
                 localBranchNode.UpdateAheadBehind(aheadBehind.ToDisplay(), aheadBehind.RemoteRef);
             }
 
-            BaseRevisionNode? parent = localBranchNode.CreateRootNode(pathToNode, (tree, parentPath) => new BranchPathNode(tree, parentPath));
-            if (parent is not null)
-            {
-                nodes.AddNode(parent);
-            }
+            return localBranchNode;
         }
-
-        return nodes;
     }
 
     protected override void PostFillTreeViewNode(bool firstTime)

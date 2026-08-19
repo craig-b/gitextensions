@@ -1,4 +1,5 @@
-﻿using GitExtensions.Extensibility;
+﻿using GitCommands.LeftPanel;
+using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUI.UserControls.RevisionGrid;
 
@@ -14,22 +15,34 @@ internal sealed class TagTree : BaseRefTree
     protected override Nodes FillTree(IReadOnlyList<IGitRef> tags, CancellationToken token)
     {
         Nodes nodes = new(this);
-        Dictionary<string, BaseRevisionNode> pathToNodes = [];
 
-        foreach (IGitRef tag in tags)
+        // The portable builder folds the hierarchy with the same pathToNode semantics
+        // CreateRootNode had; tags have no priority setting.
+        IReadOnlyList<RefTreeNode> roots = RefTreeBuilder.Build(tags, tag => tag.Name, prioritySetting: "");
+        foreach (RefTreeNode root in roots)
         {
-            token.ThrowIfCancellationRequested();
-
-            TagNode tagNode = new(this, tag.ObjectId, tag.Name, visible: true);
-            BaseRevisionNode? parent = tagNode.CreateRootNode(pathToNodes, (tree, parentPath) => new BasePathNode(tree, parentPath));
-
-            if (parent is not null)
-            {
-                nodes.AddNode(parent);
-            }
+            nodes.AddNode(Convert(root));
         }
 
         return nodes;
+
+        BaseRevisionNode Convert(RefTreeNode node)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (node.ObjectId is not ObjectId objectId)
+            {
+                BasePathNode folder = new(this, node.FullPath);
+                foreach (RefTreeNode child in node.Children)
+                {
+                    folder.Nodes.AddNode(Convert(child));
+                }
+
+                return folder;
+            }
+
+            return new TagNode(this, objectId, node.FullPath, visible: true);
+        }
     }
 
     protected override void PostFillTreeViewNode(bool firstTime)
