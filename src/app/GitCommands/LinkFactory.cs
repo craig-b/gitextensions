@@ -108,7 +108,13 @@ public sealed class LinkFactory : ILinkFactory
             return;
         }
 
-        OsShellUtil.OpenUrlInDefaultBrowser(uri.AbsoluteUri);
+        // Link targets originate in commit-message content - repository history is not trusted
+        // input. Only well-known web/mail schemes may reach the shell; a file:// or custom-
+        // scheme URI in a message stays inert.
+        if (uri.Scheme is "http" or "https" or "mailto" or "ftp" or "ftps")
+        {
+            OsShellUtil.OpenUrlInDefaultBrowser(uri.AbsoluteUri);
+        }
     }
 
     private static bool ParseInternalScheme(Uri? uri, [NotNullWhen(returnValue: true)] out CommandEventArgs? commandEventArgs)
