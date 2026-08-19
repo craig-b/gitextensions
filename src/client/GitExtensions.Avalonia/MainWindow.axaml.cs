@@ -55,7 +55,14 @@ public partial class MainWindow : Window
         const string internalPrefix = "gitext://";
         if (!target.StartsWith(internalPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            GitCommands.OsShellUtil.OpenUrlInDefaultBrowser(target);
+            // Link targets come from commit-message content, i.e. from whoever authored the
+            // repository's history - only well-known schemes may reach the shell.
+            if (Uri.TryCreate(target, UriKind.Absolute, out Uri? uri)
+                && uri.Scheme is "http" or "https" or "mailto")
+            {
+                GitCommands.OsShellUtil.OpenUrlInDefaultBrowser(target);
+            }
+
             return;
         }
 
