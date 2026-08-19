@@ -200,10 +200,57 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         return base.ArrangeOverride(finalSize);
     }
 
+    public RevisionLogControl()
+    {
+        Focusable = true;
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        Focus();
         SelectRow((int)((_offset.Y + e.GetPosition(this).Y) / RowHeight));
         base.OnPointerPressed(e);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        int rowsPerPage = Math.Max(1, (int)(_viewport.Height / RowHeight) - 1);
+        int current = _selectedIndex < 0 ? FirstVisibleRow : _selectedIndex;
+
+        int? target = e.Key switch
+        {
+            Key.Up => current - 1,
+            Key.Down => current + 1,
+            Key.PageUp => current - rowsPerPage,
+            Key.PageDown => current + rowsPerPage,
+            Key.Home => 0,
+            Key.End => _graph.Count - 1,
+            _ => null,
+        };
+
+        if (target is not int row || _graph.Count == 0)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        row = Math.Clamp(row, 0, _graph.Count - 1);
+        SelectRow(row);
+        EnsureRowVisible(row, rowsPerPage);
+        e.Handled = true;
+    }
+
+    private void EnsureRowVisible(int row, int rowsPerPage)
+    {
+        int firstVisible = FirstVisibleRow;
+        if (row < firstVisible)
+        {
+            ScrollToRow(row);
+        }
+        else if (row > firstVisible + rowsPerPage)
+        {
+            ScrollToRow(row - rowsPerPage);
+        }
     }
 
     public void SelectRow(int row)
