@@ -840,19 +840,14 @@ public sealed partial class FormCommit : GitModuleForm
             return;
         }
 
-        string pushTo;
-        if (string.IsNullOrEmpty(currentBranch.TrackingRemote) || string.IsNullOrEmpty(currentBranch.MergeWith))
+        BranchPushTarget pushTarget = BranchPushTarget.Resolve(currentBranch, Module.GetRemoteNames(), currentBranchName);
+        string pushTo = pushTarget.Kind switch
         {
-            string? defaultRemote = Module.GetRemoteNames().FirstOrDefault(r => r == "origin") ?? Module.GetRemoteNames().OrderBy(r => r).FirstOrDefault();
-
-            pushTo = defaultRemote is not null
-                ? $"{defaultRemote}/{currentBranchName} {_untrackedRemote.Text}"
-                : _statusBarBranchWithoutRemote.Text;
-        }
-        else
-        {
-            pushTo = $"{currentBranch.TrackingRemote}/{currentBranch.MergeWith}";
-        }
+            PushTargetKind.Tracked => pushTarget.Target!,
+            PushTargetKind.DefaultRemoteUntracked => $"{pushTarget.Target} {_untrackedRemote.Text}",
+            PushTargetKind.NoRemoteConfigured => _statusBarBranchWithoutRemote.Text,
+            _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(pushTarget.Kind), (int)pushTarget.Kind, typeof(PushTargetKind)),
+        };
 
         await this.SwitchToMainThreadAsync();
 
@@ -1819,41 +1814,31 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void CommitMessageToolStripMenuItemDropDownOpening(object sender, EventArgs e)
     {
-        string msg = AppSettings.LastCommitMessage;
-        int maxCount = AppSettings.CommitDialogNumberOfPreviousMessages;
         string authorPattern = string.Empty;
 
         if (ShowOnlyMyMessagesToolStripMenuItem.Checked)
         {
             string userName = Module.GetEffectiveSetting(SettingKeyString.UserName);
             string userEmail = Module.GetEffectiveSetting(SettingKeyString.UserEmail);
-            authorPattern = $"^{Regex.Escape(userName)} <{Regex.Escape(userEmail)}>$";
+            authorPattern = PreviousCommitMessagesProvider.BuildAuthorPattern(userName, userEmail);
         }
 
-        List<string> prevMessages = [.. Module.GetPreviousCommitMessages(maxCount, "HEAD", authorPattern)
-            .WhereNotNull()
-            .Select(message => message.TrimEnd('\n'))
-            .Where(message => !string.IsNullOrWhiteSpace(message))];
-
-        if (!string.IsNullOrWhiteSpace(msg) && !prevMessages.Contains(msg))
-        {
-            // If the list is already full
-            if (prevMessages.Count == maxCount)
-            {
-                // Remove the last item
-                prevMessages.RemoveAt(maxCount - 1);
-            }
-
-            // Insert the last commit message as the first entry
-            prevMessages.Insert(0, msg);
-        }
+        IReadOnlyList<PreviousCommitMessage> prevMessages = PreviousCommitMessagesProvider.GetMessages(
+            Module,
+            AppSettings.LastCommitMessage,
+            AppSettings.CommitDialogNumberOfPreviousMessages,
+            authorPattern);
 
         commitMessageToolStripMenuItem.DropDown.SuspendLayout();
         commitMessageToolStripMenuItem.DropDownItems.Clear();
 
-        foreach (string prevMsg in prevMessages)
+        foreach (PreviousCommitMessage prevMsg in prevMessages)
         {
-            AddCommitMessageToMenu(prevMsg);
+            commitMessageToolStripMenuItem.DropDownItems.Add(new ToolStripMenuItem
+            {
+                Tag = prevMsg.Message,
+                Text = prevMsg.Label
+            });
         }
 
         commitMessageToolStripMenuItem.DropDownItems.AddRange(
@@ -1863,30 +1848,6 @@ public sealed partial class FormCommit : GitModuleForm
             ShowOnlyMyMessagesToolStripMenuItem
         ]);
         commitMessageToolStripMenuItem.DropDown.ResumeLayout();
-
-        void AddCommitMessageToMenu(string commitMessage)
-        {
-            const int maxLabelLength = 72;
-
-            string label = commitMessage;
-            int newlineIndex = label.IndexOf('\n');
-
-            if (newlineIndex != -1)
-            {
-                label = label[..newlineIndex];
-            }
-
-            if (label.Length > maxLabelLength)
-            {
-                label = label.ShortenTo(maxLabelLength);
-            }
-
-            commitMessageToolStripMenuItem.DropDownItems.Add(new ToolStripMenuItem
-            {
-                Tag = commitMessage,
-                Text = label
-            });
-        }
     }
 
     private void CommitMessageToolStripMenuItemDropDownItemClicked(object sender, ToolStripItemClickedEventArgs e)
