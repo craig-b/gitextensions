@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using GitCommands;
 using GitCommands.Commit;
 using GitCommands.Git;
+using GitCommands.LeftPanel;
 using GitCommands.RichText;
 using GitExtUtils;
 using GitExtensions.Extensibility;
@@ -64,6 +65,21 @@ public sealed class SliceSession
         _module.GetRefs(RefsFilter.Heads).FirstOrDefault(r => r.LocalName == SelectedBranch),
         _module.GetRemoteNames(),
         SelectedBranch);
+
+    /// <summary>
+    ///  The left panel's ref hierarchy: local branches, remote branches, and tags, each shaped
+    ///  by the portable RefTreeBuilder with the user's priority settings applied.
+    /// </summary>
+    public (IReadOnlyList<RefTreeNode> Branches, IReadOnlyList<RefTreeNode> Remotes, IReadOnlyList<RefTreeNode> Tags) GetRefPanel()
+    {
+        IReadOnlyList<IGitRef> refs = _module.GetRefs(RefsFilter.NoFilter);
+        string currentBranch = SelectedBranch;
+
+        return (
+            RefTreeBuilder.Build(refs.Where(r => r.IsHead), r => r.LocalName, AppSettings.PrioritizedBranchNames, currentBranch),
+            RefTreeBuilder.Build(refs.Where(r => r.IsRemote), r => r.LocalName, AppSettings.PrioritizedRemoteNames),
+            RefTreeBuilder.Build(refs.Where(r => r.IsTag), r => r.LocalName, prioritySetting: ""));
+    }
 
     /// <summary>
     ///  The work-tree status, partitioned exactly as FormCommit.LoadUnstagedOutput does:

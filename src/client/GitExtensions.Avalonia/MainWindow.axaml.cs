@@ -85,6 +85,33 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task LoadRefPanelAsync()
+    {
+        var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
+
+        GitCommands.LeftPanel.RefTreeNode Section(string name, IReadOnlyList<GitCommands.LeftPanel.RefTreeNode> children)
+        {
+            GitCommands.LeftPanel.RefTreeNode section = new() { Name = name, FullPath = "" };
+            section.Children.AddRange(children);
+            return section;
+        }
+
+        RefTree.ItemsSource = new[]
+        {
+            Section($"Branches ({branches.Count})", branches),
+            Section($"Remotes ({remotes.Count})", remotes),
+            Section($"Tags ({tags.Count})", tags),
+        };
+    }
+
+    private void OnRefTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (RefTree.SelectedItem is GitCommands.LeftPanel.RefTreeNode { ObjectId: ObjectId objectId })
+        {
+            LogControl.TryJumpTo(objectId);
+        }
+    }
+
     private void ShowBranchInfo()
     {
         GitCommands.Commit.BranchPushTarget pushTarget = _session.PushTarget;
@@ -164,6 +191,7 @@ public partial class MainWindow : Window
                         {
                             LogControl.NotifyRowsChanged();
                             Title = $"Git Extensions - {_session.WorkingDir} - {LogControl.Count:n0} commits in {loadStopwatch.Elapsed.TotalSeconds:0.0}s";
+                            _ = LoadRefPanelAsync();
 
                             if (Environment.GetEnvironmentVariable("GE_SPIKE_BENCH") == "1")
                             {

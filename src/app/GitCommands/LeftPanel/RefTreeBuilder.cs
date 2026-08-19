@@ -1,0 +1,66 @@
+using GitExtensions.Extensibility.Git;
+
+namespace GitCommands.LeftPanel;
+
+/// <summary>A node of the left panel's ref hierarchy: a folder, or a ref leaf carrying its ObjectId.</summary>
+public sealed class RefTreeNode
+{
+    public required string Name { get; init; }
+
+    public required string FullPath { get; init; }
+
+    /// <summary>The ref's commit for leaves; null for path folders.</summary>
+    public ObjectId? ObjectId { get; init; }
+
+    public bool IsCurrent { get; init; }
+
+    public List<RefTreeNode> Children { get; } = [];
+}
+
+/// <summary>
+///  Builds the branch/tag hierarchy the left panel shows: refs arrive in
+///  priority order (see <see cref="RefPriorityOrder"/>), each name splits on '/', and folders
+///  are created on first encounter - the same fold semantics as the WinForms panel's
+///  CreateRootNode/pathToNode walk, so "develop/features/x" and "develop/issues/y" share the
+///  "develop" folder and folder order follows the first ref that needed the folder.
+/// </summary>
+public static class RefTreeBuilder
+{
+    public static IReadOnlyList<RefTreeNode> Build(IEnumerable<IGitRef> refs, Func<IGitRef, string> getDisplayName, string prioritySetting, string? currentRefName = null)
+    {
+        List<IGitRef> ordered = [.. refs];
+        List<RefTreeNode> roots = [];
+        Dictionary<string, RefTreeNode> pathToNode = [];
+
+        foreach (IGitRef gitRef in RefPriorityOrder.OrderByPriority(ordered, getDisplayName, prioritySetting))
+        {
+            string fullPath = getDisplayName(gitRef);
+            string[] parts = fullPath.Split('/');
+
+            List<RefTreeNode> siblings = roots;
+            string path = "";
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                path = path.Length == 0 ? parts[i] : $"{path}/{parts[i]}";
+                if (!pathToNode.TryGetValue(path, out RefTreeNode? folder))
+                {
+                    folder = new RefTreeNode { Name = parts[i], FullPath = path };
+                    pathToNode.Add(path, folder);
+                    siblings.Add(folder);
+                }
+
+                siblings = folder.Children;
+            }
+
+            siblings.Add(new RefTreeNode
+            {
+                Name = parts[^1],
+                FullPath = fullPath,
+                ObjectId = gitRef.ObjectId,
+                IsCurrent = fullPath == currentRefName,
+            });
+        }
+
+        return roots;
+    }
+}
