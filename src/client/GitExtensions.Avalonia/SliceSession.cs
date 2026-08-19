@@ -45,6 +45,8 @@ public sealed class SliceSession
 
     public string SelectedBranch => _module.GetSelectedBranch();
 
+    public ObjectId? ResolveRef(string refName) => _module.RevParse(refName) is { IsZero: false } objectId ? objectId : null;
+
     public bool IsMergeCommitPending => !_module.RevParse("MERGE_HEAD").IsZero;
 
     public bool InConflictedMerge => _module.InTheMiddleOfConflictedMerge();

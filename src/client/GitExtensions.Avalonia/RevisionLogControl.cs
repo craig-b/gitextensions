@@ -240,6 +240,19 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         e.Handled = true;
     }
 
+    /// <summary>Selects and scrolls to the given revision if it is in the graph.</summary>
+    public bool TryJumpTo(ObjectId objectId)
+    {
+        if (!_graph.TryGetRowIndex(objectId, out int row))
+        {
+            return false;
+        }
+
+        SelectRow(row);
+        EnsureRowVisible(row, Math.Max(1, (int)(_viewport.Height / RowHeight) - 1));
+        return true;
+    }
+
     private void EnsureRowVisible(int row, int rowsPerPage)
     {
         int firstVisible = FirstVisibleRow;

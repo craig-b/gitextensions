@@ -46,6 +46,38 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    ///  The commit-info links use LinkFactory's targets: gitext:// links jump within the log,
+    ///  anything else opens in the browser.
+    /// </summary>
+    private void HandleCommitInfoLink(string target)
+    {
+        const string internalPrefix = "gitext://";
+        if (!target.StartsWith(internalPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            GitCommands.OsShellUtil.OpenUrlInDefaultBrowser(target);
+            return;
+        }
+
+        string[] parts = target[internalPrefix.Length..].Split('/', 2);
+        if (parts.Length != 2)
+        {
+            return;
+        }
+
+        ObjectId? objectId = parts[0].ToLowerInvariant() switch
+        {
+            "gotocommit" => ObjectId.TryParse(parts[1], out ObjectId id) ? id : null,
+            "gotobranch" or "gototag" => _session.ResolveRef(parts[1]),
+            _ => null,
+        };
+
+        if (objectId is ObjectId target1)
+        {
+            LogControl.TryJumpTo(target1);
+        }
+    }
+
     private void ShowBranchInfo()
     {
         GitCommands.Commit.BranchPushTarget pushTarget = _session.PushTarget;
@@ -263,10 +295,10 @@ public partial class MainWindow : Window
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 CommitHeader.Inlines!.Clear();
-                CommitHeader.Inlines.AddRange(InlineRendering.ToInlines(header));
+                CommitHeader.Inlines.AddRange(InlineRendering.ToInlines(header, HandleCommitInfoLink));
 
                 CommitBody.Inlines!.Clear();
-                CommitBody.Inlines.AddRange(InlineRendering.ToInlines(body));
+                CommitBody.Inlines.AddRange(InlineRendering.ToInlines(body, HandleCommitInfoLink));
 
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));

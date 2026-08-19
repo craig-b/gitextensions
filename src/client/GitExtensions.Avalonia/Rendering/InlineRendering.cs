@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
-using Avalonia.Media;
+using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Media;
 using GitCommands.RichText;
 using GitUI.Editor.Diff;
 
@@ -17,10 +19,26 @@ internal static class InlineRendering
 {
     private static readonly IBrush _linkBrush = new SolidColorBrush(Color.FromRgb(0x2b, 0x6c, 0xd4));
 
-    public static IEnumerable<Inline> ToInlines(RichContent content)
+    public static IEnumerable<Inline> ToInlines(RichContent content, System.Action<string>? onLinkClick = null)
     {
         foreach (RichTextSegment segment in content.Segments)
         {
+            if (segment.LinkTarget is string linkTarget && onLinkClick is not null)
+            {
+                // Runs receive no pointer events; a TextBlock in an InlineUIContainer does.
+                TextBlock linkBlock = new()
+                {
+                    Text = segment.Text,
+                    Foreground = _linkBrush,
+                    TextDecorations = TextDecorations.Underline,
+                    Cursor = new Cursor(StandardCursorType.Hand),
+                };
+                linkBlock.PointerReleased += (_, _) => onLinkClick(linkTarget);
+
+                yield return new InlineUIContainer(linkBlock) { BaselineAlignment = BaselineAlignment.Baseline };
+                continue;
+            }
+
             Run run = new(segment.Text);
 
             if (segment.LinkTarget is not null)
