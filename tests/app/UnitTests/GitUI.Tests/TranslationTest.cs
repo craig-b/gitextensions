@@ -9,6 +9,10 @@ public sealed class TranslationTest
     public void SetUp()
     {
         GitModuleForm.IsUnitTestActive = true;
+
+        // Same requirement as TranslationApp: the WinForms special cases must be installed
+        // before any ITranslate is walked, independent of form-construction order.
+        GitExtensions.Extensibility.WinForms.Translations.WinFormsTranslationSpecialCases.Install();
     }
 
     [TearDown]

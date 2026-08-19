@@ -13,7 +13,7 @@
       - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
 
     SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
-      1. GitExtensions.Extensibility   : 112 of 116 files —  4 debt
+      1. GitExtensions.Extensibility   : 116 of 117 files —  1 debt (UIExtensions, M1.4 residue)
       2. GitExtUtils                   :  42 of  69 files — 27 debt, added by M1.7
       3. GitCommands                   : 217 of 218 files —  0 debt (artefact only)
       4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
@@ -26,9 +26,9 @@
 
     An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
     (fonts), M1.5 (application paths), M1.7's splits, the UserNotification seam, M1.8's binding
-    split and M3's UI command bus, the same scope needs 33 — of which 29 have a DIRECT Windows
-    dependency, 2 are pure cascade (each annotated with its root), and 2 are compilation
-    artefacts, see below.
+    split and M3's UI command bus, the same scope needs 30 — of which 28 have a DIRECT Windows
+    dependency and 2 are compilation artefacts, see below. No pure-cascade exclusions remain
+    (M7 cleared the last two).
 
     Notes on maintaining the Remove list:
       - Derive it from files with a DIRECT error, never by iteratively excluding everything the
@@ -116,14 +116,17 @@
     <!-- M1.4 residue: IsFixedWidth(Font, Graphics) is inherently a rendering concern; move to GitUI -->
     <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Extensions\UIExtensions.cs" />
 
-    <!-- M7: translation extraction reflects over WinForms control trees. Only TranslationUtil is
-         Windows-bound now; the rest of the Xliff types came off this list with M1.4. -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\Xliff\TranslationUtil.cs" />
-    <!-- cascade of M7: forwards to TranslationUtil -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Translations\TranslationUtils.cs" />
-    <!-- cascade of M7: registers its translation items through TranslationUtils; everything
-         M3-related in it (the object? Icon, IGitUICommands registration) is portable -->
-    <ProbeSource Remove="$(RepoRoot)src\app\GitExtensions.Extensibility\Plugins\GitPluginBase.cs" />
+    <!-- M7 DONE (2026-08-19): TranslationUtil, TranslationUtils and GitPluginBase came off this
+         list. The translation walk itself was ~90% portable (fields, string properties by name,
+         Item{N} lists); the five WinForms special cases (ToolTip pairing, DataGridViewColumn,
+         ComboBox/ListBox items) moved verbatim to
+         Extensibility.WinForms\Translations\WinFormsTranslationSpecialCases behind the
+         TranslationUtil.SpecialItemHandler host seam, installed by
+         GitExtensionsControlInitialiser's static ctor (plus TranslationApp and the round-trip
+         test explicitly). CI's "Verify localisation" step is the byte-identical English.xlf
+         oracle. The explicit-declaration variant of M7 was deliberately retired - see the plan. -->
+
+
 
 
     <!-- ===== DEBT: GitExtUtils, 28 of 67 files (shrinks) ===== -->

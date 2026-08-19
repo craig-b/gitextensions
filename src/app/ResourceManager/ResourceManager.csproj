@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GitCommands\GitCommands.csproj" />
+    <ProjectReference Include="..\GitExtensions.Extensibility.WinForms\GitExtensions.Extensibility.WinForms.csproj" />
     <ProjectReference Include="..\GitExtUtils\GitExtUtils.csproj" />
     <ProjectReference Include="..\..\plugins\GitUIPluginInterfaces\GitUIPluginInterfaces.csproj" />
   </ItemGroup>

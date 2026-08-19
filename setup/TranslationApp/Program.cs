@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // The extraction walk needs the WinForms special cases installed before ANY ITranslate
+        // is processed - including non-form types, which may be instantiated before the first
+        // form would install this via GitExtensionsControlInitialiser.
+        GitExtensions.Extensibility.WinForms.Translations.WinFormsTranslationSpecialCases.Install();
+
         // This form created for obtain UI synchronization context only
         using (new Form())
         {
