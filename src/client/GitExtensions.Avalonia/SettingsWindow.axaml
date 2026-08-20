@@ -6,7 +6,10 @@
         WindowStartupLocation="CenterOwner">
     <Grid RowDefinitions="*,Auto" ColumnDefinitions="190,4,*">
 
-        <ListBox x:Name="PageList" Grid.Column="0" Grid.Row="0" SelectionChanged="OnPageSelectionChanged" />
+        <Grid Grid.Column="0" Grid.Row="0" RowDefinitions="Auto,*">
+            <TextBox x:Name="FindBox" Grid.Row="0" Watermark="Type to find" Margin="4" TextChanged="OnFindTextChanged" />
+            <ListBox x:Name="PageList" Grid.Row="1" SelectionChanged="OnPageSelectionChanged" />
+        </Grid>
 
         <GridSplitter Grid.Column="1" Grid.Row="0" Background="#40808080" ResizeDirection="Columns" />
 

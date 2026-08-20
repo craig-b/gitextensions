@@ -49,4 +49,11 @@ public abstract class SettingsPageModel
             entry.Save();
         }
     }
+
+    /// <summary>
+    ///  The texts the settings search matches against — the model-side equivalent of the
+    ///  WinForms page's control-text walk: the group captions and every entry caption.
+    /// </summary>
+    public virtual IEnumerable<string> GetSearchKeywords()
+        => Groups.SelectMany(group => group.Entries.Select(entry => entry.Caption).Prepend(group.Caption));
 }

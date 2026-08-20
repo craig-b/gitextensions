@@ -51,16 +51,36 @@ public partial class SettingsWindow : Window
             ("Git: Advanced", new GitConfigAdvancedPageModel(() => gitConfigSource), saveGitConfig),
         ];
 
+        _visiblePages = _pages;
         PageList.ItemsSource = _pages.Select(page => page.Label).ToList();
         PageList.SelectedIndex = 0;
+    }
+
+    private List<(string Label, SettingsPageModel Page, Action? AfterSave)> _visiblePages;
+
+    private void OnFindTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        string searchText = FindBox.Text ?? string.Empty;
+        SettingsPageModel? selected = PageList.SelectedIndex >= 0 && PageList.SelectedIndex < _visiblePages.Count
+            ? _visiblePages[PageList.SelectedIndex].Page
+            : null;
+
+        _visiblePages = string.IsNullOrWhiteSpace(searchText)
+            ? _pages
+            : _pages.Where(entry => SettingsPageSearch.Matches(searchText, entry.Page.Title, entry.Page.GetSearchKeywords())).ToList();
+
+        PageList.ItemsSource = _visiblePages.Select(page => page.Label).ToList();
+
+        int keepIndex = _visiblePages.FindIndex(entry => entry.Page == selected);
+        PageList.SelectedIndex = keepIndex >= 0 ? keepIndex : (_visiblePages.Count > 0 ? 0 : -1);
     }
 
     private void OnPageSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         int index = PageList.SelectedIndex;
-        if (index >= 0 && index < _pages.Count)
+        if (index >= 0 && index < _visiblePages.Count)
         {
-            ShowPage(_pages[index].Page);
+            ShowPage(_visiblePages[index].Page);
         }
     }
 
@@ -286,6 +306,12 @@ public partial class SettingsWindow : Window
 
         GitConfigPageModel gitConfig = (GitConfigPageModel)_pages.Single(entry => entry.Page is GitConfigPageModel).Page;
         Console.Error.WriteLine($"[settings] git config global user.name loads as: '{gitConfig.UserName.Value}'");
+
+        FindBox.Text = "stash";
+        await Task.Delay(300);
+        Console.Error.WriteLine($"[settings] search 'stash' shows: {string.Join(", ", _visiblePages.Select(entry => entry.Label))}");
+        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_search.png"));
+        FindBox.Text = "";
 
         Close();
 
