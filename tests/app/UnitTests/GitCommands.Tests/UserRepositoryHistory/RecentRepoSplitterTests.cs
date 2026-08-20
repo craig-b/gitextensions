@@ -3,6 +3,21 @@
 namespace GitCommandsTests.UserRepositoryHistory;
 public class RecentRepoSplitterTests
 {
+    // The old parameterless splitter constructor read these from AppSettings; the tests ran on
+    // the settings defaults (MaxTopRepositories = 0 etc.), which this helper reproduces.
+    private static RecentRepoSplitterOptions Options(
+        GitCommands.ShorteningRecentRepoPathStrategy strategy,
+        bool sortTopRepos = false,
+        bool sortRecentRepos = false,
+        bool hideTopRepositoriesFromRecentList = false)
+        => new(
+            MaxTopRepositories: 0,
+            hideTopRepositoriesFromRecentList,
+            strategy,
+            sortTopRepos,
+            sortRecentRepos,
+            RecentReposComboMinWidth: 0);
+
     private const string _relativeLongRepoPath = @"this\is\a\very_very_very_very_very_very_very\long\repo_path";
     private static readonly string repoPathInUserFolder = Path.Combine(Path.GetTempPath(), _relativeLongRepoPath);
 
@@ -27,10 +42,7 @@ public class RecentRepoSplitterTests
             new Repository(repoAnchoredInTopPath1) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -49,10 +61,7 @@ public class RecentRepoSplitterTests
             new Repository(repoAnchoredInTopPath1) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.None
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.None));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -78,10 +87,7 @@ public class RecentRepoSplitterTests
             new Repository(repoPathInUserFolder) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.None
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.None));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -105,10 +111,7 @@ public class RecentRepoSplitterTests
             new Repository(repoPathInUserFolder) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.MiddleDots
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.MiddleDots));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -117,6 +120,37 @@ public class RecentRepoSplitterTests
         topRepoList.Should().ContainSingle();
         topRepoList[0].Caption.Should().Be(@"~\AppData\..\long\repo_path");
         recentRepoList.Should().ContainSingle();
+    }
+
+    // No [Platform] gate: unlike the "~"-substitution tests above, this one only needs the repo
+    // path to exist on disk (AddToOrderedMiddleDots shortens existing dirs only, comparing
+    // DirectoryInfo.FullName against the native path - fine for a temp path on any OS).
+    [Test]
+    public void SplitRecentRepos_Should_shorten_with_the_char_budget_when_no_width_measure_is_supplied()
+    {
+        // Warning: Able to shorten only an existing folder path
+        string longRepoPath = Path.Combine(Path.GetTempPath(), "ge_char_budget", "very_long_middle_segment_for_char_budget_fallback_shortening", "repo");
+        Directory.CreateDirectory(longRepoPath);
+
+        List<Repository> history =
+        [
+            new Repository(longRepoPath) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
+        ];
+
+        // MiddleDots with a fixed combo width and MeasureCaptionWidth left at null: the
+        // CharBudgetMeasure fallback drives the skip loop. (The old default measured every
+        // caption as 0 pixels, so the loop exited on the first pass and the caption silently
+        // stayed the full path.)
+        RecentRepoSplitterOptions options = Options(GitCommands.ShorteningRecentRepoPathStrategy.MiddleDots) with { RecentReposComboMinWidth = 200 };
+        RecentRepoSplitter sut = new(options);
+        List<RecentRepoInfo> topRepoList = [];
+        List<RecentRepoInfo> recentRepoList = [];
+
+        sut.SplitRecentRepos(history, topRepoList, recentRepoList);
+
+        topRepoList.Should().ContainSingle();
+        topRepoList[0].Caption.Should().Contain("..");
+        topRepoList[0].Caption!.Length.Should().BeLessThan(longRepoPath.Length);
     }
     #endregion
 
@@ -132,12 +166,7 @@ public class RecentRepoSplitterTests
             new Repository(repoNotAnchoredPath) { Anchor = Repository.RepositoryAnchor.None },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir,
-            SortTopRepos = false,
-            SortRecentRepos = false
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir, sortTopRepos: false, sortRecentRepos: false));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -165,12 +194,7 @@ public class RecentRepoSplitterTests
             new Repository(repoAnchoredInTopPath1) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir,
-            SortTopRepos = true,
-            SortRecentRepos = true
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir, sortTopRepos: true, sortRecentRepos: true));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 
@@ -198,13 +222,7 @@ public class RecentRepoSplitterTests
             new Repository(repoAnchoredInTopPath1) { Anchor = Repository.RepositoryAnchor.AnchoredInTop },
         ];
 
-        RecentRepoSplitter sut = new()
-        {
-            ShorteningStrategy = GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir,
-            SortTopRepos = true,
-            SortRecentRepos = true,
-            HideTopRepositoriesFromRecentList = true
-        };
+        RecentRepoSplitter sut = new(Options(GitCommands.ShorteningRecentRepoPathStrategy.MostSignDir, sortTopRepos: true, sortRecentRepos: true, hideTopRepositoriesFromRecentList: true));
         List<RecentRepoInfo> topRepoList = [];
         List<RecentRepoInfo> recentRepoList = [];
 

@@ -43,28 +43,22 @@ public class RecentRepoInfo
 
 public class RecentRepoSplitter
 {
-    public int MaxTopRepositories { get; set; }
-    public bool HideTopRepositoriesFromRecentList { get; set; }
-    public ShorteningRecentRepoPathStrategy ShorteningStrategy { get; set; }
-    public bool SortTopRepos { get; set; }
-    public bool SortRecentRepos { get; set; }
-    public int RecentReposComboMinWidth { get; set; }
+    private readonly RecentRepoSplitterOptions _options;
+    private readonly Func<string?, int> _measureCaptionWidth;
 
-    /// <summary>
-    ///  Measures the rendered pixel width of a caption; supplied by the UI, which knows the font.
-    ///  The default measures nothing, disabling width-based shortening.
-    /// </summary>
-    public Func<string?, int> MeasureCaptionWidth { get; set; } = static _ => 0;
-
-    public RecentRepoSplitter()
+    public RecentRepoSplitter(RecentRepoSplitterOptions options)
     {
-        MaxTopRepositories = AppSettings.MaxTopRepositories;
-        HideTopRepositoriesFromRecentList = AppSettings.HideTopRepositoriesFromRecentList.Value;
-        ShorteningStrategy = AppSettings.ShorteningRecentRepoPathStrategy;
-        SortTopRepos = AppSettings.SortTopRepos;
-        SortRecentRepos = AppSettings.SortRecentRepos;
-        RecentReposComboMinWidth = AppSettings.RecentReposComboMinWidth;
+        _options = options;
+        _measureCaptionWidth = options.MeasureCaptionWidth ?? RecentRepoSplitterOptions.CharBudgetMeasure();
     }
+
+    private int MaxTopRepositories => _options.MaxTopRepositories;
+    private bool HideTopRepositoriesFromRecentList => _options.HideTopRepositoriesFromRecentList;
+    private ShorteningRecentRepoPathStrategy ShorteningStrategy => _options.ShorteningStrategy;
+    private bool SortTopRepos => _options.SortTopRepos;
+    private bool SortRecentRepos => _options.SortRecentRepos;
+    private int RecentReposComboMinWidth => _options.RecentReposComboMinWidth;
+    private Func<string?, int> MeasureCaptionWidth => _measureCaptionWidth;
 
     public void SplitRecentRepos(IList<Repository> repositories, List<RecentRepoInfo> topRepoList, List<RecentRepoInfo> recentRepoList)
     {

@@ -8,6 +8,7 @@ using GitCommands.Git;
 using GitCommands.Git.Gpg;
 using GitCommands.Open;
 using GitCommands.Submodules;
+using GitCommands.UserRepositoryHistory;
 using GitCommands.Utils;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -1051,6 +1052,13 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             stashStagedToolStripMenuItem.Visible = Module.GitVersion.SupportStashStaged;
 
             toolsToolStripMenuItem.RefreshState(bareRepository);
+
+            // The explicit MRU promotion (used to hide inside the button's caption refresh).
+            // Only a VALID repository earns a recent-list entry.
+            if (validBrowseDir)
+            {
+                ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(Module.WorkingDir));
+            }
 
             _NO_TRANSLATE_WorkingDir.RefreshContent();
 

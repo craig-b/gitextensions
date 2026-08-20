@@ -114,16 +114,14 @@ public partial class FormRecentReposSettings : GitExtensionsForm
             List<RecentRepoInfo> topRepos = [];
             List<RecentRepoInfo> recentRepos = [];
 
-            RecentRepoSplitter splitter = new()
-            {
-                MaxTopRepositories = (int)_NO_TRANSLATE_maxRecentRepositories.Value,
-                HideTopRepositoriesFromRecentList = hideTopRepositoriesFromRecentList.Checked,
-                ShorteningStrategy = GetShorteningStrategy(),
-                SortRecentRepos = sortRecentRepos.Checked,
-                SortTopRepos = sortTopRepos.Checked,
-                RecentReposComboMinWidth = (int)comboMinWidthEdit.Value,
-                MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, TopLB.Font).Width,
-            };
+            RecentRepoSplitter splitter = new(new RecentRepoSplitterOptions(
+                MaxTopRepositories: (int)_NO_TRANSLATE_maxRecentRepositories.Value,
+                HideTopRepositoriesFromRecentList: hideTopRepositoriesFromRecentList.Checked,
+                ShorteningStrategy: GetShorteningStrategy(),
+                SortTopRepos: sortTopRepos.Checked,
+                SortRecentRepos: sortRecentRepos.Checked,
+                RecentReposComboMinWidth: (int)comboMinWidthEdit.Value,
+                caption => TextRenderer.MeasureText(caption, TopLB.Font).Width));
 
             splitter.SplitRecentRepos(_repositoryHistory, topRepos, recentRepos);
 

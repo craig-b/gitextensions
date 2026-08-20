@@ -71,16 +71,8 @@ public sealed class UserRepositoriesListController : IUserRepositoriesListContro
         List<RecentRepoInfo> topRepos = [];
         List<RecentRepoInfo> recentRepos = [];
 
-        RecentRepoSplitter splitter = new()
-        {
-            MeasureCaptionWidth = caption => TextRenderer.MeasureText(caption, AppFonts.App).Width,
-
-            MaxTopRepositories = AppSettings.MaxTopRepositories,
-            RecentReposComboMinWidth = AppSettings.RecentReposComboMinWidth,
-            ShorteningStrategy = AppSettings.ShorteningRecentRepoPathStrategy,
-            SortRecentRepos = AppSettings.SortRecentRepos,
-            SortTopRepos = AppSettings.SortTopRepos
-        };
+        RecentRepoSplitter splitter = new(RecentRepoSplitterOptions.FromAppSettings(
+            caption => TextRenderer.MeasureText(caption, AppFonts.App).Width));
 
         _allRecentRepositories ??= ThreadHelper.JoinableTaskFactory.Run(RepositoryHistoryManager.Locals.LoadRecentHistoryAsync);
         IList<Repository> repositories = Filter(_allRecentRepositories, pattern);

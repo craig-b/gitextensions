@@ -36,7 +36,7 @@ public interface IRepositoryCurrentBranchNameCache : IRepositoryCurrentBranchNam
     bool IsEmpty { get; }
 }
 
-internal sealed class RepositoryCurrentBranchNameCache(IRepositoryCurrentBranchNameProvider inner) : IRepositoryCurrentBranchNameCache
+public sealed class RepositoryCurrentBranchNameCache(IRepositoryCurrentBranchNameProvider inner) : IRepositoryCurrentBranchNameCache
 {
     private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.InvariantCulture);
 
