@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using GitCommands;
+using GitCommands.LeftPanel;
 using GitCommands.Submodules;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -193,181 +194,31 @@ internal sealed class SubmoduleTree : Tree
     private Nodes FillSubmoduleTree(SubmoduleInfoResult result)
     {
         Validates.NotNull(result.TopProject);
+        Validates.NotNull(result.Module);
 
-        GitModule? threadModule = (GitModule?)result.Module;
+        SubmoduleTreeBuildResult built = SubmoduleTreeBuilder.Build(result);
 
-        Validates.NotNull(threadModule);
-
-        List<SubmoduleNode> submoduleNodes = [];
-
-        // We always want to display submodules rooted from the top project.
-        CreateSubmoduleNodes(result, threadModule, ref submoduleNodes);
-
-        return AddTopAndNodesToTree(submoduleNodes, threadModule, result);
-    }
-
-    private void CreateSubmoduleNodes(SubmoduleInfoResult result, IGitModule threadModule, ref List<SubmoduleNode> nodes)
-    {
-        // result.OurSubmodules/AllSubmodules contain a recursive list of submodules, but don't provide info about the super
-        // project path. So we deduce these by substring matching paths against an ordered list of all paths.
-        List<string> modulePaths = [.. result.AllSubmodules.Select(info => info.Path)];
-
-        // Add current and parent module paths
-        IGitModule? parentModule = threadModule;
-
-        while (parentModule is not null)
+        foreach ((string? superPath, string submodulePath, string submoduleText) in built.SkippedMissingSuperPaths)
         {
-            modulePaths.Add(parentModule.WorkingDir);
-            parentModule = parentModule.SuperprojectModule;
+            MessageBoxes.SubmoduleDirectoryDoesNotExist(owner: null, superPath ?? submodulePath, submoduleText);
         }
-
-        // Sort descending so we find the nearest outer folder first
-        modulePaths = [.. modulePaths.OrderByDescending(path => path)];
-
-        foreach (SubmoduleInfo submoduleInfo in result.AllSubmodules)
-        {
-            string? superPath = GetSubmoduleSuperPath(submoduleInfo.Path);
-
-            if (!Directory.Exists(superPath))
-            {
-                MessageBoxes.SubmoduleDirectoryDoesNotExist(owner: null, superPath ?? submoduleInfo.Path, submoduleInfo.Text);
-                continue;
-            }
-
-            string? localPath = Path.GetDirectoryName(submoduleInfo.Path[superPath.Length..]).ToPosixPath();
-
-            bool isCurrent = submoduleInfo.Bold;
-
-            nodes.Add(new SubmoduleNode(this,
-                submoduleInfo,
-                isCurrent,
-                isCurrent ? result.CurrentSubmoduleStatus : null,
-                localPath!,
-                superPath));
-        }
-
-        return;
-
-        string? GetSubmoduleSuperPath(string submodulePath) =>
-            modulePaths.Find(path => submodulePath != path && submodulePath.Contains(path));
-    }
-
-    private static string GetNodeRelativePath(IGitModule topModule, SubmoduleNode node)
-    {
-        return node.SuperPath.SubstringAfter(topModule.WorkingDir).ToPosixPath() + node.LocalPath;
-    }
-
-    private Nodes AddTopAndNodesToTree(
-        List<SubmoduleNode> submoduleNodes,
-        IGitModule threadModule,
-        SubmoduleInfoResult result)
-    {
-        // Create tree of SubmoduleFolderNode for each path directory and add input SubmoduleNodes as leaves.
-
-        // Example of (SuperPath + LocalPath).ToPosixPath() for all nodes:
-        //
-        // C:/code/gitextensions2/Externals/conemu-inside
-        // C:/code/gitextensions2/Externals/Git.hub
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions/Externals/conemu-inside
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions/Externals/Git.hub
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions/Externals/ICSharpCode.TextEditor
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions/Externals/NBug
-        // C:/code/gitextensions2/Externals/ICSharpCode.TextEditor/gitextensions/GitExtensionsDoc
-        // C:/code/gitextensions2/Externals/NBug
-        // C:/code/gitextensions2/GitExtensionsDoc
-        //
-        // What we want to do is first remove the topModule portion, "C:/code/gitextensions2/", and
-        // then build our tree by breaking up each path into parts, separated by '/'.
-        //
-        // Note that when we break up the paths, some parts are just directories, the others are submodule nodes:
-        //
-        // Externals / ICSharpCode.TextEditor / gitextensions / Externals / Git.hub
-        //  folder          submodule             submodule      folder     submodule
-        //
-        // Input 'nodes' is an array of SubmoduleNodes for all the submodules; now we need to create SubmoduleFolderNodes
-        // and insert everything into a tree.
-
-        IGitModule topModule = threadModule.GetTopModule();
-
-        // Build a mapping of top-module-relative path to node
-        Dictionary<string, Node> pathToNodes = [];
-
-        // Add existing SubmoduleNodes
-        foreach (SubmoduleNode node in submoduleNodes)
-        {
-            pathToNodes[GetNodeRelativePath(topModule, node)] = node;
-        }
-
-        // Create and add missing SubmoduleFolderNodes
-        foreach (SubmoduleNode node in submoduleNodes)
-        {
-            string[] parts = GetNodeRelativePath(topModule, node).Split(Delimiters.ForwardSlash);
-
-            for (int i = 0; i < parts.Length - 1; ++i)
-            {
-                string path = string.Join("/", parts.Take(i + 1));
-
-                if (!pathToNodes.ContainsKey(path))
-                {
-                    pathToNodes[path] = new SubmoduleFolderNode(this, parts[i]);
-                }
-            }
-        }
-
-        // Add top-module node
-        Validates.NotNull(result.TopProject);
-        SubmoduleNode topModuleNode = new(
-            this,
-            result.TopProject,
-            result.TopProject.Bold,
-            result.TopProject.Bold ? result.CurrentSubmoduleStatus : null,
-            "",
-            result.TopProject.Path);
-
-        // Now build the tree
-        HashSet<Node> nodesInTree = [];
-        foreach (SubmoduleNode node in submoduleNodes)
-        {
-            Node parentNode = topModuleNode;
-            string[] parts = GetNodeRelativePath(topModule, node).Split(Delimiters.ForwardSlash);
-
-            for (int i = 0; i < parts.Length; ++i)
-            {
-                string path = string.Join("/", parts.Take(i + 1));
-                Node nodeToAdd = pathToNodes[path];
-
-                // If node is not already in the tree, add it
-                if (!nodesInTree.Contains(nodeToAdd))
-                {
-                    parentNode.Nodes.AddNode(nodeToAdd);
-                    nodesInTree.Add(nodeToAdd);
-                }
-
-                parentNode = nodeToAdd;
-            }
-        }
-
-        // Compact chains of single-child folder nodes for a cleaner display
-        CompactSingleChildFolderChains(topModuleNode.Nodes);
 
         Nodes nodes = new(this);
-        nodes.AddNode(topModuleNode);
-
+        nodes.AddNode(Convert(built.Root));
         return nodes;
 
-        static void CompactSingleChildFolderChains(Nodes nodes)
+        Node Convert(SubmoduleTreeNode node)
         {
-            foreach (Node node in nodes)
-            {
-                if (node is SubmoduleFolderNode folderNode)
-                {
-                    folderNode.CompactSingleChildFolders();
-                }
+            Node converted = node.IsFolder
+                ? new SubmoduleFolderNode(this, node.Name)
+                : new SubmoduleNode(this, node.Info!, node.IsCurrent, node.GitStatus, node.LocalPath, node.SuperPath);
 
-                CompactSingleChildFolderChains(node.Nodes);
+            foreach (SubmoduleTreeNode child in node.Children)
+            {
+                converted.Nodes.AddNode(Convert(child));
             }
+
+            return converted;
         }
     }
 
