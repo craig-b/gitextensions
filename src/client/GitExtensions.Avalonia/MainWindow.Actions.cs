@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using GitCommands.Actions;
 using GitCommands.Branch;
+using GitCommands.Git;
 using GitCommands.LeftPanel;
 using GitCommands.Rebase;
 using GitCommands.Reset;
@@ -89,6 +90,24 @@ public partial class MainWindow
                 await ReloadLogAsync();
             }
         },
+        ["commit.resetAnotherToHere"] = async revision =>
+        {
+            var (candidates, defaultName) = await Task.Run(() => _session.GetResetAnotherBranchCandidates(revision));
+            if (candidates.Count == 0)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Reset another branch", "No other local branch can be reset to this commit.");
+                return;
+            }
+
+            List<(string Label, Func<Task> Execute)> entries = [.. candidates.Select(candidate =>
+                ($"{(candidate.Name == defaultName ? "★ " : "")}Reset {candidate.Name} to {revision.ObjectId.ToShortString()}",
+                 (Func<Task>)(() => RunOperationAsync($"Reset {candidate.Name}", () => _session.UpdateRefAsync(candidate.CompleteName, revision.ObjectId)))))];
+            await CommandPalette.ShowAsync(this, entries);
+        },
+        ["bisect.good"] = _ => RunOperationAsync("Bisect: mark good", () => _session.ContinueBisectAsync(GitBisectOption.Good)),
+        ["bisect.bad"] = _ => RunOperationAsync("Bisect: mark bad", () => _session.ContinueBisectAsync(GitBisectOption.Bad)),
+        ["bisect.skip"] = _ => RunOperationAsync("Bisect: skip", () => _session.ContinueBisectAsync(GitBisectOption.Skip)),
+        ["bisect.stop"] = _ => RunOperationAsync("Bisect: stop", () => _session.StopBisectAsync()),
         ["stash.apply"] = revision => RunOperationAsync("Apply stash", () => _session.StashApplyAsync(revision.ReflogSelector!)),
         ["stash.pop"] = revision => RunOperationAsync("Pop stash", () => _session.StashPopAsync()),
         ["stash.drop"] = async revision =>

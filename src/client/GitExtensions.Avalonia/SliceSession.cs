@@ -186,6 +186,28 @@ public sealed class SliceSession
 
     public bool InBisect => _module.InTheMiddleOfBisect();
 
+    public Task<(bool Success, string Output)> StartBisectAsync()
+        => Task.Run(() => RunGitOperation(Commands.StartBisect()));
+
+    public Task<(bool Success, string Output)> ContinueBisectAsync(GitBisectOption option)
+        => Task.Run(() => RunGitOperation(Commands.ContinueBisect(option)));
+
+    public Task<(bool Success, string Output)> StopBisectAsync()
+        => Task.Run(() => RunGitOperation(Commands.StopBisect()));
+
+    /// <summary>Points a ref at a commit (the reset-another-branch primitive).</summary>
+    public Task<(bool Success, string Output)> UpdateRefAsync(string refCompleteName, ObjectId targetId)
+        => Task.Run(() => RunGitOperation(Commands.UpdateRef(refCompleteName, targetId)));
+
+    /// <summary>The reset-another-branch candidate list for a revision, model-ordered, with the preselect.</summary>
+    public (IReadOnlyList<IGitRef> Candidates, string? DefaultName) GetResetAnotherBranchCandidates(GitRevision revision)
+    {
+        List<IGitRef> revisionRemotes = [.. (revision.Refs ?? []).Where(r => r.IsRemote)];
+        IReadOnlyList<IGitRef> candidates = GitCommands.Reset.ResetAnotherBranchCandidates.Build(
+            _module.GetRefs(RefsFilter.Heads), revisionRemotes, SelectedBranch, revision.ObjectId);
+        return (candidates, GitCommands.Reset.ResetAnotherBranchCandidates.ResolveDefault(candidates, revisionRemotes));
+    }
+
     public bool IsBareRepository => _module.IsBareRepository();
 
     /// <summary>Runs a pull/fetch built from the portable PullOptions model.</summary>

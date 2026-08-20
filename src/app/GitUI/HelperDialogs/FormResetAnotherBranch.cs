@@ -1,5 +1,6 @@
 using GitCommands;
 using GitCommands.Git;
+using GitCommands.Reset;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI;
@@ -59,26 +60,17 @@ public partial class FormResetAnotherBranch : GitModuleForm
 
     private void InitLocalBranchesWithoutCurrent()
     {
-        string currentBranch = Module.GetSelectedBranch();
-        bool isDetachedHead = currentBranch == DetachedHeadParser.DetachedBranch;
-
         List<IGitRef> selectedRevisionRemotes = [.. _revision.Refs.Where(r => r.IsRemote)];
 
-        _localGitRefs = [.. Module.GetRefs(RefsFilter.Heads)
-            .Where(r => r.IsHead)
-            .Where(r => isDetachedHead || r.LocalName != currentBranch)
-            .Where(r => _revision.ObjectId != r.ObjectId) // Don't display local branches already at this revision
-            .OrderByDescending(r => selectedRevisionRemotes.Any(r.IsTrackingRemote)) // Put local branches that track these remotes first
-            .ThenByDescending(r => selectedRevisionRemotes.Any(r2 => r2.LocalName == r.LocalName))];
+        _localGitRefs = [.. ResetAnotherBranchCandidates.Build(
+            Module.GetRefs(RefsFilter.Heads),
+            selectedRevisionRemotes,
+            Module.GetSelectedBranch(),
+            _revision.ObjectId)];
 
-        if (selectedRevisionRemotes.Count == 1)
+        if (ResetAnotherBranchCandidates.ResolveDefault(_localGitRefs, selectedRevisionRemotes) is string defaultBranch)
         {
-            IGitRef availableRemote = selectedRevisionRemotes[0];
-            IGitRef[] defaultCandidateRefs = [.. _localGitRefs.Where(r => r.IsTrackingRemote(availableRemote) || r.LocalName == availableRemote.LocalName)];
-            if (defaultCandidateRefs.Length == 1)
-            {
-                Branches.Text = defaultCandidateRefs[0].Name;
-            }
+            Branches.Text = defaultBranch;
         }
     }
 
