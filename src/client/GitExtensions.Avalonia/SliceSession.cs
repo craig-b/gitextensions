@@ -328,6 +328,12 @@ public sealed class SliceSession
         // Refs are looked up per revision, the same way the WinForms grid attaches them.
         ILookup<ObjectId, IGitRef> refsByObjectId = _module.GetRefs(RefsFilter.NoFilter).ToLookup(gitRef => gitRef.ObjectId);
 
+        // The WinForms grid's default branch filter (FilterInfo.GetBranchRevisionFilter): all
+        // refs, minus notes/stashes/session refs - so commits reachable only from other
+        // branches or unmerged tags (e.g. release tags) have rows to jump to.
+        string revisionFilter =
+            $"--exclude={GitRefName.RefsNotesPrefix} --exclude={GitRefName.RefsStashPrefix} --exclude={GitRefName.RefsSessionsPrefix}** --all";
+
         RevisionReader reader = new(_module, allBodies: false);
         reader.GetLog(
             new BatchObserver(
@@ -342,7 +348,7 @@ public sealed class SliceSession
                 },
                 onCompleted,
                 onError),
-            revisionFilter: "HEAD",
+            revisionFilter: revisionFilter,
             pathFilter: "",
             hasNotes: false,
             autostashLabel: "autostash",

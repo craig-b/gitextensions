@@ -287,6 +287,16 @@ public partial class MainWindow : Window
                                 _ = RunScrollBenchmarkAsync();
                             }
 
+                            // Verification hook: resolve a ref and jump to it, reporting whether
+                            // the commit has a row (regression check for the log's ref coverage).
+                            if (Environment.GetEnvironmentVariable("GE_SPIKE_JUMPTEST") is string jumpRef)
+                            {
+                                ObjectId? jumpId = _session.ResolveRef(jumpRef);
+                                bool jumped = jumpId is ObjectId id && LogControl.TryJumpTo(id);
+                                Console.Error.WriteLine($"[jump] {jumpRef} -> {jumpId?.ToShortString() ?? "unresolved"}: {(jumped ? "OK" : "NO ROW")}");
+                                Environment.Exit(jumped ? 0 : 1);
+                            }
+
                             // Verification hook: park the view at a fixed row so the rendering
                             // can be compared against the reference topology at that position.
                             if (int.TryParse(Environment.GetEnvironmentVariable("GE_SPIKE_SCROLLTO"), out int scrollTo))
