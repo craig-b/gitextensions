@@ -76,6 +76,23 @@ public partial class MainWindow : Window
             };
         }
 
+        // Verification hook: build the recents menu model from the real history store and report
+        // its shape (pinned/recent/favourite-group counts and the first caption).
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_RECENTTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                var recent = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+                var favourites = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync();
+                var options = GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions.FromAppSettings();
+                var model = GitCommands.UserRepositoryHistory.RecentRepositoryMenu.BuildRecent(recent, options, _ => null);
+                var groups = GitCommands.UserRepositoryHistory.RecentRepositoryMenu.BuildFavourites(favourites, options, _ => null);
+                string first = model.Pinned.Concat(model.Recent).FirstOrDefault()?.Caption ?? "<none>";
+                Console.Error.WriteLine($"[recent] pinned:{model.Pinned.Count} recent:{model.Recent.Count} favGroups:{groups.Count} first:{first}");
+                Environment.Exit(model.Pinned.Count + model.Recent.Count > 0 ? 0 : 1);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_OPSTEST") == "1")
         {
             Loaded += async (_, _) =>
@@ -669,6 +686,139 @@ public partial class MainWindow : Window
 
         Title = $"Git Extensions - {_session.WorkingDir}";
         await ReloadLogAsync();
+    }
+
+    // Branch names for the recents menu, shared portable cache + the WinForms dedup policy.
+    private readonly GitUI.IRepositoryCurrentBranchNameCache _recentBranchNames =
+        new GitUI.RepositoryCurrentBranchNameCache(
+            new GitUI.RepositoryCurrentBranchNameProvider(new GitCommands.GitExecutorProvider(new GitCommands.Git.GitDirectoryResolver())));
+    private GitCommands.UserRepositoryHistory.BranchNameCacheUpdatePolicy? _recentBranchNamePolicy;
+
+    private async void OnRecentReposClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> recent =
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> favourites =
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync();
+
+        TriggerRecentBranchNameUpdate(onlyIfEmpty: true, recent, favourites);
+
+        GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions options =
+            GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions.FromAppSettings();
+        GitCommands.UserRepositoryHistory.RecentRepositoriesMenuModel model =
+            GitCommands.UserRepositoryHistory.RecentRepositoryMenu.BuildRecent(recent, options, _recentBranchNames.GetCachedBranchName);
+        System.Collections.Generic.IReadOnlyList<GitCommands.UserRepositoryHistory.FavouriteCategoryGroup> favouriteGroups =
+            GitCommands.UserRepositoryHistory.RecentRepositoryMenu.BuildFavourites(favourites, options, _recentBranchNames.GetCachedBranchName);
+
+        MenuFlyout flyout = new();
+
+        if (favouriteGroups.Count > 0)
+        {
+            MenuItem favouritesRoot = new() { Header = Loc.T("Favourites") };
+            foreach (GitCommands.UserRepositoryHistory.FavouriteCategoryGroup group in favouriteGroups)
+            {
+                MenuItem category = new() { Header = group.Category ?? Loc.T("(no category)") };
+                foreach (GitCommands.UserRepositoryHistory.RepoMenuEntry entry in group.Entries)
+                {
+                    category.Items.Add(MakeItem(entry));
+                }
+
+                favouritesRoot.Items.Add(category);
+            }
+
+            flyout.Items.Add(favouritesRoot);
+            flyout.Items.Add(new Separator());
+        }
+
+        foreach (GitCommands.UserRepositoryHistory.RepoMenuEntry entry in model.Pinned)
+        {
+            flyout.Items.Add(MakeItem(entry));
+        }
+
+        if (model.ShowSeparator)
+        {
+            flyout.Items.Add(new Separator());
+        }
+
+        foreach (GitCommands.UserRepositoryHistory.RepoMenuEntry entry in model.Recent)
+        {
+            flyout.Items.Add(MakeItem(entry));
+        }
+
+        if (model.Pinned.Count > 0 || model.Recent.Count > 0)
+        {
+            flyout.Items.Add(new Separator());
+        }
+
+        MenuItem openItem = new() { Header = Loc.T("Open repository...") };
+        openItem.Click += OnOpenRepositoryClick;
+        flyout.Items.Add(openItem);
+
+        flyout.ShowAt((Control)sender!);
+
+        MenuItem MakeItem(GitCommands.UserRepositoryHistory.RepoMenuEntry entry)
+        {
+            string pin = entry.IsPinned ? "\U0001F4CC " : "";
+            string branch = entry.BranchName is null ? "" : $"  ({entry.BranchName})";
+            MenuItem item = new() { Header = $"{pin}{entry.Number}: {entry.Caption}{branch}" };
+            if (entry.Tooltip is not null)
+            {
+                ToolTip.SetTip(item, entry.Tooltip);
+            }
+
+            string path = entry.Repo.Path;
+            item.Click += async (_, _) => await OpenRecentAsync(path);
+            return item;
+        }
+    }
+
+    /// <summary>Opens a repository from the recents menu, offering the WinForms invalid-repository cleanup when it went stale.</summary>
+    internal async Task OpenRecentAsync(string path)
+    {
+        if (GitCommands.Open.OpenRepositoryModel.TryGetOpenablePath(path, System.IO.Directory.Exists, GitCommands.GitModule.IsValidGitWorkingDir) is string openablePath)
+        {
+            await SwitchRepositoryAsync(openablePath);
+            return;
+        }
+
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> history =
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+        GitCommands.Open.InvalidRepositoryPromptOptions options = GitCommands.Open.InvalidRepositoryPromptOptions.Evaluate(
+            history.Select(r => r.Path), GitCommands.GitModule.IsValidGitWorkingDir);
+
+        if (!await ConfirmDialog.ConfirmAsync(this, Loc.T("Open repository"),
+                string.Format(Loc.T("'{0}' is not a valid git repository. Remove it from the recent repositories?"), path)))
+        {
+            return;
+        }
+
+        await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveRecentAsync(path);
+
+        if (options.OfferRemoveAll
+            && await ConfirmDialog.ConfirmAsync(this, Loc.T("Open repository"),
+                string.Format(Loc.T("Remove all {0} invalid repositories from the recent list?"), options.InvalidCount)))
+        {
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveInvalidRepositoriesAsync(
+                repoPath => GitCommands.GitModule.IsValidGitWorkingDir(repoPath));
+        }
+    }
+
+    private void TriggerRecentBranchNameUpdate(
+        bool onlyIfEmpty,
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> recent,
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> favourites)
+    {
+        _recentBranchNamePolicy ??= new GitCommands.UserRepositoryHistory.BranchNameCacheUpdatePolicy(_recentBranchNames);
+        if (!_recentBranchNamePolicy.ShouldUpdate(onlyIfEmpty))
+        {
+            return;
+        }
+
+        string[] paths = [.. recent.Concat(favourites).Select(r => r.Path).Distinct(StringComparer.InvariantCulture)];
+        if (paths.Length > 0)
+        {
+            _ = Task.Run(() => GitCommands.UserRepositoryHistory.BranchNameCacheUpdater.UpdateBranchNames(paths, _recentBranchNames, CancellationToken.None));
+        }
     }
 
     /// <summary>The Colors page's variant choice, applied application-wide (blank follows the system).</summary>

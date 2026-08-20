@@ -9,6 +9,7 @@
 
         <StackPanel Grid.Row="0" Grid.ColumnSpan="5" Orientation="Horizontal" Spacing="8" Margin="8,6">
             <Button x:Name="OpenRepositoryButton" Content="Open..." Click="OnOpenRepositoryClick" />
+            <Button x:Name="RecentReposButton" Content="Recent" Click="OnRecentReposClick" />
             <Button x:Name="CommitToolButton" Content="Commit..." Click="OnOpenCommitClick" />
             <Button x:Name="FetchButton" Content="Fetch" Click="OnFetchClick" />
             <Button x:Name="PullButton" Content="Pull" Click="OnPullClick" />

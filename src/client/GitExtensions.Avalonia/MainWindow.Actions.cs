@@ -772,6 +772,19 @@ public partial class MainWindow
         }));
         entries.Add(("Update all submodules", () => RunOperationAsync("Update submodules", _session.UpdateSubmodulesAsync)));
 
+        System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> recentRepos =
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+        GitCommands.UserRepositoryHistory.RecentRepositoriesMenuModel recentModel =
+            GitCommands.UserRepositoryHistory.RecentRepositoryMenu.BuildRecent(
+                recentRepos,
+                GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions.FromAppSettings(),
+                _recentBranchNames.GetCachedBranchName);
+        foreach (GitCommands.UserRepositoryHistory.RepoMenuEntry recentEntry in recentModel.Pinned.Concat(recentModel.Recent))
+        {
+            string repoPath = recentEntry.Repo.Path;
+            entries.Add(($"Open recent: {recentEntry.Caption}", () => OpenRecentAsync(repoPath)));
+        }
+
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))
         {
