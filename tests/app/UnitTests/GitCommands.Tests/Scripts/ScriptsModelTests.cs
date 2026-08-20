@@ -82,6 +82,66 @@ public sealed class ScriptsModelTests
     }
 
     [Test]
+    public void Safe_expansion_keeps_repo_content_out_of_the_shell_command()
+    {
+        string malicious = "\"; rm -rf ~; $(touch pwned) `id` #";
+        ScriptTokenContext context = new(SelectedSubject: malicious, CurrentBranch: "main");
+
+        ExpandedScript posix = ScriptTokenSubstitution.ExpandSafe(
+            "notify {selected.subject} on {current.branch}", context, new Dictionary<string, string>(), ScriptInterpreterKind.PosixShell);
+
+        posix.Command.Should().Be("notify \"$GE_SCRIPT_SELECTED_SUBJECT\" on \"$GE_SCRIPT_CURRENT_BRANCH\"");
+        posix.Command.Should().NotContain("rm -rf");
+        posix.Environment["GE_SCRIPT_SELECTED_SUBJECT"].Should().Be(malicious);
+        posix.Environment["GE_SCRIPT_CURRENT_BRANCH"].Should().Be("main");
+    }
+
+    [Test]
+    public void Safe_expansion_uses_each_interpreters_reference_syntax()
+    {
+        ScriptTokenContext context = new(CurrentBranch: "main");
+
+        ScriptTokenSubstitution.ExpandSafe("x {current.branch}", context, new Dictionary<string, string>(), ScriptInterpreterKind.Cmd)
+            .Command.Should().Be("x %GE_SCRIPT_CURRENT_BRANCH%");
+        ScriptTokenSubstitution.ExpandSafe("x {current.branch}", context, new Dictionary<string, string>(), ScriptInterpreterKind.PowerShell)
+            .Command.Should().Be("x $env:GE_SCRIPT_CURRENT_BRANCH");
+        ScriptTokenSubstitution.ExpandSafe("x {cBranch}", context, new Dictionary<string, string>(), ScriptInterpreterKind.PosixShell)
+            .Command.Should().Be("x \"$GE_SCRIPT_CURRENT_BRANCH\"");
+    }
+
+    [Test]
+    public void Safe_expansion_quotes_argv_for_direct_interpreters()
+    {
+        ScriptTokenContext context = new(SelectedSubject: "say \"hi\" \\ there");
+
+        ExpandedScript direct = ScriptTokenSubstitution.ExpandSafe(
+            "{selected.subject}", context, new Dictionary<string, string>(), ScriptInterpreterKind.Direct);
+
+        direct.Command.Should().Be("\"say \\\"hi\\\" \\\\ there\"");
+        direct.Environment.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Safe_expansion_routes_prompts_through_the_environment()
+    {
+        ExpandedScript expanded = ScriptTokenSubstitution.ExpandSafe(
+            "tag {prompt:Version?}", new ScriptTokenContext(),
+            new Dictionary<string, string> { ["Version?"] = "1.0; rm x" }, ScriptInterpreterKind.PosixShell);
+
+        expanded.Command.Should().Be("tag \"$GE_SCRIPT_PROMPT_0\"");
+        expanded.Environment["GE_SCRIPT_PROMPT_0"].Should().Be("1.0; rm x");
+    }
+
+    [Test]
+    public void Interpreter_classification()
+    {
+        ScriptInterpreter.Classify("bash").Should().Be(ScriptInterpreterKind.PosixShell);
+        ScriptInterpreter.Classify("pwsh").Should().Be(ScriptInterpreterKind.PowerShell);
+        ScriptInterpreter.Classify("cmd").Should().Be(ScriptInterpreterKind.Cmd);
+        ScriptInterpreter.Classify("/usr/bin/notify-send").Should().Be(ScriptInterpreterKind.Direct);
+    }
+
+    [Test]
     public void Interpreter_resolution()
     {
         ScriptInterpreter.Resolve("shell", "echo hi", isWindows: false).Should().Be(("/bin/sh", "-c \"echo hi\""));

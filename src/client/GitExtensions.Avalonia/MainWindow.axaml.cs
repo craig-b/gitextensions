@@ -140,6 +140,18 @@ public partial class MainWindow : Window
                 await RunScriptAsync(_scripts[0], _selectedRevision, refName: null);
                 Console.Error.WriteLine($"[scripts] ran: {OperationStatus.Text}");
 
+                // Injection probe: the selected subject carries shell metacharacters; the safe
+                // expansion must deliver it verbatim without executing anything.
+                GitCommands.Scripts.ExpandedScript probe = GitCommands.Scripts.ScriptTokenSubstitution.ExpandSafe(
+                    "echo subject={selected.subject}",
+                    new GitCommands.Scripts.ScriptTokenContext(SelectedSubject: _selectedRevision?.Subject),
+                    new Dictionary<string, string>(),
+                    GitCommands.Scripts.ScriptInterpreterKind.PosixShell);
+                (string probeFile, string probeArguments) = GitCommands.Scripts.ScriptInterpreter.Resolve("shell", probe.Command, OperatingSystem.IsWindows());
+                (bool probeOk, string probeOut) = await _session.RunProcessAsync(probeFile, probeArguments, probe.Environment);
+                bool injected = System.IO.File.Exists(System.IO.Path.Combine(_session.WorkingDir, "injected"));
+                Console.Error.WriteLine($"[scripts] injection probe: ok={probeOk} output={probeOut.Trim()} | injected file created: {injected}");
+
                 IReadOnlyList<(string Name, string Expansion)> aliases = await _session.GetGitAliasesAsync();
                 Console.Error.WriteLine($"[scripts] aliases: {string.Join(", ", aliases.Select(alias => $"{alias.Name}={alias.Expansion}"))}");
                 Environment.Exit(0);

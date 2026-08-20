@@ -143,6 +143,100 @@ public static class ScriptTokenSubstitution
         ["UserInput"] = "prompt:Enter a value",
     };
 
+    /// <summary>
+    ///  The injection-safe expansion used by runners: token VALUES never enter the command
+    ///  text (they are repo content - commit subjects, branch names - i.e. untrusted).
+    ///  Each referenced token becomes an environment variable, and the command gets the
+    ///  interpreter's env-reference syntax spliced in instead of the value. Direct-exec
+    ///  interpreters get argv-quoted inline values (no shell ever parses them).
+    /// </summary>
+    public static ExpandedScript ExpandSafe(
+        string command,
+        ScriptTokenContext context,
+        IReadOnlyDictionary<string, string> promptAnswers,
+        ScriptInterpreterKind interpreterKind)
+    {
+        foreach ((string legacy, string canonical) in LegacyAliases)
+        {
+            command = command.Replace($"{{{legacy}}}", $"{{{canonical}}}");
+        }
+
+        Dictionary<string, string> environment = new(StringComparer.Ordinal);
+
+        foreach ((string token, string? value) in TokenValues(context))
+        {
+            string placeholder = $"{{{token}}}";
+            if (!command.Contains(placeholder, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            command = command.Replace(placeholder, Reference(token, value ?? "", environment, interpreterKind));
+        }
+
+        int promptIndex = 0;
+        int promptStart;
+        while ((promptStart = command.IndexOf("{prompt:", StringComparison.Ordinal)) >= 0)
+        {
+            int promptEnd = command.IndexOf('}', promptStart);
+            if (promptEnd < 0)
+            {
+                break;
+            }
+
+            string question = command[(promptStart + "{prompt:".Length)..promptEnd];
+            string answer = promptAnswers.GetValueOrDefault(question, "");
+            string reference = Reference($"prompt.{promptIndex++}", answer, environment, interpreterKind);
+            command = command[..promptStart] + reference + command[(promptEnd + 1)..];
+        }
+
+        return new ExpandedScript(command, environment);
+
+        static string Reference(string token, string value, Dictionary<string, string> environment, ScriptInterpreterKind kind)
+        {
+            if (kind is ScriptInterpreterKind.Direct)
+            {
+                // No shell parses this - quote for argv splitting only.
+                return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            }
+
+            string variable = "GE_SCRIPT_" + token.ToUpperInvariant().Replace('.', '_');
+            environment[variable] = value;
+            return kind switch
+            {
+                ScriptInterpreterKind.Cmd => $"%{variable}%",
+                ScriptInterpreterKind.PowerShell => $"$env:{variable}",
+                _ => $"\"${variable}\"",
+            };
+        }
+
+        static IEnumerable<(string Token, string? Value)> TokenValues(ScriptTokenContext context)
+        {
+            yield return ("selected.hash", context.SelectedHash);
+            yield return ("selected.hashes", context.SelectedHashes);
+            yield return ("selected.subject", context.SelectedSubject);
+            yield return ("selected.message", context.SelectedMessage);
+            yield return ("selected.author", context.SelectedAuthor);
+            yield return ("selected.branch", context.SelectedBranch);
+            yield return ("selected.tag", context.SelectedTag);
+            yield return ("selected.remoteBranch", context.SelectedRemoteBranch);
+            yield return ("selected.remote", context.SelectedRemote);
+            yield return ("selected.remoteUrl", context.SelectedRemoteUrl);
+            yield return ("current.branch", context.CurrentBranch);
+            yield return ("current.hash", context.CurrentHash);
+            yield return ("current.remote", context.CurrentRemote);
+            yield return ("current.remoteUrl", context.CurrentRemoteUrl);
+            yield return ("repo.name", context.RepoName);
+            yield return ("repo.dir", context.RepoDir);
+            yield return ("ref.name", context.RefName);
+        }
+    }
+
+    /// <summary>
+    ///  PREVIEW ONLY: inline textual expansion. Never feed this to a shell - repo-derived
+    ///  token values would be parsed as shell syntax (command injection). Runners use
+    ///  <see cref="ExpandSafe"/>.
+    /// </summary>
     public static string Expand(string command, ScriptTokenContext context, Func<string, string?> prompt)
     {
         // Rewrite legacy tokens to their canonical spelling first, then substitute once.
@@ -244,9 +338,30 @@ public static class ScriptActions
                 Hotkey: definition.Hotkey))];
 }
 
+public enum ScriptInterpreterKind
+{
+    PosixShell,
+    Cmd,
+    PowerShell,
+    Direct,
+}
+
+/// <summary>The injection-safe expansion: static command text + the values as environment variables.</summary>
+public sealed record ExpandedScript(string Command, IReadOnlyDictionary<string, string> Environment);
+
 /// <summary>How an interpreter choice maps to a process invocation.</summary>
 public static class ScriptInterpreter
 {
+    public static ScriptInterpreterKind Classify(string interpreter)
+        => (string.IsNullOrWhiteSpace(interpreter) ? "shell" : interpreter.Trim().ToLowerInvariant()) switch
+        {
+            "shell" => OperatingSystem.IsWindows() ? ScriptInterpreterKind.Cmd : ScriptInterpreterKind.PosixShell,
+            "cmd" => ScriptInterpreterKind.Cmd,
+            "bash" or "sh" or "zsh" => ScriptInterpreterKind.PosixShell,
+            "pwsh" or "powershell" => ScriptInterpreterKind.PowerShell,
+            _ => ScriptInterpreterKind.Direct,
+        };
+
     /// <summary>
     ///  "shell" (or blank) is sh -c / cmd /c per platform; bash/sh/zsh use -c, pwsh and
     ///  powershell use -Command, cmd uses /c; anything else runs the interpreter with the

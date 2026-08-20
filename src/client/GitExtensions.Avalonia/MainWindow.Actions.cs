@@ -411,16 +411,19 @@ public partial class MainWindow
             RepoDir: _session.WorkingDir,
             RefName: refName);
 
-        string expanded = GitCommands.Scripts.ScriptTokenSubstitution.Expand(script.Command, context, question => answers.GetValueOrDefault(question, ""));
-        (string fileName, string arguments) = GitCommands.Scripts.ScriptInterpreter.Resolve(script.Interpreter, expanded, OperatingSystem.IsWindows());
+        // Token values are repo content (subjects, branch names) - they reach the process
+        // as environment variables, never as shell-parsed command text (injection-safe).
+        GitCommands.Scripts.ScriptInterpreterKind kind = GitCommands.Scripts.ScriptInterpreter.Classify(script.Interpreter);
+        GitCommands.Scripts.ExpandedScript expanded = GitCommands.Scripts.ScriptTokenSubstitution.ExpandSafe(script.Command, context, answers, kind);
+        (string fileName, string arguments) = GitCommands.Scripts.ScriptInterpreter.Resolve(script.Interpreter, expanded.Command, OperatingSystem.IsWindows());
 
         if (script.RunInBackground)
         {
-            _ = _session.RunProcessAsync(fileName, arguments);
+            _ = _session.RunProcessAsync(fileName, arguments, expanded.Environment);
             return;
         }
 
-        await RunOperationAsync(script.Caption, () => _session.RunProcessAsync(fileName, arguments));
+        await RunOperationAsync(script.Caption, () => _session.RunProcessAsync(fileName, arguments, expanded.Environment));
     }
 
     /// <summary>Dispatches a registry hotkey against the current selection (text inputs keep their keys).</summary>

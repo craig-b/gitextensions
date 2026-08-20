@@ -177,7 +177,7 @@ public sealed class SliceSession
         => Task.Run(() => RunGitOperation(Commands.Rebase(new Commands.RebaseOptions { BranchName = onto })));
 
     /// <summary>Runs an arbitrary process in the repo (the scripts engine's runner).</summary>
-    public Task<(bool Success, string Output)> RunProcessAsync(string fileName, string arguments)
+    public Task<(bool Success, string Output)> RunProcessAsync(string fileName, string arguments, IReadOnlyDictionary<string, string>? environment = null)
         => Task.Run(() =>
         {
             System.Diagnostics.ProcessStartInfo startInfo = new()
@@ -189,6 +189,11 @@ public sealed class SliceSession
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
+
+            foreach ((string name, string value) in environment ?? new Dictionary<string, string>())
+            {
+                startInfo.Environment[name] = value;
+            }
 
             using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)!;
             string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
