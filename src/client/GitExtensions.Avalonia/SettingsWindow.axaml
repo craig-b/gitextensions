@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GitExtensions.Avalonia.SettingsWindow"
+        Title="Settings"
+        Width="780" Height="600"
+        WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="*,Auto" ColumnDefinitions="190,4,*">
+
+        <ListBox x:Name="PageList" Grid.Column="0" Grid.Row="0" SelectionChanged="OnPageSelectionChanged" />
+
+        <GridSplitter Grid.Column="1" Grid.Row="0" Background="#40808080" ResizeDirection="Columns" />
+
+        <ScrollViewer Grid.Column="2" Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="PagePanel" Margin="16,12" Spacing="6" />
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="12,8">
+            <Button x:Name="OkButton" Content="OK" MinWidth="80" Click="OnOkClick" />
+            <Button x:Name="CancelButton" Content="Cancel" MinWidth="80" Click="OnCancelClick" />
+            <Button x:Name="ApplyButton" Content="Apply" MinWidth="80" Click="OnApplyClick" />
+        </StackPanel>
+    </Grid>
+</Window>

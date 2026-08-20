@@ -51,6 +51,19 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_SETTINGSTEST") is string settingsSnapshotDirectory)
+        {
+            Loaded += async (_, _) =>
+            {
+                SettingsWindow settingsWindow = new();
+                Task harness = null!;
+                settingsWindow.Loaded += (_, _) => harness = settingsWindow.RunHarnessAsync(settingsSnapshotDirectory);
+                await settingsWindow.ShowDialog(this);
+                await harness;
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_COMMITTEST") is string snapshotDirectory)
         {
             Loaded += async (_, _) =>
@@ -223,6 +236,12 @@ public partial class MainWindow : Window
         {
             await ReloadLogAsync();
         }
+    }
+
+    private async void OnSettingsClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        SettingsWindow settingsWindow = new();
+        await settingsWindow.ShowDialog(this);
     }
 
     /// <summary>

@@ -13,6 +13,7 @@
             <Button x:Name="PullButton" Content="Pull" Click="OnPullClick" />
             <Button x:Name="PushButton" Content="Push" Click="OnPushClick" />
             <Button x:Name="NewBranchButton" Content="New branch..." Click="OnNewBranchClick" />
+            <Button x:Name="SettingsButton" Content="Settings..." Click="OnSettingsClick" />
             <TextBlock x:Name="BranchInfo" VerticalAlignment="Center" FontSize="12" Foreground="Gray" Margin="8,0,0,0" />
             <TextBlock x:Name="OperationStatus" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />
         </StackPanel>
