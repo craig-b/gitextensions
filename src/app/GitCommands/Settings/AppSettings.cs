@@ -1016,6 +1016,20 @@ public static partial class AppSettings
         set => SetEnum("DefaultPullAction", value);
     }
 
+    /// <summary>The context-menu profile: Simple, Normal, or Custom.</summary>
+    public static Actions.MenuProfileMode MenuProfileMode
+    {
+        get => GetEnum("MenuProfileMode", Actions.MenuProfileMode.Normal);
+        set => SetEnum("MenuProfileMode", value);
+    }
+
+    /// <summary>Whether inapplicable menu items are grayed (positional stability) or hidden.</summary>
+    public static Actions.InapplicableItemPolicy MenuInapplicableItemPolicy
+    {
+        get => GetEnum("MenuInapplicableItemPolicy", Actions.InapplicableItemPolicy.Gray);
+        set => SetEnum("MenuInapplicableItemPolicy", value);
+    }
+
     /// <summary>
     /// Gets or sets the default pull action as configured in the FormPull dialog.
     /// </summary>

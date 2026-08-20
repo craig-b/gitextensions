@@ -18,7 +18,8 @@ namespace GitExtensions.Avalonia;
 /// </summary>
 public partial class MainWindow
 {
-    private static readonly MenuProfile _menuProfile = MenuProfile.Normal;
+    private static MenuProfile _menuProfile
+        => new(GitCommands.AppSettings.MenuProfileMode, GitCommands.AppSettings.MenuInapplicableItemPolicy);
 
     private GridCommitMenuContext CommitMenuContext(GitRevision revision) => new(
         IsArtificial: revision.IsArtificial,

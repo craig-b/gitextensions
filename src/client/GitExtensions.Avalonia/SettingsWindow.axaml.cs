@@ -46,6 +46,7 @@ public partial class SettingsWindow : Window
             ("Blame viewer", new BlameViewerPageModel(), null),
             ("Sorting", new SortingPageModel(), null),
             ("Browse repository window", new BrowseRepoPageModel(), null),
+            ("Menus", new MenusPageModel(), null),
             ("Git: Paths", new GitPathsPageModel(), null),
             ("Git: Config", new GitConfigPageModel(() => gitConfigSource, () => true), saveGitConfig),
             ("Git: Advanced", new GitConfigAdvancedPageModel(() => gitConfigSource), saveGitConfig),
