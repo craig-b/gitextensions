@@ -6,8 +6,8 @@ namespace GitCommandsTests.Stash;
 
 public sealed class StashModelTests
 {
-    private static readonly ObjectId Head = ObjectId.Parse("3333333333333333333333333333333333333333");
-    private static readonly ObjectId StashId = ObjectId.Parse("4444444444444444444444444444444444444444");
+    private static readonly ObjectId Head = ObjectId.Parse("aaaa111111111111111111111111111111111111");
+    private static readonly ObjectId StashId = ObjectId.Parse("bbbb222222222222222222222222222222222222");
 
     [TestCase("stash@{0}", 1)]
     [TestCase("stash@{4}", 5)]

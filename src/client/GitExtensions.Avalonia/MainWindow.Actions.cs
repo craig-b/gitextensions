@@ -63,6 +63,19 @@ public partial class MainWindow
 
             await RunOperationAsync($"Reset ({mode.Value}) to {revision.ObjectId.ToShortString()}", () => _session.ResetAsync(mode.Value, revision.ObjectId));
         },
+        ["commit.createTag"] = async revision =>
+        {
+            if (await CreateTagDialog.ShowAsync(this, revision.ObjectId, _session.ResolveTagPushRemote()) is not (var args, var pushIt))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Create tag {args.TagName}", () => _session.CreateTagAsync(args));
+            if (pushIt)
+            {
+                await RunOperationAsync($"Push tag {args.TagName}", () => _session.PushTagAsync(_session.ResolveTagPushRemote(), args.TagName));
+            }
+        },
         ["copy.hash"] = revision => CopyToClipboardAsync(revision.ObjectId.ToString()),
         ["copy.message"] = revision => CopyToClipboardAsync(revision.Body ?? revision.Subject),
         ["copy.author"] = revision => CopyToClipboardAsync($"{revision.Author} <{revision.AuthorEmail}>"),

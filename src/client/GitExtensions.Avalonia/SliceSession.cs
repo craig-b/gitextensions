@@ -5,6 +5,8 @@ using GitCommands;
 using GitCommands.Branch;
 using GitCommands.Commit;
 using GitCommands.Git;
+using GitCommands.Git.Extensions;
+using GitCommands.Git.Tag;
 using GitCommands.Merge;
 using GitCommands.LeftPanel;
 using GitCommands.RichText;
@@ -145,6 +147,36 @@ public sealed class SliceSession
 
     public Task<(bool Success, string Output)> DeleteTagAsync(string tagName)
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("tag") { "-d", tagName.QuoteNE() }));
+
+    /// <summary>Creates a tag from the portable GitCreateTagArgs (the GitTagController message-file protocol).</summary>
+    public Task<(bool Success, string Output)> CreateTagAsync(GitCreateTagArgs args)
+        => Task.Run(() =>
+        {
+            string? messageFile = null;
+            if (args.Operation.CanProvideMessage())
+            {
+                messageFile = System.IO.Path.Join(_module.WorkingDirGitDir, "TAGMESSAGE");
+                System.IO.File.WriteAllText(messageFile, args.TagMessage);
+            }
+
+            try
+            {
+                return RunGitOperation(Commands.CreateTag(args, messageFile, _module.GetPathForGitExecution).Arguments);
+            }
+            finally
+            {
+                if (messageFile is not null && System.IO.File.Exists(messageFile))
+                {
+                    System.IO.File.Delete(messageFile);
+                }
+            }
+        });
+
+    public Task<(bool Success, string Output)> PushTagAsync(string remote, string tagName)
+        => Task.Run(() => RunGitOperation(Commands.PushTag(remote, tagName, all: false)));
+
+    /// <summary>The remote a created tag is offered to push to.</summary>
+    public string ResolveTagPushRemote() => TagDialogModel.ResolvePushRemote(_module.GetCurrentRemote());
 
     public Task<(bool Success, string Output)> StashApplyAsync(string reflogSelector)
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "apply", reflogSelector.QuoteNE() }));

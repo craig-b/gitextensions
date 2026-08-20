@@ -518,6 +518,14 @@ public static partial class Commands
         };
     }
 
+    /// <summary>Deletes a tag on the remote by pushing an empty source to its ref.</summary>
+    public static ArgumentString DeleteRemoteTag(string remote, string tagName)
+        => new GitArgumentBuilder("push")
+        {
+            remote.Trim().Quote(),
+            $":refs/tags/{tagName.Replace(" ", "")}"
+        };
+
     public static ArgumentString Rebase(in RebaseOptions rebaseOptions)
     {
         // TODO-NULLABLE does it make sense for 'branch' to be null here?

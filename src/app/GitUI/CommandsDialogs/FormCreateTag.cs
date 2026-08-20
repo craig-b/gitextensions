@@ -33,15 +33,7 @@ public sealed partial class FormCreateTag : GitModuleForm
 
         tagMessage.MistakeFont = new Font(tagMessage.MistakeFont, FontStyle.Underline);
 
-        if (objectId.IsArtificial)
-        {
-            objectId = default;
-        }
-
-        if (objectId.IsZero)
-        {
-            objectId = Module.GetCurrentCheckout();
-        }
+        objectId = TagDialogModel.NormalizeTarget(objectId, Module.GetCurrentCheckout);
 
         if (!objectId.IsZero)
         {
@@ -54,12 +46,7 @@ public sealed partial class FormCreateTag : GitModuleForm
     private void FormCreateTag_Load(object sender, EventArgs e)
     {
         textBoxTagName.Select();
-        _currentRemote = Module.GetCurrentRemote();
-        if (string.IsNullOrEmpty(_currentRemote))
-        {
-            _currentRemote = "origin";
-        }
-
+        _currentRemote = TagDialogModel.ResolvePushRemote(Module.GetCurrentRemote());
         pushTag.Text = string.Format(_pushToCaption.Text, _currentRemote);
     }
 
@@ -131,23 +118,13 @@ public sealed partial class FormCreateTag : GitModuleForm
 
     private void AnnotateDropDownChanged(object sender, EventArgs e)
     {
-        TagOperation tagOperation = GetSelectedOperation(annotate.SelectedIndex);
-        textBoxGpgKey.Enabled = tagOperation == TagOperation.SignWithSpecificKey;
-        keyIdLbl.Enabled = tagOperation == TagOperation.SignWithSpecificKey;
-        bool providesMessage = tagOperation.CanProvideMessage();
-        tagMessage.Enabled = providesMessage;
-        tagMessage.BorderStyle = providesMessage ? BorderStyle.FixedSingle : BorderStyle.None;
+        TagOptionAvailability availability = TagOptionAvailability.Evaluate(GetSelectedOperation(annotate.SelectedIndex));
+        textBoxGpgKey.Enabled = availability.GpgKeyEnabled;
+        keyIdLbl.Enabled = availability.GpgKeyEnabled;
+        tagMessage.Enabled = availability.MessageEnabled;
+        tagMessage.BorderStyle = availability.MessageEnabled ? BorderStyle.FixedSingle : BorderStyle.None;
     }
 
     private static TagOperation GetSelectedOperation(int dropdownSelection)
-    {
-        return dropdownSelection switch
-        {
-            0 => TagOperation.Lightweight,
-            1 => TagOperation.Annotate,
-            2 => TagOperation.SignWithDefaultKey,
-            3 => TagOperation.SignWithSpecificKey,
-            _ => throw new NotSupportedException("Invalid dropdownSelection")
-        };
-    }
+        => TagDialogModel.OperationChoices[dropdownSelection];
 }
