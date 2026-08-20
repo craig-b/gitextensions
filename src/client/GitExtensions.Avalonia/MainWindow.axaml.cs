@@ -79,6 +79,28 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_COMPARETEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(4000);
+                ObjectId head = _session.CurrentCheckout;
+                ObjectId? older = _session.ResolveRef("HEAD~5");
+                if (older is null)
+                {
+                    Console.Error.WriteLine("[compare] HEAD~5 unresolvable");
+                    Environment.Exit(1);
+                    return;
+                }
+
+                CompareWindow compareWindow = new(_session, older.Value, "HEAD~5", head, "HEAD");
+                compareWindow.Show(this);
+                var (files, inlines) = await compareWindow.ProbeAsync();
+                Console.Error.WriteLine($"[compare] HEAD~5..HEAD: {files} files, first diff {inlines} inlines");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_REMOTESTEST") == "1")
         {
             Loaded += (_, _) =>

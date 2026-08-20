@@ -536,6 +536,18 @@ public sealed class SliceSession
 
     public GitRevision GetRevision(ObjectId objectId) => _module.GetRevision(objectId);
 
+    /// <summary>The changed files between two revisions (the compare window's list).</summary>
+    public IReadOnlyList<GitItemStatus> GetDiffFilesBetween(ObjectId firstId, ObjectId secondId, CancellationToken cancellationToken)
+        => _module.GetDiffFilesWithUntracked(
+            firstId == ObjectId.WorkTreeId ? null : firstId.ToString(),
+            secondId == ObjectId.WorkTreeId ? null : secondId.ToString(),
+            GitExtensions.Extensibility.Git.StagedStatus.None,
+            cancellationToken: cancellationToken);
+
+    /// <summary>The compare window's merge base (model rules over Module.GetMergeBase).</summary>
+    public ObjectId? ResolveMergeBase(ObjectId firstId, ObjectId secondId)
+        => GitCommands.Compare.CompareRevisions.ResolveMergeBase(firstId, secondId, () => CurrentCheckout, _module.GetMergeBase);
+
     /// <summary>The blame-previous line mapping (GitBlameParser's diff-chunk walk).</summary>
     public int GetOriginalLineInPreviousCommit(GitRevision blamedRevision, string fileName, int line)
         => new GitCommands.Blame.GitBlameParser(() => _module).GetOriginalLineInPreviousCommit(blamedRevision, fileName, line);

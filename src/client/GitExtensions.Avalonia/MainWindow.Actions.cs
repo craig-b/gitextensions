@@ -26,13 +26,16 @@ public partial class MainWindow
     private static MenuProfile _menuProfile
         => new(GitCommands.AppSettings.MenuProfileMode, GitCommands.AppSettings.MenuInapplicableItemPolicy);
 
+    private GitRevision? _compareBaseRevision;
+
     private GridCommitMenuContext CommitMenuContext(GitRevision revision) => new(
         IsArtificial: revision.IsArtificial,
         IsStash: revision.ReflogSelector?.StartsWith("stash@") is true,
         InBisect: _session.InBisect,
         IsBareRepository: _session.IsBareRepository,
-        SelectedCount: 1,
-        HasCurrentBranch: !_session.IsDetachedHead);
+        SelectedCount: Math.Max(1, LogControl.SelectedRevisions.Count),
+        HasCurrentBranch: !_session.IsDetachedHead,
+        HasBaseToCompare: _compareBaseRevision is not null);
 
     private Dictionary<string, Func<GitRevision, Task>> CommitActionHandlers => new()
     {
@@ -105,6 +108,63 @@ public partial class MainWindow
                 ($"{(candidate.Name == defaultName ? "★ " : "")}Reset {candidate.Name} to {revision.ObjectId.ToShortString()}",
                  (Func<Task>)(() => RunOperationAsync($"Reset {candidate.Name}", () => _session.UpdateRefAsync(candidate.CompleteName, revision.ObjectId)))))];
             await CommandPalette.ShowAsync(this, entries);
+        },
+        ["compare.toCurrentBranch"] = revision =>
+        {
+            new CompareWindow(_session, revision.ObjectId, revision.Subject, _session.CurrentCheckout, _session.SelectedBranch).Show(this);
+            return Task.CompletedTask;
+        },
+        ["compare.toWorkingDir"] = async revision =>
+        {
+            if (!GitCommands.Compare.CompareRevisions.CanCompareToWorkingDirectory(revision.ObjectId))
+            {
+                await ConfirmDialog.ErrorAsync(this, "Compare", "Cannot diff the working directory to itself.");
+                return;
+            }
+
+            new CompareWindow(_session, revision.ObjectId, revision.Subject, ObjectId.WorkTreeId, "Working directory").Show(this);
+        },
+        ["compare.toBranch"] = async revision =>
+        {
+            var (branches, remotes, _) = await Task.Run(_session.GetRefPanel);
+            List<(string Label, Func<Task> Execute)> entries = [.. Flatten(branches).Concat(Flatten(remotes))
+                .Where(leaf => leaf.ObjectId is not null)
+                .Select(leaf => ($"Compare to: {leaf.FullPath}", (Func<Task>)(() =>
+                {
+                    new CompareWindow(_session, revision.ObjectId, revision.Subject, leaf.ObjectId!.Value, leaf.FullPath).Show(this);
+                    return Task.CompletedTask;
+                })))];
+            await CommandPalette.ShowAsync(this, entries);
+
+            static IEnumerable<RefTreeNode> Flatten(IReadOnlyList<RefTreeNode> nodes)
+                => nodes.SelectMany(node => node.Children.Count == 0 ? [node] : Flatten(node.Children));
+        },
+        ["compare.selected"] = async revision =>
+        {
+            IReadOnlyList<GitRevision> selected = LogControl.SelectedRevisions;
+            if (selected.Count < 2)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Compare", "Select two commits to compare (Ctrl+click).");
+                return;
+            }
+
+            // Rows sort newest-first; the older commit is the BASE.
+            new CompareWindow(_session, selected[^1].ObjectId, selected[^1].Subject, selected[0].ObjectId, selected[0].Subject).Show(this);
+        },
+        ["compare.selectBase"] = revision =>
+        {
+            _compareBaseRevision = revision;
+            return Task.CompletedTask;
+        },
+        ["compare.toBase"] = async revision =>
+        {
+            if (_compareBaseRevision is not GitRevision baseRevision)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Compare", "Select a BASE commit first.");
+                return;
+            }
+
+            new CompareWindow(_session, baseRevision.ObjectId, baseRevision.Subject, revision.ObjectId, revision.Subject).Show(this);
         },
         ["commit.archive"] = async revision =>
         {

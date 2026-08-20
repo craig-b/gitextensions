@@ -33,6 +33,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     private Size _viewport;
     private bool _canScroll;
     private int _selectedIndex = -1;
+    private readonly SortedSet<int> _selectedIndexes = [];
 
     private readonly Typeface _typeface = new("monospace");
     private readonly Typeface _textTypeface = Typeface.Default;
@@ -230,9 +231,72 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         Focus();
-        SelectRow((int)((_offset.Y + e.GetPosition(this).Y) / RowHeight));
+        int row = (int)((_offset.Y + e.GetPosition(this).Y) / RowHeight);
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            ToggleRowSelection(row);
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && _selectedIndex >= 0)
+        {
+            SelectRange(_selectedIndex, row);
+        }
+        else
+        {
+            SelectRow(row);
+        }
+
         base.OnPointerPressed(e);
     }
+
+    /// <summary>Ctrl+click: toggle a row in the multi-selection; the clicked row becomes primary.</summary>
+    private void ToggleRowSelection(int row)
+    {
+        if (row < 0 || row >= _graph.Count)
+        {
+            return;
+        }
+
+        if (!_selectedIndexes.Remove(row))
+        {
+            _selectedIndexes.Add(row);
+        }
+
+        _selectedIndex = row;
+        InvalidateVisual();
+        if (_graph.GetNodeForRow(row)?.GitRevision is { } revision)
+        {
+            RevisionSelected?.Invoke(this, revision);
+        }
+    }
+
+    /// <summary>Shift+click: select the anchor..row range; the clicked row becomes primary.</summary>
+    private void SelectRange(int anchor, int row)
+    {
+        if (row < 0 || row >= _graph.Count)
+        {
+            return;
+        }
+
+        _selectedIndexes.Clear();
+        for (int i = Math.Min(anchor, row); i <= Math.Max(anchor, row); i++)
+        {
+            _selectedIndexes.Add(i);
+        }
+
+        _selectedIndex = row;
+        InvalidateVisual();
+        if (_graph.GetNodeForRow(row)?.GitRevision is { } revision)
+        {
+            RevisionSelected?.Invoke(this, revision);
+        }
+    }
+
+    /// <summary>The selected revisions in row order (primary selection included).</summary>
+    public IReadOnlyList<GitRevision> SelectedRevisions
+        => [.. _selectedIndexes
+            .Where(row => row < _graph.Count)
+            .Select(row => _graph.GetNodeForRow(row)?.GitRevision)
+            .OfType<GitRevision>()];
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
@@ -296,6 +360,8 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         }
 
         _selectedIndex = row;
+        _selectedIndexes.Clear();
+        _selectedIndexes.Add(row);
         InvalidateVisual();
         GitRevision? revision = _graph.GetNodeForRow(row)?.GitRevision;
         if (revision is not null)
@@ -339,7 +405,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
             double yTop = (row * RowHeight) - _offset.Y;
             double yMid = yTop + (RowHeight / 2);
 
-            if (row == _selectedIndex)
+            if (row == _selectedIndex || _selectedIndexes.Contains(row))
             {
                 context.FillRectangle(palette.Selection, new Rect(0, yTop, Bounds.Width, RowHeight));
             }
