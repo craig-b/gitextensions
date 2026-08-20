@@ -53,6 +53,20 @@ public sealed class ScriptsWindow : Window
             }
         };
 
+        Button import = new() { Content = "Import from Git Extensions" };
+        import.Click += (_, _) =>
+        {
+            IReadOnlyList<ScriptDefinition> imported = ScriptImport.FromWinFormsXml(AppSettings.GetString("ownScripts", null));
+            if (imported.Count == 0)
+            {
+                return;
+            }
+
+            _scripts = [.. ScriptImport.Merge(_scripts, imported)];
+            Persist();
+            RefreshList(preserve: imported[0].Slug);
+        };
+
         Button save = new() { Content = "Save script", MinWidth = 100, IsDefault = true };
         save.Click += (_, _) => SaveCurrent();
         Button close = new() { Content = "Close", MinWidth = 90, IsCancel = true };
@@ -71,6 +85,7 @@ public sealed class ScriptsWindow : Window
                     {
                         _list,
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { newButton, deleteButton } },
+                        import,
                     },
                 }, 0),
                 WithColumn(new StackPanel
