@@ -115,8 +115,16 @@ public sealed class OpenRepositoryModelTests
 
         string? result = OpenRepositoryModel.TryGetOpenablePath(
             $"  {path}  ",
-            directoryExists: p => { seenByExists = p; return true; },
-            isValidGitWorkingDir: p => { seenByValid = p; return true; });
+            directoryExists: p =>
+            {
+                seenByExists = p;
+                return true;
+            },
+            isValidGitWorkingDir: p =>
+            {
+                seenByValid = p;
+                return true;
+            });
 
         result.Should().Be(path + _sep);
         seenByExists.Should().Be(path, because: "the existence check runs on the trimmed input");
@@ -131,7 +139,11 @@ public sealed class OpenRepositoryModelTests
         OpenRepositoryModel.TryGetOpenablePath(
                 Rooted("gone"),
                 directoryExists: _ => false,
-                isValidGitWorkingDir: _ => { validityChecked = true; return true; })
+                isValidGitWorkingDir: _ =>
+                {
+                    validityChecked = true;
+                    return true;
+                })
             .Should().BeNull();
 
         validityChecked.Should().BeFalse();
