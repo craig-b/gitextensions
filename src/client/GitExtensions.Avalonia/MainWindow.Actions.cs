@@ -82,6 +82,7 @@ public partial class MainWindow
         ["copy.message"] = revision => CopyToClipboardAsync(revision.Body ?? revision.Subject),
         ["copy.author"] = revision => CopyToClipboardAsync($"{revision.Author} <{revision.AuthorEmail}>"),
         ["copy.date"] = revision => CopyToClipboardAsync(revision.CommitDate.ToString("yyyy-MM-dd HH:mm:ss")),
+        ["copy.refNames"] = revision => CopyToClipboardAsync(string.Join("\n", (revision.Refs ?? []).Select(r => r.Name))),
         ["artificial.commit"] = async _ =>
         {
             CommitWindow commitWindow = new(_session);
@@ -188,6 +189,14 @@ public partial class MainWindow
             }
         },
         ["ref.copyName"] = node => CopyToClipboardAsync(node.FullPath),
+        ["ref.rename"] = async node =>
+        {
+            string? newName = await ConfirmDialog.InputAsync(this, "Rename branch", $"New name for {node.FullPath}:", node.FullPath);
+            if (!string.IsNullOrWhiteSpace(newName) && newName != node.FullPath)
+            {
+                await RunOperationAsync($"Rename {node.FullPath}", () => _session.RenameBranchAsync(node.FullPath, newName.Trim()));
+            }
+        },
     };
 
     /// <summary>Merge via the options dialog (MergeBranchOptions, §20a batch 2).</summary>

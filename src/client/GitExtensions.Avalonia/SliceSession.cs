@@ -146,6 +146,9 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> CreateBranchAtAsync(string branchName, ObjectId commitId, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, commitId, checkout)));
 
+    public Task<(bool Success, string Output)> RenameBranchAsync(string oldName, string newName)
+        => Task.Run(() => RunGitOperation(Commands.RenameBranch(oldName, newName)));
+
     public Task<(bool Success, string Output)> DeleteBranchAsync(string branchName, bool force = false)
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("branch") { force ? "-D" : "-d", branchName.QuoteNE() }));
 
