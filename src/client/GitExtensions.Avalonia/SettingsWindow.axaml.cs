@@ -11,15 +11,22 @@ using GitCommands.Settings.Pages;
 namespace GitExtensions.Avalonia;
 
 /// <summary>
-///  The settings dialog, rendered generically from the portable page models: each
-///  <see cref="SettingsPageModel"/> becomes a page of group captions and checkboxes.
+///  The settings dialog, rendered generically from the portable page models: every
+///  <see cref="SettingsEntry"/> kind maps to an editor (checkbox, numeric, text, combo).
 ///  Apply pushes values through the models and flushes <see cref="AppSettings"/> to disk.
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private readonly List<SettingsPageModel> _pages = [new ConfirmationsPageModel()];
-    private readonly Dictionary<SettingsEntry, CheckBox> _checkBoxes = [];
+    private readonly List<SettingsPageModel> _pages =
+    [
+        new GeneralPageModel(),
+        new CommitDialogPageModel(),
+        new ConfirmationsPageModel(),
+    ];
+
+    private readonly Dictionary<SettingsEntry, Control> _editors = [];
     private readonly Dictionary<SettingsPageModel, Control> _builtPages = [];
+    private readonly Dictionary<SettingsPageModel, List<Action>> _pullValueActions = [];
 
     public SettingsWindow()
     {
@@ -53,6 +60,7 @@ public partial class SettingsWindow : Window
 
     private StackPanel BuildPage(SettingsPageModel page)
     {
+        List<Action> pullValues = _pullValueActions[page] = [];
         StackPanel panel = new() { Spacing = 6 };
 
         foreach (SettingsGroup group in page.Groups)
@@ -66,49 +74,139 @@ public partial class SettingsWindow : Window
 
             foreach (SettingsEntry entry in group.Entries)
             {
-                CheckBox checkBox = new()
-                {
-                    Content = entry.Caption,
-                    IsThreeState = entry is TriStateSettingsEntry,
-                    IsChecked = entry switch
-                    {
-                        BoolSettingsEntry boolEntry => boolEntry.Value,
-                        TriStateSettingsEntry triStateEntry => triStateEntry.Value,
-                        _ => false,
-                    },
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Margin = new global::Avalonia.Thickness(12, 0, 0, 0),
-                };
-
-                _checkBoxes[entry] = checkBox;
-                panel.Children.Add(checkBox);
+                panel.Children.Add(BuildEditor(entry, pullValues));
             }
         }
 
         return panel;
     }
 
-    /// <summary>Pushes every shown page's checkbox states through its model and persists.</summary>
+    private Control BuildEditor(SettingsEntry entry, List<Action> pullValues)
+    {
+        switch (entry)
+        {
+            case BoolSettingsEntry boolEntry:
+            {
+                CheckBox checkBox = MakeCheckBox(entry.Caption, boolEntry.Value, isThreeState: false);
+                pullValues.Add(() => boolEntry.Value = checkBox.IsChecked ?? false);
+                _editors[entry] = checkBox;
+                return Indent(checkBox);
+            }
+
+            case TriStateSettingsEntry triStateEntry:
+            {
+                CheckBox checkBox = MakeCheckBox(entry.Caption, triStateEntry.Value, isThreeState: true);
+                pullValues.Add(() => triStateEntry.Value = checkBox.IsChecked);
+                _editors[entry] = checkBox;
+                return Indent(checkBox);
+            }
+
+            case NumberSettingsEntry numberEntry:
+            {
+                NumericUpDown numeric = MakeNumeric(numberEntry.Minimum, numberEntry.Maximum, numberEntry.Increment, numberEntry.Value);
+                pullValues.Add(() => numberEntry.Value = (int)(numeric.Value ?? numberEntry.Value));
+                _editors[entry] = numeric;
+                return CaptionedRow(entry.Caption, numeric);
+            }
+
+            case OptionalNumberSettingsEntry optionalNumberEntry:
+            {
+                CheckBox gate = MakeCheckBox(entry.Caption, optionalNumberEntry.Enabled, isThreeState: false);
+                NumericUpDown numeric = MakeNumeric(optionalNumberEntry.Minimum, optionalNumberEntry.Maximum, optionalNumberEntry.Increment, optionalNumberEntry.Number);
+                numeric.IsEnabled = optionalNumberEntry.Enabled;
+                gate.IsCheckedChanged += (_, _) => numeric.IsEnabled = gate.IsChecked == true;
+                pullValues.Add(() =>
+                {
+                    optionalNumberEntry.Enabled = gate.IsChecked == true;
+                    optionalNumberEntry.Number = (int)(numeric.Value ?? optionalNumberEntry.Number);
+                });
+                _editors[entry] = gate;
+                return Indent(new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children = { gate, numeric },
+                });
+            }
+
+            case StringSettingsEntry stringEntry:
+            {
+                TextBox textBox = new() { Text = stringEntry.Value, MinWidth = 280 };
+                pullValues.Add(() => stringEntry.Value = textBox.Text ?? string.Empty);
+                _editors[entry] = textBox;
+                return CaptionedRow(entry.Caption, textBox);
+            }
+
+            case ChoiceSettingsEntry choiceEntry:
+            {
+                ComboBox comboBox = new()
+                {
+                    ItemsSource = choiceEntry.Choices,
+                    SelectedIndex = choiceEntry.SelectedIndex,
+                    MinWidth = 200,
+                };
+                pullValues.Add(() =>
+                {
+                    if (comboBox.SelectedIndex >= 0)
+                    {
+                        choiceEntry.SelectedIndex = comboBox.SelectedIndex;
+                    }
+                });
+                _editors[entry] = comboBox;
+                return CaptionedRow(entry.Caption, comboBox);
+            }
+
+            default:
+                return Indent(new TextBlock { Text = entry.Caption });
+        }
+    }
+
+    private static CheckBox MakeCheckBox(string caption, bool? isChecked, bool isThreeState)
+        => new()
+        {
+            Content = caption,
+            IsChecked = isChecked,
+            IsThreeState = isThreeState,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
+    private static NumericUpDown MakeNumeric(int minimum, int maximum, int increment, int value)
+        => new()
+        {
+            Minimum = minimum,
+            Maximum = maximum,
+            Increment = increment,
+            Value = value,
+            FormatString = "0",
+            MinWidth = 130,
+        };
+
+    private static Control Indent(Control control)
+    {
+        control.Margin = new global::Avalonia.Thickness(12, 0, 0, 0);
+        return control;
+    }
+
+    private static Control CaptionedRow(string caption, Control editor)
+        => Indent(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = caption, VerticalAlignment = VerticalAlignment.Center },
+                editor,
+            },
+        });
+
+    /// <summary>Pushes every shown page's editor states through its model and persists.</summary>
     private void Apply()
     {
-        foreach (SettingsPageModel page in _pages.Where(_builtPages.ContainsKey))
+        foreach ((SettingsPageModel page, List<Action> pullValues) in _pullValueActions)
         {
-            foreach (SettingsEntry entry in page.Entries)
+            foreach (Action pullValue in pullValues)
             {
-                if (!_checkBoxes.TryGetValue(entry, out CheckBox? checkBox))
-                {
-                    continue;
-                }
-
-                switch (entry)
-                {
-                    case BoolSettingsEntry boolEntry:
-                        boolEntry.Value = checkBox.IsChecked ?? false;
-                        break;
-                    case TriStateSettingsEntry triStateEntry:
-                        triStateEntry.Value = checkBox.IsChecked;
-                        break;
-                }
+                pullValue();
             }
 
             page.Save();
@@ -128,17 +226,21 @@ public partial class SettingsWindow : Window
     private void OnApplyClick(object? sender, RoutedEventArgs e) => Apply();
 
     /// <summary>
-    ///  Verification harness (GE_SPIKE_SETTINGSTEST): snapshot the dialog, toggle
-    ///  "Amend last commit" off, apply, prove the storage flip and the file flush,
-    ///  toggle it back, snapshot, close.
+    ///  Verification harness (GE_SPIKE_SETTINGSTEST): snapshot the General page, switch to
+    ///  Confirmations, toggle "Amend last commit", apply, prove the storage flip and the
+    ///  file flush, restore, snapshot, close.
     /// </summary>
     internal async Task RunHarnessAsync(string snapshotDirectory)
     {
         await Task.Delay(800);
-        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_before.png"));
+        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_general.png"));
 
-        ConfirmationsPageModel page = (ConfirmationsPageModel)_pages[0];
-        CheckBox amend = _checkBoxes[page.AmendLastCommit];
+        ConfirmationsPageModel page = _pages.OfType<ConfirmationsPageModel>().Single();
+        PageList.SelectedIndex = _pages.IndexOf(page);
+        await Task.Delay(400);
+        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_confirmations.png"));
+
+        CheckBox amend = (CheckBox)_editors[page.AmendLastCommit];
         bool? original = amend.IsChecked;
 
         amend.IsChecked = !(original ?? false);
@@ -152,9 +254,6 @@ public partial class SettingsWindow : Window
         amend.IsChecked = original;
         Apply();
         Console.Error.WriteLine($"[settings] after restore: DontConfirmAmend={AppSettings.DontConfirmAmend}");
-
-        await Task.Delay(300);
-        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_after.png"));
 
         Close();
 
