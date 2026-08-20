@@ -119,6 +119,33 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_SCRIPTSTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(3000);
+                LogControl.SelectRow(0);
+                await Task.Delay(300);
+
+                GitCommands.Scripts.ScriptDefinition script = new(
+                    "harness-echo", "Harness echo", "shell",
+                    "echo branch={current.branch} repo={repo.name} hash={selected.hash} legacy={cBranch}",
+                    Surfaces: GitCommands.Scripts.ScriptSurfaces.CommitMenu | GitCommands.Scripts.ScriptSurfaces.RefMenu);
+                GitCommands.Scripts.ScriptStorage.Save([script], GitCommands.AppSettings.SetString);
+                RebuildHotkeyMap();
+
+                var menuActions = GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.CommitMenu);
+                Console.Error.WriteLine($"[scripts] loaded {_scripts.Count}, commit-menu actions: {string.Join(", ", menuActions.Select(a => a.Caption))}");
+
+                await RunScriptAsync(_scripts[0], _selectedRevision, refName: null);
+                Console.Error.WriteLine($"[scripts] ran: {OperationStatus.Text}");
+
+                IReadOnlyList<(string Name, string Expansion)> aliases = await _session.GetGitAliasesAsync();
+                Console.Error.WriteLine($"[scripts] aliases: {string.Join(", ", aliases.Select(alias => $"{alias.Name}={alias.Expansion}"))}");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_CONFLICTSTEST") == "1")
         {
             Loaded += async (_, _) =>

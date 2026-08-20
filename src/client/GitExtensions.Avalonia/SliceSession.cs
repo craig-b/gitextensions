@@ -176,6 +176,34 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> RebaseAsync(string onto)
         => Task.Run(() => RunGitOperation(Commands.Rebase(new Commands.RebaseOptions { BranchName = onto })));
 
+    /// <summary>Runs an arbitrary process in the repo (the scripts engine's runner).</summary>
+    public Task<(bool Success, string Output)> RunProcessAsync(string fileName, string arguments)
+        => Task.Run(() =>
+        {
+            System.Diagnostics.ProcessStartInfo startInfo = new()
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = _module.WorkingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)!;
+            string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return (process.ExitCode == 0, output);
+        });
+
+    /// <summary>The user's git aliases for the palette (name, expansion).</summary>
+    public Task<IReadOnlyList<(string Name, string Expansion)>> GetGitAliasesAsync()
+        => Task.Run<IReadOnlyList<(string, string)>>(() =>
+        {
+            (bool success, string output) = RunGitOperation(new GitArgumentBuilder("config") { "--get-regexp", "^alias\\." });
+            return success ? GitCommands.Scripts.GitAliasParser.Parse(output) : [];
+        });
+
     /// <summary>Runs git with extra environment variables (the sequence-editor flows need them).</summary>
     public Task<(bool Success, string Output)> RunGitWithEnvAsync(GitExtensions.Extensibility.ArgumentString arguments, IReadOnlyDictionary<string, string> environment)
         => Task.Run(() =>

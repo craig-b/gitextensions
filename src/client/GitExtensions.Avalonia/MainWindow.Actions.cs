@@ -347,12 +347,81 @@ public partial class MainWindow
     }
 
     private IReadOnlyDictionary<string, string> _hotkeyMap = new Dictionary<string, string>();
+    private IReadOnlyList<GitCommands.Scripts.ScriptDefinition> _scripts = [];
+
+    /// <summary>The stored script definitions, reloaded when the editor or settings close.</summary>
+    private void ReloadScripts()
+        => _scripts = GitCommands.Scripts.ScriptStorage.Load(key => GitCommands.AppSettings.GetString(key, null));
 
     /// <summary>The effective gesture per action id: registry defaults overridden by the Hotkeys page.</summary>
     private void RebuildHotkeyMap()
-        => _hotkeyMap = HotkeyResolution.ResolveAll(
-            [.. GridMenuRegistry.CommitActions, .. GridMenuRegistry.RefActions],
+    {
+        ReloadScripts();
+        _hotkeyMap = HotkeyResolution.ResolveAll(
+            [
+                .. GridMenuRegistry.CommitActions,
+                .. GridMenuRegistry.RefActions,
+                .. GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.CommitMenu),
+            ],
             actionId => GitCommands.AppSettings.GetString(HotkeyResolution.SettingKey(actionId), null));
+    }
+
+    /// <summary>Runs a script: prompts pre-collected, tokens expanded, interpreter resolved.</summary>
+    private async Task RunScriptAsync(GitCommands.Scripts.ScriptDefinition script, GitRevision? revision, string? refName)
+    {
+        if (script.Destructive
+            && !await ConfirmDialog.ConfirmAsync(this, script.Caption, $"Run \"{script.Caption}\"?"))
+        {
+            return;
+        }
+
+        Dictionary<string, string> answers = [];
+        foreach (string question in GitCommands.Scripts.ScriptTokenSubstitution.ExtractPrompts(script.Command))
+        {
+            if (answers.ContainsKey(question))
+            {
+                continue;
+            }
+
+            string? answer = await ConfirmDialog.InputAsync(this, script.Caption, question);
+            if (answer is null)
+            {
+                return;
+            }
+
+            answers[question] = answer;
+        }
+
+        IGitRef? selectedLocal = revision?.Refs?.FirstOrDefault(r => !r.IsRemote && !r.IsTag);
+        IGitRef? selectedRemote = revision?.Refs?.FirstOrDefault(r => r.IsRemote);
+        GitCommands.Scripts.ScriptTokenContext context = new(
+            SelectedHash: revision?.ObjectId.ToString(),
+            SelectedHashes: string.Join(" ", LogControl.SelectedRevisions.Select(r => r.ObjectId.ToString())),
+            SelectedSubject: revision?.Subject,
+            SelectedMessage: revision?.Body ?? revision?.Subject,
+            SelectedAuthor: revision?.Author,
+            SelectedBranch: selectedLocal?.Name,
+            SelectedTag: revision?.Refs?.FirstOrDefault(r => r.IsTag)?.Name,
+            SelectedRemoteBranch: selectedRemote?.Name,
+            SelectedRemote: selectedRemote?.Name.Split('/').FirstOrDefault(),
+            CurrentBranch: _session.SelectedBranch,
+            CurrentHash: _session.CurrentCheckout.ToString(),
+            CurrentRemote: _session.GetPushDefaults().Remote,
+            RepoName: System.IO.Path.GetFileName(_session.WorkingDir.TrimEnd('/', '\\')),
+            RepoDir: _session.WorkingDir,
+            RefName: refName);
+
+        string expanded = GitCommands.Scripts.ScriptTokenSubstitution.Expand(script.Command, context, question => answers.GetValueOrDefault(question, ""));
+        (string fileName, string arguments) = GitCommands.Scripts.ScriptInterpreter.Resolve(script.Interpreter, expanded, OperatingSystem.IsWindows());
+
+        if (script.RunInBackground)
+        {
+            _ = _session.RunProcessAsync(fileName, arguments);
+            return;
+        }
+
+        await RunOperationAsync(script.Caption, () => _session.RunProcessAsync(fileName, arguments));
+    }
 
     /// <summary>Dispatches a registry hotkey against the current selection (text inputs keep their keys).</summary>
     private void HandleActionHotkey(KeyEventArgs keyArgs)
@@ -376,8 +445,19 @@ public partial class MainWindow
         GridCommitMenuContext context = CommitMenuContext(revision);
         foreach ((string actionId, string actionGesture) in _hotkeyMap)
         {
-            if (!actionGesture.Equals(gesture, StringComparison.OrdinalIgnoreCase)
-                || !CommitActionHandlers.TryGetValue(actionId, out Func<GitRevision, Task>? handler))
+            if (!actionGesture.Equals(gesture, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (_scripts.FirstOrDefault(script => script.ActionId == actionId) is GitCommands.Scripts.ScriptDefinition hotkeyScript)
+            {
+                keyArgs.Handled = true;
+                _ = RunScriptAsync(hotkeyScript, revision, refName: null);
+                return;
+            }
+
+            if (!CommitActionHandlers.TryGetValue(actionId, out Func<GitRevision, Task>? handler))
             {
                 continue;
             }
@@ -421,9 +501,14 @@ public partial class MainWindow
         e.Handled = true;
         GridCommitMenuContext context = CommitMenuContext(revision);
         Dictionary<string, Func<GitRevision, Task>> handlers = CommitActionHandlers;
+        foreach (GitCommands.Scripts.ScriptDefinition script in _scripts)
+        {
+            GitCommands.Scripts.ScriptDefinition captured = script;
+            handlers[script.ActionId] = rev => RunScriptAsync(captured, rev, refName: null);
+        }
 
         ContextMenu menu = BuildMenu(
-            GridMenuRegistry.CommitMenuFor(context),
+            [.. GridMenuRegistry.CommitMenuFor(context), .. GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.CommitMenu)],
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
             action => handlers[action.Id](revision));
@@ -487,9 +572,14 @@ public partial class MainWindow
         e.Handled = true;
         RefMenuContext context = new(kind.Value, node.IsCurrent);
         Dictionary<string, Func<RefTreeNode, Task>> handlers = RefActionHandlers;
+        foreach (GitCommands.Scripts.ScriptDefinition script in _scripts)
+        {
+            GitCommands.Scripts.ScriptDefinition captured = script;
+            handlers[script.ActionId] = refNode => RunScriptAsync(captured, _selectedRevision, refNode.FullPath);
+        }
 
         ContextMenu menu = BuildMenu(
-            GridMenuRegistry.RefActions,
+            [.. GridMenuRegistry.RefActions, .. GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.RefMenu)],
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
             action => handlers[action.Id](node));
@@ -638,6 +728,27 @@ public partial class MainWindow
                     entries.Add(($"{Loc.T(action.Caption)}{hint}", () => handler(revision)));
                 }
             }
+        }
+
+        foreach (GitCommands.Scripts.ScriptDefinition script in _scripts.Where(s => s.Enabled))
+        {
+            GitCommands.Scripts.ScriptDefinition captured = script;
+            entries.Add(($"Script: {script.Caption}", () => RunScriptAsync(captured, _selectedRevision, refName: null)));
+        }
+
+        entries.Add(("Scripts: edit...", async () =>
+        {
+            ScriptsWindow scriptsWindow = new();
+            await scriptsWindow.ShowDialog(this);
+            RebuildHotkeyMap();
+        }));
+
+        foreach ((string aliasName, string expansion) in await _session.GetGitAliasesAsync())
+        {
+            string capturedName = aliasName;
+            string hint = expansion.Length > 60 ? expansion[..60] + "…" : expansion;
+            entries.Add(($"git: {aliasName}  —  {hint}", () => RunOperationAsync($"git {capturedName}", () => _session.RunProcessAsync(
+                "git", capturedName))));
         }
 
         entries.Add(("Add submodule...", async () =>
