@@ -27,13 +27,21 @@ public sealed class MenusPageModel : SettingsPageModel
                 InapplicableItems = new ChoiceSettingsEntry("Items that do not apply to the selection",
                     ["Show grayed (stable positions)", "Hide (shorter menus)"],
                     () => Array.IndexOf(_policies, AppSettings.MenuInapplicableItemPolicy),
-                    index => AppSettings.MenuInapplicableItemPolicy = _policies[index])),
+                    index => AppSettings.MenuInapplicableItemPolicy = _policies[index]),
+                CustomOrder = new StringSettingsEntry(
+                    "Custom profile: action ids in order (comma-separated; blank = all). Promoting to the front IS pinning",
+                    () => string.IsNullOrEmpty(AppSettings.MenuCustomOrder)
+                        ? MenuCustomOrder.DefaultText(GridMenuRegistry.CommitActions)
+                        : AppSettings.MenuCustomOrder,
+                    value => AppSettings.MenuCustomOrder = value.Trim())),
         ];
     }
 
     public ChoiceSettingsEntry Profile { get; }
 
     public ChoiceSettingsEntry InapplicableItems { get; }
+
+    public StringSettingsEntry CustomOrder { get; }
 
     public override IReadOnlyList<SettingsGroup> Groups { get; }
 }

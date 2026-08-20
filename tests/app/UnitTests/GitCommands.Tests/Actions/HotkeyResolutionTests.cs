@@ -37,6 +37,16 @@ public sealed class HotkeyResolutionTests
     }
 
     [Test]
+    public void Custom_order_parses_separators_and_falls_back_to_null()
+    {
+        MenuCustomOrder.Parse("commit.createBranch, commit.cherryPick\nref.delete;  ")
+            .Should().Equal("commit.createBranch", "commit.cherryPick", "ref.delete");
+        MenuCustomOrder.Parse("").Should().BeNull();
+        MenuCustomOrder.Parse("  ,\n; ").Should().BeNull();
+        MenuCustomOrder.DefaultText(GridMenuRegistry.RefActions).Should().StartWith("ref.checkout, ");
+    }
+
+    [Test]
     public void Hotkeys_page_projects_every_registry_action()
     {
         HotkeysPageModel page = new();

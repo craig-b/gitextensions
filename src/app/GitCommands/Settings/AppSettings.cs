@@ -1030,6 +1030,13 @@ public static partial class AppSettings
         set => SetEnum("MenuInapplicableItemPolicy", value);
     }
 
+    /// <summary>The Custom profile's ordered action ids (comma-separated; blank = Normal's order).</summary>
+    public static string MenuCustomOrder
+    {
+        get => GetString("MenuCustomOrder", "") ?? "";
+        set => SetString("MenuCustomOrder", value);
+    }
+
     /// <summary>
     /// Gets or sets the default pull action as configured in the FormPull dialog.
     /// </summary>

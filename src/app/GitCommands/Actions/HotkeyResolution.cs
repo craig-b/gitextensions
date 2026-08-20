@@ -1,5 +1,24 @@
 namespace GitCommands.Actions;
 
+/// <summary>The Custom profile's stored order: comma/newline-separated action ids.</summary>
+public static class MenuCustomOrder
+{
+    public static IReadOnlyList<string>? Parse(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        string[] ids = text.Split([',', '\n', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return ids.Length == 0 ? null : ids;
+    }
+
+    /// <summary>The starting point for editing: every action id in Normal's order.</summary>
+    public static string DefaultText(IEnumerable<ActionDescriptor> actions)
+        => string.Join(", ", actions.Select(action => action.Id));
+}
+
 /// <summary>
 ///  Hotkey overrides for registry actions: stored per action id, the descriptor's
 ///  hotkey is the default, and the "none" sentinel disables one.

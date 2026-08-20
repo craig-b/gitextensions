@@ -26,7 +26,10 @@ namespace GitExtensions.Avalonia;
 public partial class MainWindow
 {
     private static MenuProfile _menuProfile
-        => new(GitCommands.AppSettings.MenuProfileMode, GitCommands.AppSettings.MenuInapplicableItemPolicy);
+        => new(
+            GitCommands.AppSettings.MenuProfileMode,
+            GitCommands.AppSettings.MenuInapplicableItemPolicy,
+            MenuCustomOrder.Parse(GitCommands.AppSettings.MenuCustomOrder));
 
     private GitRevision? _compareBaseRevision;
 
@@ -631,7 +634,8 @@ public partial class MainWindow
             {
                 if (handlers.TryGetValue(action.Id, out Func<GitRevision, Task>? handler) && GridMenuRegistry.IsApplicable(action, context))
                 {
-                    entries.Add(($"{action.Caption}", () => handler(revision)));
+                    string hint = _hotkeyMap.TryGetValue(action.Id, out string? gesture) ? $"  [{gesture}]" : "";
+                    entries.Add(($"{action.Caption}{hint}", () => handler(revision)));
                 }
             }
         }
