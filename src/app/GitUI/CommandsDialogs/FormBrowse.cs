@@ -2190,8 +2190,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
         void FocusNextTab(bool forward = true)
         {
-            int tabIndex = CommitInfoTabControl.SelectedIndex;
-            tabIndex += forward ? 1 : (CommitInfoTabControl.TabCount - 1);
+            int tabIndex = BrowseTabNavigation.Next(CommitInfoTabControl.SelectedIndex, CommitInfoTabControl.TabCount, forward);
             CommitInfoTabControl.SelectedIndex = tabIndex % CommitInfoTabControl.TabCount;
         }
 

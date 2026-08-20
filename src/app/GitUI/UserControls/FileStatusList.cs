@@ -756,9 +756,8 @@ public sealed partial class FileStatusList : GitModuleControl
         foreach (TreeNode rootNode in FileStatusListView.Nodes)
         {
             // Skip collapsed or empty groups
-            if ((_showDiffGroups && !rootNode.IsExpanded)
-                || (rootNode.Nodes.Count == 1 && rootNode.Nodes[0].Tag is FileStatusItem fileStatusItem && fileStatusItem.Item == _noItemStatuses[0])
-                || (_isFileTreeMode && _filter is null && !FindInCommitFilesGitGrepActive))
+            bool rootIsPlaceholderOnly = rootNode.Nodes.Count == 1 && rootNode.Nodes[0].Tag is FileStatusItem fileStatusItem && fileStatusItem.Item == _noItemStatuses[0];
+            if (FileStatusRootSkip.ShouldSkip(_showDiffGroups, rootNode.IsExpanded, rootIsPlaceholderOnly, _isFileTreeMode, _filter is not null, FindInCommitFilesGitGrepActive))
             {
                 continue;
             }

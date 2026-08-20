@@ -52,3 +52,19 @@ public static class CommitInfoLayoutTable
             ? Math.Max(0, containerWidth - preferredWidth)
             : preferredWidth;
 }
+
+/// <summary>The detail tab strip's wrap-around navigation.</summary>
+public static class BrowseTabNavigation
+{
+    /// <summary>The next tab index, wrapping in both directions (FormBrowse's FocusNextTab).</summary>
+    public static int Next(int selectedIndex, int tabCount, bool forward)
+    {
+        if (tabCount <= 0)
+        {
+            return -1;
+        }
+
+        int index = selectedIndex + (forward ? 1 : tabCount - 1);
+        return index % tabCount;
+    }
+}
