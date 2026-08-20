@@ -567,7 +567,7 @@ public partial class MainWindow
             {
                 MenuItem menuItem = new()
                 {
-                    Header = item.Action.Caption,
+                    Header = Loc.T(item.Action.Caption),
                     IsEnabled = item.Enabled,
                 };
                 ActionDescriptor action = item.Action;
@@ -635,7 +635,7 @@ public partial class MainWindow
                 if (handlers.TryGetValue(action.Id, out Func<GitRevision, Task>? handler) && GridMenuRegistry.IsApplicable(action, context))
                 {
                     string hint = _hotkeyMap.TryGetValue(action.Id, out string? gesture) ? $"  [{gesture}]" : "";
-                    entries.Add(($"{action.Caption}{hint}", () => handler(revision)));
+                    entries.Add(($"{Loc.T(action.Caption)}{hint}", () => handler(revision)));
                 }
             }
         }

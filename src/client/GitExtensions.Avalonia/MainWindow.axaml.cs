@@ -26,6 +26,8 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _session = new SliceSession(repositoryPath);
+        Loc.Reload();
+        ApplyToolbarTranslations();
         Title = $"Git Extensions - {_session.WorkingDir}";
 
         LogControl.RevisionSelected += (_, revision) =>
@@ -98,6 +100,20 @@ public partial class MainWindow : Window
 
                 (bool subOk, string subOut) = await _session.AddSubmoduleAsync("../opsremote.git", "harness-submodule", branch: "", force: false);
                 Console.Error.WriteLine($"[worktree] add-submodule: {(subOk ? "OK" : $"FAIL {subOut.Replace("\n", " / ")}")}");
+                Environment.Exit(0);
+            };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_L10NTEST") is string l10nLanguage)
+        {
+            Loaded += (_, _) =>
+            {
+                GitCommands.Localization.SourceJoinTranslator translator =
+                    GitCommands.Localization.SourceJoinTranslator.Load(Loc.TranslationDir, l10nLanguage);
+                string[] samples = ["Fetch", "Pull", "Push", "Delete...", "Checkout", "Rename...", "Cherry-pick this commit..."];
+                Console.Error.WriteLine($"[l10n] {l10nLanguage}: {translator.Count} joined strings | " +
+                    string.Join(" | ", samples.Select(sample => $"{sample} -> {translator.T(sample)}")));
+                Console.Error.WriteLine($"[l10n] languages available: {GitCommands.Localization.SourceJoinTranslation.FindLanguages(Loc.TranslationDir).Count}");
                 Environment.Exit(0);
             };
         }
@@ -542,6 +558,21 @@ public partial class MainWindow : Window
         SettingsWindow settingsWindow = new(_session);
         await settingsWindow.ShowDialog(this);
         RebuildHotkeyMap();
+        Loc.Reload();
+        ApplyToolbarTranslations();
+    }
+
+    /// <summary>The static toolbar captions go through the §11 join (menus re-render per open).</summary>
+    private void ApplyToolbarTranslations()
+    {
+        CommitToolButton.Content = Loc.T("Commit...");
+        FetchButton.Content = Loc.T("Fetch");
+        PullButton.Content = Loc.T("Pull");
+        PushButton.Content = Loc.T("Push");
+        NewBranchButton.Content = Loc.T("New branch...");
+        RemotesButton.Content = Loc.T("Remotes...");
+        SettingsButton.Content = Loc.T("Settings...");
+        ResolveConflictsButton.Content = Loc.T("Resolve conflicts...");
     }
 
     /// <summary>

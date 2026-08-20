@@ -48,6 +48,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The xlf catalog for the §11 source-join client localization. -->
+    <None Include="..\..\app\GitUI\Translation\*.xlf" Link="Translation\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\app\GitExtensions.Extensibility\GitExtensions.Extensibility.csproj" />
     <ProjectReference Include="..\..\app\GitExtUtils\GitExtUtils.csproj" />
     <ProjectReference Include="..\..\app\GitCommands\GitCommands.csproj" />

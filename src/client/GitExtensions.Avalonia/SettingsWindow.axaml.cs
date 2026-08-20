@@ -48,6 +48,7 @@ public partial class SettingsWindow : Window
             ("Browse repository window", new BrowseRepoPageModel(), null),
             ("Menus", new MenusPageModel(), null),
             ("Hotkeys", new HotkeysPageModel(), null),
+            ("Language", new LanguagePageModel(GitCommands.Localization.SourceJoinTranslation.FindLanguages(Loc.TranslationDir)), null),
             ("Git: Paths", new GitPathsPageModel(), null),
             ("Git: Config", new GitConfigPageModel(() => gitConfigSource, () => true), saveGitConfig),
             ("Git: Advanced", new GitConfigAdvancedPageModel(() => gitConfigSource), saveGitConfig),
@@ -158,7 +159,7 @@ public partial class SettingsWindow : Window
         {
             panel.Children.Add(new TextBlock
             {
-                Text = group.Caption,
+                Text = Loc.T(group.Caption),
                 FontWeight = FontWeight.Bold,
                 Margin = new global::Avalonia.Thickness(0, panel.Children.Count == 0 ? 0 : 10, 0, 2),
             });
@@ -178,7 +179,7 @@ public partial class SettingsWindow : Window
         {
             case BoolSettingsEntry boolEntry:
             {
-                CheckBox checkBox = MakeCheckBox(entry.Caption, boolEntry.Value, isThreeState: false);
+                CheckBox checkBox = MakeCheckBox(Loc.T(entry.Caption), boolEntry.Value, isThreeState: false);
                 pullValues.Add(() => boolEntry.Value = checkBox.IsChecked ?? false);
                 _editors[entry] = checkBox;
                 return Indent(checkBox);
@@ -186,7 +187,7 @@ public partial class SettingsWindow : Window
 
             case TriStateSettingsEntry triStateEntry:
             {
-                CheckBox checkBox = MakeCheckBox(entry.Caption, triStateEntry.Value, isThreeState: true);
+                CheckBox checkBox = MakeCheckBox(Loc.T(entry.Caption), triStateEntry.Value, isThreeState: true);
                 pullValues.Add(() => triStateEntry.Value = checkBox.IsChecked);
                 _editors[entry] = checkBox;
                 return Indent(checkBox);
@@ -197,12 +198,12 @@ public partial class SettingsWindow : Window
                 NumericUpDown numeric = MakeNumeric(numberEntry.Minimum, numberEntry.Maximum, numberEntry.Increment, numberEntry.Value);
                 pullValues.Add(() => numberEntry.Value = (int)(numeric.Value ?? numberEntry.Value));
                 _editors[entry] = numeric;
-                return CaptionedRow(entry.Caption, numeric);
+                return CaptionedRow(Loc.T(entry.Caption), numeric);
             }
 
             case OptionalNumberSettingsEntry optionalNumberEntry:
             {
-                CheckBox gate = MakeCheckBox(entry.Caption, optionalNumberEntry.Enabled, isThreeState: false);
+                CheckBox gate = MakeCheckBox(Loc.T(entry.Caption), optionalNumberEntry.Enabled, isThreeState: false);
                 NumericUpDown numeric = MakeNumeric(optionalNumberEntry.Minimum, optionalNumberEntry.Maximum, optionalNumberEntry.Increment, optionalNumberEntry.Number);
                 numeric.IsEnabled = optionalNumberEntry.Enabled;
                 gate.IsCheckedChanged += (_, _) => numeric.IsEnabled = gate.IsChecked == true;
@@ -225,7 +226,7 @@ public partial class SettingsWindow : Window
                 TextBox textBox = new() { Text = stringEntry.Value, MinWidth = 280 };
                 pullValues.Add(() => stringEntry.Value = textBox.Text ?? string.Empty);
                 _editors[entry] = textBox;
-                return CaptionedRow(entry.Caption, textBox);
+                return CaptionedRow(Loc.T(entry.Caption), textBox);
             }
 
             case ChoiceSettingsEntry choiceEntry:
@@ -244,11 +245,11 @@ public partial class SettingsWindow : Window
                     }
                 });
                 _editors[entry] = comboBox;
-                return CaptionedRow(entry.Caption, comboBox);
+                return CaptionedRow(Loc.T(entry.Caption), comboBox);
             }
 
             default:
-                return Indent(new TextBlock { Text = entry.Caption });
+                return Indent(new TextBlock { Text = Loc.T(entry.Caption) });
         }
     }
 

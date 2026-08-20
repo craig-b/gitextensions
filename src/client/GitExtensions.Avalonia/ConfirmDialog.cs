@@ -34,7 +34,7 @@ internal static class ConfirmDialog
         for (int i = 0; i < buttons.Length; i++)
         {
             int index = i;
-            Button button = new() { Content = buttons[i], MinWidth = 80 };
+            Button button = new() { Content = Loc.T(buttons[i]), MinWidth = 80 };
             button.Click += (_, _) =>
             {
                 result = index;
@@ -60,7 +60,7 @@ internal static class ConfirmDialog
     }
 
     public static async Task<bool> ConfirmAsync(Window owner, string caption, string text)
-        => await ShowAsync(owner, caption, text, "Yes", "No") == 0;
+        => await ShowAsync(owner, caption, text, Loc.T("Yes"), Loc.T("No")) == 0;
 
     public static Task ErrorAsync(Window owner, string caption, string text)
         => ShowAsync(owner, caption, text, "OK");
