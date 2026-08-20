@@ -343,6 +343,54 @@ public partial class MainWindow
         });
     }
 
+    private IReadOnlyDictionary<string, string> _hotkeyMap = new Dictionary<string, string>();
+
+    /// <summary>The effective gesture per action id: registry defaults overridden by the Hotkeys page.</summary>
+    private void RebuildHotkeyMap()
+        => _hotkeyMap = HotkeyResolution.ResolveAll(
+            [.. GridMenuRegistry.CommitActions, .. GridMenuRegistry.RefActions],
+            actionId => GitCommands.AppSettings.GetString(HotkeyResolution.SettingKey(actionId), null));
+
+    /// <summary>Dispatches a registry hotkey against the current selection (text inputs keep their keys).</summary>
+    private void HandleActionHotkey(KeyEventArgs keyArgs)
+    {
+        if (keyArgs.Source is TextBox || _selectedRevision is not GitRevision revision)
+        {
+            return;
+        }
+
+        string keyName = keyArgs.Key switch
+        {
+            Key.Delete => "Del",
+            _ => keyArgs.Key.ToString(),
+        };
+        string gesture = HotkeyResolution.Normalize(
+            keyArgs.KeyModifiers.HasFlag(KeyModifiers.Control),
+            keyArgs.KeyModifiers.HasFlag(KeyModifiers.Shift),
+            keyArgs.KeyModifiers.HasFlag(KeyModifiers.Alt),
+            keyName);
+
+        GridCommitMenuContext context = CommitMenuContext(revision);
+        foreach ((string actionId, string actionGesture) in _hotkeyMap)
+        {
+            if (!actionGesture.Equals(gesture, StringComparison.OrdinalIgnoreCase)
+                || !CommitActionHandlers.TryGetValue(actionId, out Func<GitRevision, Task>? handler))
+            {
+                continue;
+            }
+
+            ActionDescriptor? action = GridMenuRegistry.CommitActions.FirstOrDefault(a => a.Id == actionId);
+            if (action is not null && !GridMenuRegistry.IsApplicable(action, context))
+            {
+                continue;
+            }
+
+            keyArgs.Handled = true;
+            _ = handler(revision);
+            return;
+        }
+    }
+
     private async Task CopyToClipboardAsync(string text)
     {
         if (GetTopLevel(this)?.Clipboard is { } clipboard)

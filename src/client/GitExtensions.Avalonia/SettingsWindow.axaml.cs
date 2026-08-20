@@ -47,6 +47,7 @@ public partial class SettingsWindow : Window
             ("Sorting", new SortingPageModel(), null),
             ("Browse repository window", new BrowseRepoPageModel(), null),
             ("Menus", new MenusPageModel(), null),
+            ("Hotkeys", new HotkeysPageModel(), null),
             ("Git: Paths", new GitPathsPageModel(), null),
             ("Git: Config", new GitConfigPageModel(() => gitConfigSource, () => true), saveGitConfig),
             ("Git: Advanced", new GitConfigAdvancedPageModel(() => gitConfigSource), saveGitConfig),

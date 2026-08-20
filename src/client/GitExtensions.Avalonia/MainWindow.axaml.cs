@@ -36,6 +36,7 @@ public partial class MainWindow : Window
         LogControl.ContextRequested += OnLogContextRequested;
         RefTree.ContextRequested += OnRefTreeContextRequested;
         FileTree.ContextRequested += OnFileTreeContextRequested;
+        RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
             if (keyArgs.Key == global::Avalonia.Input.Key.P
@@ -43,7 +44,10 @@ public partial class MainWindow : Window
             {
                 keyArgs.Handled = true;
                 _ = ShowCommandPaletteAsync();
+                return;
             }
+
+            HandleActionHotkey(keyArgs);
         };
 
         Loaded += (_, _) => StartLogStream();
@@ -501,6 +505,7 @@ public partial class MainWindow : Window
     {
         SettingsWindow settingsWindow = new(_session);
         await settingsWindow.ShowDialog(this);
+        RebuildHotkeyMap();
     }
 
     /// <summary>
