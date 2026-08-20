@@ -393,7 +393,7 @@ public sealed partial class FileStatusList : GitModuleControl
                     _ => throw new NotSupportedException($"{sortType} is not a supported sorting method.")
                 };
 
-                _flatList = sortType.ToString().EndsWith("Flat");
+                _flatList = DiffListSortLayout.Decompose(sortType).Flat;
 
                 UpdateFileStatusListView(GitItemStatusesWithDescription, updateCausedByFilter: true);
             })
@@ -1764,18 +1764,15 @@ public sealed partial class FileStatusList : GitModuleControl
 
         void AddToSelectionFilter(string filter)
         {
-            if (cboFilterComboBox.Items.Cast<string>().Any(candidate => candidate == filter))
+            const int SelectionFilterMaxLength = 10;
+            MruUpdate update = ComboMruHistory.Add([.. cboFilterComboBox.Items.Cast<string>()], filter, SelectionFilterMaxLength, MruDedupe.KeepPosition);
+            if (!update.Changed)
             {
                 return;
             }
 
-            const int SelectionFilterMaxLength = 10;
-            if (cboFilterComboBox.Items.Count == SelectionFilterMaxLength)
-            {
-                cboFilterComboBox.Items.RemoveAt(SelectionFilterMaxLength - 1);
-            }
-
-            cboFilterComboBox.Items.Insert(0, filter);
+            cboFilterComboBox.Items.Clear();
+            cboFilterComboBox.Items.AddRange([.. update.Items]);
         }
     }
 
@@ -1866,28 +1863,21 @@ public sealed partial class FileStatusList : GitModuleControl
                 {
                     cboFindInCommitFilesGitGrep.SelectedIndexChanged -= cboFindInCommitFilesGitGrep_SelectedIndexChanged;
                     cboFindInCommitFilesGitGrep.BeginUpdate();
-                    if (cboFindInCommitFilesGitGrep.Items.IndexOf(search) is int index && index >= 0)
+                    const int SearchFilterMaxLength = 30;
+                    bool promoted = cboFindInCommitFilesGitGrep.Items.IndexOf(search) > 0;
+                    MruUpdate update = ComboMruHistory.Add([.. cboFindInCommitFilesGitGrep.Items.Cast<string>()], search, SearchFilterMaxLength, MruDedupe.MoveToFront);
+                    if (!update.Changed)
                     {
-                        if (index == 0)
-                        {
-                            return;
-                        }
+                        return;
+                    }
 
-                        cboFindInCommitFilesGitGrep.Items.RemoveAt(index);
-                        cboFindInCommitFilesGitGrep.Items.Insert(0, search);
+                    cboFindInCommitFilesGitGrep.Items.Clear();
+                    cboFindInCommitFilesGitGrep.Items.AddRange([.. update.Items.Cast<object>()]);
+                    if (promoted)
+                    {
                         cboFindInCommitFilesGitGrep.Text = search;
                         cboFindInCommitFilesGitGrep.SelectionStart = search.Length;
                         cboFindInCommitFilesGitGrep.SelectionLength = 0;
-                    }
-                    else
-                    {
-                        const int SearchFilterMaxLength = 30;
-                        if (cboFindInCommitFilesGitGrep.Items.Count >= SearchFilterMaxLength)
-                        {
-                            cboFindInCommitFilesGitGrep.Items.RemoveAt(SearchFilterMaxLength - 1);
-                        }
-
-                        cboFindInCommitFilesGitGrep.Items.Insert(0, search);
                     }
 
                     if (_formFindInCommitFilesGitGrep?.IsDisposed is false)

@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.FileStatus;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Properties;
@@ -20,11 +21,12 @@ partial class FileStatusList
     private void ApplyGroupBy()
     {
         bool flatList = btnAsTree.Image == _flatListImage;
-        DiffListSortService.Instance.DiffListSorting =
-            btnByPath.Checked ? flatList ? DiffListSortType.FilePathFlat : DiffListSortType.FilePath
-            : btnByExtension.Checked ? flatList ? DiffListSortType.FileExtensionFlat : DiffListSortType.FileExtension
-            : btnByStatus.Checked ? flatList ? DiffListSortType.FileStatusFlat : DiffListSortType.FileStatus
+        DiffListGrouping grouping =
+            btnByPath.Checked ? DiffListGrouping.FilePath
+            : btnByExtension.Checked ? DiffListGrouping.FileExtension
+            : btnByStatus.Checked ? DiffListGrouping.FileStatus
             : throw new InvalidOperationException("Exactly one group-by button must be checked");
+        DiffListSortService.Instance.DiffListSorting = DiffListSortLayout.Compose(grouping, flatList);
     }
 
     private void AsTree_ButtonClick(object sender, EventArgs e)
@@ -264,10 +266,10 @@ partial class FileStatusList
         sepAsTree.Visible = hasGroups || btnRefresh.Visible;
 
         DiffListSortType sortType = DiffListSortService.Instance.DiffListSorting;
-        btnByPath.Checked = sortType is DiffListSortType.FilePath or DiffListSortType.FilePathFlat;
-        btnByExtension.Checked = sortType is DiffListSortType.FileExtension or DiffListSortType.FileExtensionFlat;
-        btnByStatus.Checked = sortType is DiffListSortType.FileStatus or DiffListSortType.FileStatusFlat;
-        bool flatList = sortType.ToString().EndsWith("Flat");
+        (DiffListGrouping sortGrouping, bool flatList) = DiffListSortLayout.Decompose(sortType);
+        btnByPath.Checked = sortGrouping is DiffListGrouping.FilePath;
+        btnByExtension.Checked = sortGrouping is DiffListGrouping.FileExtension;
+        btnByStatus.Checked = sortGrouping is DiffListGrouping.FileStatus;
         btnAsTree.Image = flatList ? _flatListImage : _treeImage;
         tsmiGroupByFilePathTree.Checked = sortType == DiffListSortType.FilePath;
         tsmiGroupByFilePathFlat.Checked = sortType == DiffListSortType.FilePathFlat;

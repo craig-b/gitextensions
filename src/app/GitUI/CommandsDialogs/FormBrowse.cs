@@ -970,20 +970,22 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
             bool bareRepository = Module.IsBareRepository();
             bool isDashboard = _dashboard?.Visible ?? false;
-            bool validBrowseDir = !isDashboard && Module.IsValidGitWorkingDir();
+            RepoUiCapabilities capabilities = RepoUiCapabilities.For(
+                new RepoUiState(hasWorkingDir, Module.IsValidGitWorkingDir(), bareRepository, isDashboard));
+            bool validBrowseDir = capabilities.ValidBrowseDir;
 
             branchSelect.Text = validBrowseDir
                 ? !string.IsNullOrWhiteSpace(RevisionGrid.CurrentBranch.Value)
                     ? RevisionGrid.CurrentBranch.Value
                     : DetachedHeadParser.DetachedBranch
                 : "";
-            toolStripButtonLevelUp.Enabled = hasWorkingDir && !bareRepository;
+            toolStripButtonLevelUp.Enabled = capabilities.CanLevelUp;
             UpdateWorktreeToolStripVisibility();
-            CommitInfoTabControl.Visible = validBrowseDir;
+            CommitInfoTabControl.Visible = capabilities.CanShowDetailTabs;
             fileExplorerToolStripMenuItem.Enabled = validBrowseDir;
             manageRemoteRepositoriesToolStripMenuItem1.Enabled = validBrowseDir;
             branchSelect.Enabled = validBrowseDir;
-            toolStripButtonCommit.Enabled = validBrowseDir && !bareRepository;
+            toolStripButtonCommit.Enabled = capabilities.CanCommit;
 
             toolStripButtonPull.Enabled = validBrowseDir;
             toolStripButtonPush.Enabled = validBrowseDir;
@@ -2334,8 +2336,8 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     private void CommandsToolStripMenuItem_DropDownOpening(object? sender, EventArgs e)
     {
         // Most options do not make sense for artificial commits or no revision selected at all
-        IReadOnlyList<GitRevision> selectedRevisions = RevisionGrid.GetSelectedRevisions();
-        bool singleNormalCommit = selectedRevisions.Count == 1 && !selectedRevisions[0].IsArtificial;
+        RevisionCommandAvailability availability = RevisionCommandAvailability.For(
+            Module.IsBareRepository(), RevisionGrid.GetSelectedRevisions());
 
         // Some commands like stash, undo commit etc has no relation to selections
 
@@ -2349,14 +2351,14 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         cherryPickToolStripMenuItem.Enabled =
         checkoutToolStripMenuItem.Enabled =
         bisectToolStripMenuItem.Enabled =
-            singleNormalCommit && !Module.IsBareRepository();
+            availability.CanBranchCheckoutMergeCherryPickBisect;
 
-        rebaseToolStripMenuItem.Enabled = selectedRevisions.Count is (1 or 2) && selectedRevisions.All(r => !r.IsArtificial) && !Module.IsBareRepository();
+        rebaseToolStripMenuItem.Enabled = availability.CanRebase;
 
         tagToolStripMenuItem.Enabled =
         deleteTagToolStripMenuItem.Enabled =
         archiveToolStripMenuItem.Enabled =
-            singleNormalCommit;
+            availability.CanTagOrArchive;
 
         // Not operating on selected revision
         commitToolStripMenuItem.Enabled =
@@ -2367,7 +2369,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         cleanupToolStripMenuItem.Enabled =
         toolStripMenuItemReflog.Enabled =
         applyPatchToolStripMenuItem.Enabled =
-            !Module.IsBareRepository();
+            availability.CanRepositoryCommands;
     }
 
     private void PullToolStripMenuItemClick(object? sender, EventArgs e)
@@ -2837,9 +2839,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     {
         if (!menuCommitInfoPosition.DropDownButtonPressed)
         {
-            SetCommitInfoPosition((CommitInfoPosition)(
-                ((int)AppSettings.CommitInfoPosition + 1) %
-                Enum.GetValues<CommitInfoPosition>().Length));
+            SetCommitInfoPosition(CommitInfoLayoutTable.Next(AppSettings.CommitInfoPosition));
         }
     }
 
@@ -2892,47 +2892,41 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         RevisionsSplitContainer.SuspendLayout();
 
         CommitInfoPosition commitInfoPosition = AppSettings.CommitInfoPosition;
-        if (commitInfoPosition == CommitInfoPosition.BelowList)
-        {
-            CommitInfoTabControl.SelectedIndexChanged -= CommitInfoTabControl_SelectedIndexChanged;
-            CommitInfoTabControl.InsertIfNotExists(0, CommitInfoTabPage);
-            CommitInfoTabControl.SelectedIndexChanged += CommitInfoTabControl_SelectedIndexChanged;
-            CommitInfoTabControl.SelectedTab = CommitInfoTabPage;
+        CommitInfoLayout layout = CommitInfoLayoutTable.For(commitInfoPosition);
 
-            RevisionsSplitContainer.FixedPanel = FixedPanel.Panel2;
-            RevisionInfo.Parent = CommitInfoTabPage;
-            RevisionGridContainer.Parent = RevisionsSplitContainer.Panel1;
-            RevisionsSplitContainer.Panel2Collapsed = true;
+        CommitInfoTabControl.SelectedIndexChanged -= CommitInfoTabControl_SelectedIndexChanged;
+        if (layout.CommitInfoInTabControl)
+        {
+            CommitInfoTabControl.InsertIfNotExists(0, CommitInfoTabPage);
+        }
+        else
+        {
+            CommitInfoTabControl.RemoveIfExists(CommitInfoTabPage);
+        }
+
+        CommitInfoTabControl.SelectedIndexChanged += CommitInfoTabControl_SelectedIndexChanged;
+        if (layout.CommitInfoInTabControl)
+        {
+            CommitInfoTabControl.SelectedTab = CommitInfoTabPage;
         }
         else
         {
             // enough to fit CommitInfoHeader in most cases, when the width is (avatar + commit hash)
             int width = DpiUtil.Scale(490) + SystemInformation.VerticalScrollBarWidth;
-            CommitInfoTabControl.SelectedIndexChanged -= CommitInfoTabControl_SelectedIndexChanged;
-            CommitInfoTabControl.RemoveIfExists(CommitInfoTabPage);
-            CommitInfoTabControl.SelectedIndexChanged += CommitInfoTabControl_SelectedIndexChanged;
-
-            if (commitInfoPosition == CommitInfoPosition.RightwardFromList)
-            {
-                RevisionsSplitContainer.FixedPanel = FixedPanel.Panel2;
-                RevisionsSplitContainer.SplitterDistance = Math.Max(0, RevisionsSplitContainer.Width - width);
-                RevisionInfo.Parent = RevisionsSplitContainer.Panel2;
-                RevisionGridContainer.Parent = RevisionsSplitContainer.Panel1;
-            }
-            else if (commitInfoPosition == CommitInfoPosition.LeftwardFromList)
-            {
-                RevisionsSplitContainer.FixedPanel = FixedPanel.Panel1;
-                RevisionsSplitContainer.SplitterDistance = width;
-                RevisionInfo.Parent = RevisionsSplitContainer.Panel1;
-                RevisionGridContainer.Parent = RevisionsSplitContainer.Panel2;
-            }
-            else
-            {
-                throw new NotSupportedException();
-            }
-
-            RevisionsSplitContainer.Panel2Collapsed = false;
+            RevisionsSplitContainer.SplitterDistance = CommitInfoLayoutTable.SplitterDistance(commitInfoPosition, RevisionsSplitContainer.Width, width);
         }
+
+        RevisionsSplitContainer.FixedPanel = layout.FixFirstPanel ? FixedPanel.Panel1 : FixedPanel.Panel2;
+        RevisionInfo.Parent = layout.RevisionInfoPane switch
+        {
+            RevisionPane.CommitInfoTab => CommitInfoTabPage,
+            RevisionPane.SplitPanel1 => RevisionsSplitContainer.Panel1,
+            _ => RevisionsSplitContainer.Panel2,
+        };
+        RevisionGridContainer.Parent = layout.RevisionGridPane is RevisionPane.SplitPanel1
+            ? RevisionsSplitContainer.Panel1
+            : RevisionsSplitContainer.Panel2;
+        RevisionsSplitContainer.Panel2Collapsed = layout.DetailPanelCollapsed;
 
         RevisionInfo.Parent.BackColor = RevisionInfo.BackColor;
         RevisionInfo.ResumeLayout(performLayout: true);
@@ -2967,24 +2961,19 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         toolStripWorktrees.DropDown.SuspendLayout();
         toolStripWorktrees.DropDownItems.Clear();
 
-        string currentWorkingDir = Module.WorkingDir.TrimEnd(Path.DirectorySeparatorChar);
         IReadOnlyList<GitWorktree> worktrees = Module.GetWorktrees();
 
-        foreach (GitWorktree worktree in worktrees)
+        foreach (WorktreeMenuEntry entry in WorktreeMenuModel.Build(worktrees, Module.WorkingDir, pathsCaseInsensitive: true))
         {
-            bool isCurrent = string.Equals(
-                worktree.Path.TrimEnd(Path.DirectorySeparatorChar),
-                currentWorkingDir,
-                StringComparison.OrdinalIgnoreCase);
-
+            GitWorktree worktree = entry.Worktree;
             string displayName = worktree.GetDisplayName(
                 Path.GetFileName(worktree.Path.TrimEnd(Path.DirectorySeparatorChar)));
             ToolStripMenuItem item = new(displayName)
             {
                 Tag = worktree.Path,
                 Image = Images.WorkTree,
-                Checked = isCurrent,
-                Enabled = !isCurrent && !worktree.IsDeleted
+                Checked = entry.IsCurrent,
+                Enabled = entry.Enabled
             };
 
             if (worktree.IsDeleted)
@@ -3001,7 +2990,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         ToolStripMenuItem createItem = new(TranslatedStrings.CreateWorktree, Images.WorkTree);
         createItem.Click += (_, _) =>
         {
-            string mainPath = worktrees.Count > 0 ? worktrees[0].Path : Module.WorkingDir;
+            string mainPath = WorktreeMenuModel.MainWorktreePath(worktrees, Module.WorkingDir);
             if (UICommands.Execute(new UICmd.WorktreeCreate(mainPath), this))
             {
                 RefreshRevisions();
