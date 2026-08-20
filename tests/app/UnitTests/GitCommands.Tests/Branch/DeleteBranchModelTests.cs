@@ -53,6 +53,17 @@ public sealed class DeleteBranchModelTests
     }
 
     [Test]
+    public void Single_branch_unmerged_verdict_covers_detached_head()
+    {
+        HashSet<string> merged = ["merged"];
+
+        DeleteBranchPreflight.IsUnmerged("main", "merged", merged).Should().BeFalse();
+        DeleteBranchPreflight.IsUnmerged("main", "unmerged", merged).Should().BeTrue();
+        DeleteBranchPreflight.IsUnmerged(null, "merged", merged).Should().BeTrue();
+        DeleteBranchPreflight.IsUnmerged("(no branch)", "merged", merged).Should().BeTrue();
+    }
+
+    [Test]
     public void Classification_splits_main_linked_and_deleted_worktrees()
     {
         IGitRef inMain = Ref("in-main");

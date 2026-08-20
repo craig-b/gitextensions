@@ -65,8 +65,14 @@ public static class DeleteBranchPreflight
 
         return currentBranch is null
             || DetachedHeadParser.IsDetachedHead(currentBranch)
-            || selectedBranches.Any(branch => !mergedBranches.Contains(branch.Name));
+            || selectedBranches.Any(branch => IsUnmerged(currentBranch, branch.Name, mergedBranches));
     }
+
+    /// <summary>A single branch's unmerged verdict; a detached HEAD forces the warning.</summary>
+    public static bool IsUnmerged(string? currentBranch, string branchName, IReadOnlySet<string> mergedBranches)
+        => currentBranch is null
+            || DetachedHeadParser.IsDetachedHead(currentBranch)
+            || !mergedBranches.Contains(branchName);
 }
 
 /// <summary>

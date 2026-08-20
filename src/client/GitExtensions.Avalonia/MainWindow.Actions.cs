@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using GitCommands.Actions;
+using GitCommands.Branch;
 using GitCommands.LeftPanel;
+using GitCommands.Rebase;
+using GitCommands.Reset;
 using GitExtensions.Extensibility.Git;
 using GitUIPluginInterfaces;
 
@@ -41,7 +44,25 @@ public partial class MainWindow
         },
         ["commit.cherryPick"] = revision => RunOperationAsync($"Cherry-pick {revision.ObjectId.ToShortString()}", () => _session.CherryPickAsync(revision.ObjectId)),
         ["commit.revert"] = revision => RunOperationAsync($"Revert {revision.ObjectId.ToShortString()}", () => _session.RevertAsync(revision.ObjectId)),
-        ["commit.mergeIntoCurrent"] = revision => RunOperationAsync($"Merge {revision.ObjectId.ToShortString()}", () => _session.MergeAsync(revision.ObjectId.ToString())),
+        ["commit.mergeIntoCurrent"] = revision => MergeWithDialogAsync(revision.ObjectId.ToShortString(), revision.ObjectId.ToString()),
+        ["commit.rebaseCurrentOnto"] = revision => RebaseWithConfirmAsync(revision.ObjectId.ToShortString(), revision.ObjectId.ToString()),
+        ["commit.resetCurrentToHere"] = async revision =>
+        {
+            bool isDirty = await _session.IsDirtyAsync();
+            ResetMode? mode = await ResetDialog.ShowAsync(this, revision.ObjectId.ToShortString(), isDirty);
+            if (mode is null)
+            {
+                return;
+            }
+
+            if (ResetCurrentBranchPolicy.RequiresConfirmation(mode.Value)
+                && !await ConfirmDialog.ConfirmAsync(this, "Hard reset", "A hard reset discards ALL local changes. Continue?"))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Reset ({mode.Value}) to {revision.ObjectId.ToShortString()}", () => _session.ResetAsync(mode.Value, revision.ObjectId));
+        },
         ["copy.hash"] = revision => CopyToClipboardAsync(revision.ObjectId.ToString()),
         ["copy.message"] = revision => CopyToClipboardAsync(revision.Body ?? revision.Subject),
         ["copy.author"] = revision => CopyToClipboardAsync($"{revision.Author} <{revision.AuthorEmail}>"),
@@ -69,25 +90,69 @@ public partial class MainWindow
     private Dictionary<string, Func<RefTreeNode, Task>> RefActionHandlers => new()
     {
         ["ref.checkout"] = node => RunOperationAsync($"Checkout {node.FullPath}", () => _session.CheckoutBranchAsync(node.FullPath)),
-        ["ref.mergeIntoCurrent"] = node => RunOperationAsync($"Merge {node.FullPath}", () => _session.MergeAsync(node.FullPath)),
+        ["ref.mergeIntoCurrent"] = node => MergeWithDialogAsync(node.FullPath, node.FullPath),
+        ["ref.rebaseCurrentOnto"] = node => RebaseWithConfirmAsync(node.FullPath, node.FullPath),
         ["ref.delete"] = async node =>
         {
-            if (!await ConfirmDialog.ConfirmAsync(this, "Delete", $"Delete {node.FullPath}?"))
+            if (node.Kind is RefTreeNodeKind.Tag)
             {
+                if (await ConfirmDialog.ConfirmAsync(this, "Delete", $"Delete tag {node.FullPath}?"))
+                {
+                    await RunOperationAsync($"Delete tag {node.FullPath}", () => _session.DeleteTagAsync(node.FullPath));
+                }
+
                 return;
             }
 
-            if (node.Kind is RefTreeNodeKind.Tag)
+            if (node.Kind is RefTreeNodeKind.RemoteBranch)
             {
-                await RunOperationAsync($"Delete tag {node.FullPath}", () => _session.DeleteTagAsync(node.FullPath));
+                if (await ConfirmDialog.ConfirmAsync(this, "Delete", $"Delete remote branch {node.FullPath}? (local tracking ref only)"))
+                {
+                    await RunOperationAsync($"Delete {node.FullPath}", () => _session.DeleteBranchAsync(node.FullPath));
+                }
+
+                return;
             }
-            else
+
+            MergedBranchScan scan = await _session.GetMergedBranchScanAsync();
+            bool unmerged = DeleteBranchPreflight.IsUnmerged(scan.CurrentBranch, node.FullPath, scan.MergedBranches);
+            string question = unmerged
+                ? $"The branch {node.FullPath} has NOT been merged into HEAD.\nDelete anyway? (reflog can restore deleted branches)"
+                : $"Delete branch {node.FullPath}?";
+            if (await ConfirmDialog.ConfirmAsync(this, "Delete branch", question))
             {
-                await RunOperationAsync($"Delete branch {node.FullPath}", () => _session.DeleteBranchAsync(node.FullPath));
+                await RunOperationAsync($"Delete branch {node.FullPath}", () => _session.DeleteBranchAsync(node.FullPath, force: unmerged));
             }
         },
         ["ref.copyName"] = node => CopyToClipboardAsync(node.FullPath),
     };
+
+    /// <summary>Merge via the options dialog (MergeBranchOptions, §20a batch 2).</summary>
+    private async Task MergeWithDialogAsync(string displayName, string mergeRef)
+    {
+        GitCommands.Merge.MergeBranchOptions? options = await MergeDialog.ShowAsync(this, mergeRef, _session.SelectedBranch);
+        if (options is not null)
+        {
+            await RunOperationAsync($"Merge {displayName}", () => _session.MergeWithOptionsAsync(options));
+        }
+    }
+
+    /// <summary>Plain rebase of the current branch onto a ref, with the up-to-date output recognized.</summary>
+    private async Task RebaseWithConfirmAsync(string displayName, string onto)
+    {
+        if (!await ConfirmDialog.ConfirmAsync(this, "Rebase", $"Rebase {_session.SelectedBranch} onto {displayName}?"))
+        {
+            return;
+        }
+
+        await RunOperationAsync($"Rebase onto {displayName}", async () =>
+        {
+            (bool success, string output) = await _session.RebaseAsync(onto);
+            return success && RebaseOutputAnalyzer.IsBranchUpToDate(output)
+                ? (true, "Already up to date.")
+                : (success, output);
+        });
+    }
 
     private async Task CopyToClipboardAsync(string text)
     {

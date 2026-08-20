@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using GitCommands;
+using GitCommands.Branch;
 using GitCommands.Commit;
 using GitCommands.Git;
+using GitCommands.Merge;
 using GitCommands.LeftPanel;
 using GitCommands.RichText;
 using GitExtUtils;
@@ -119,11 +121,27 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> MergeAsync(string refName)
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("merge") { refName.QuoteNE() }));
 
+    /// <summary>Runs a merge built from the portable MergeBranchOptions model.</summary>
+    public Task<(bool Success, string Output)> MergeWithOptionsAsync(MergeBranchOptions options)
+        => Task.Run(() => RunGitOperation(options.ToArguments(mergeMessagePath: null, _module.GetPathForGitExecution)));
+
+    /// <summary>Rebases the current branch onto the given ref (plain, non-interactive).</summary>
+    public Task<(bool Success, string Output)> RebaseAsync(string onto)
+        => Task.Run(() => RunGitOperation(Commands.Rebase(new Commands.RebaseOptions { BranchName = onto })));
+
+    /// <summary>Resets the current branch to the given commit with the chosen mode.</summary>
+    public Task<(bool Success, string Output)> ResetAsync(ResetMode mode, ObjectId commitId)
+        => Task.Run(() => RunGitOperation(Commands.Reset(mode, commitId.ToString())));
+
+    /// <summary>The merged-branch scan feeding the delete-branch preflight.</summary>
+    public Task<MergedBranchScan> GetMergedBranchScanAsync()
+        => Task.Run(() => MergedBranchScan.Parse(_module.GetMergedBranches()));
+
     public Task<(bool Success, string Output)> CreateBranchAtAsync(string branchName, ObjectId commitId, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, commitId, checkout)));
 
-    public Task<(bool Success, string Output)> DeleteBranchAsync(string branchName)
-        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("branch") { "-d", branchName.QuoteNE() }));
+    public Task<(bool Success, string Output)> DeleteBranchAsync(string branchName, bool force = false)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("branch") { force ? "-D" : "-d", branchName.QuoteNE() }));
 
     public Task<(bool Success, string Output)> DeleteTagAsync(string tagName)
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("tag") { "-d", tagName.QuoteNE() }));
