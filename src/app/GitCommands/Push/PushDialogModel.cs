@@ -77,6 +77,85 @@ public static class PushDestinationResolver
             : (remoteName?.Trim() ?? "", remoteName ?? "");
 }
 
+/// <summary>Module-free resolution of a remote's default push target from its push refspecs.</summary>
+public static class PushRefspecResolver
+{
+    /// <summary>
+    ///  The first "lhs:rhs" refspec whose lhs names the branch (or "*") yields the rhs head
+    ///  name (wildcards substituted) - GetDefaultPushRemote's historical rules without the
+    ///  GitRef/module detour.
+    /// </summary>
+    public static string? ResolveDefaultPushTarget(IEnumerable<string>? pushRefspecs, string branch)
+    {
+        if (pushRefspecs is null)
+        {
+            return null;
+        }
+
+        List<(string Lhs, string Rhs)> pairs = [.. pushRefspecs
+            .Select(refspec => refspec.Split(':'))
+            .Where(parts => parts.Length == 2)
+            .Select(parts => (parts[0], parts[1]))];
+
+        foreach ((string lhs, string rhs) in pairs)
+        {
+            if (HeadName(lhs) is string lhsName
+                && lhsName.Equals(branch, StringComparison.OrdinalIgnoreCase)
+                && HeadName(rhs) is string rhsName)
+            {
+                return rhsName;
+            }
+        }
+
+        foreach ((string lhs, string rhs) in pairs)
+        {
+            if (HeadName(lhs) == "*" && HeadName(rhs.Replace("*", branch)) is string rhsName)
+            {
+                return rhsName;
+            }
+        }
+
+        return null;
+
+        static string? HeadName(string completeName)
+            => completeName.StartsWith(GitRefName.RefsHeadsPrefix)
+                ? completeName[GitRefName.RefsHeadsPrefix.Length..]
+                : null;
+    }
+}
+
+/// <summary>The push dialog's new-branch-for-remote warning rule.</summary>
+public static class NewBranchWarning
+{
+    /// <summary>
+    ///  A remote branch counts as known when a remote ref carries its name for this remote,
+    ///  or a local head with that name tracks this remote.
+    /// </summary>
+    public static bool IsBranchKnownToRemote(IEnumerable<IGitRef> refs, string? remote, string branch)
+        => refs.Any(gitRef => gitRef.IsRemote && gitRef.Remote == remote && gitRef.LocalName == branch)
+            || refs.Any(gitRef => gitRef.IsHead && gitRef.Name == branch && gitRef.TrackingRemote == remote);
+
+    /// <summary>
+    ///  Warn when pushing a single branch whose remote name is neither the configured push
+    ///  target nor known to the remote.
+    /// </summary>
+    public static bool ShouldWarnNewBranch(
+        bool isBranchTab,
+        bool pushToRemote,
+        bool isBareRepository,
+        string localBranchText,
+        string allRefsSentinel,
+        string remoteBranchText,
+        string? defaultPushTarget,
+        bool knownToRemote)
+        => isBranchTab
+            && pushToRemote
+            && !isBareRepository
+            && localBranchText != allRefsSentinel
+            && remoteBranchText != defaultPushTarget
+            && !knownToRemote;
+}
+
 public enum RejectionFollowUp
 {
     GiveUp,

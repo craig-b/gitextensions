@@ -211,10 +211,12 @@ public partial class FileHistoryWindow : Window
             BlamePreviousButton.IsEnabled = false;
 
             BlameGutter.Inlines!.Clear();
+            bool showLineNumbers = AppSettings.BlameShowLineNumbers;
             string[] gutterLines = contents.Gutter.Split('\n');
             for (int i = 0; i < blame.Lines.Count && i < gutterLines.Length; i++)
             {
-                BlameGutter.Inlines.Add(new global::Avalonia.Controls.Documents.Run(gutterLines[i].TrimEnd('\r') + "\n")
+                string lineNumberPrefix = showLineNumbers ? $"{i + 1,5} " : "";
+                BlameGutter.Inlines.Add(new global::Avalonia.Controls.Documents.Run(lineNumberPrefix + gutterLines[i].TrimEnd('\r') + "\n")
                 {
                     Background = AgeBucketBrushes[buckets[i]],
                 });

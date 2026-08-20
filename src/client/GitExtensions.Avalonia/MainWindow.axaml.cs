@@ -899,7 +899,7 @@ public partial class MainWindow : Window
             => node.Status is not null ? [node] : node.Children.SelectMany(Leaves);
     }
 
-    /// <summary>File history and blame open in their own windows, like the WinForms app.</summary>
+    /// <summary>The file tree's menu projects from the registry's file-status surface.</summary>
     private void OnFileTreeContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         GitItemStatus? file = FileTree.SelectedItems!.OfType<StatusNode>().FirstOrDefault()?.Status;
@@ -909,16 +909,30 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        ContextMenu menu = new();
-        AddItem("File history", showBlame: false);
-        AddItem("Blame", showBlame: true);
-        menu.Open(FileTree);
-
-        void AddItem(string caption, bool showBlame)
+        Dictionary<string, Func<GitItemStatus, Task>> handlers = new()
         {
-            MenuItem item = new() { Header = caption };
-            item.Click += (_, _) => new FileHistoryWindow(_session, file.Name, showBlame).Show(this);
-            menu.Items.Add(item);
+            ["file.history"] = status =>
+            {
+                new FileHistoryWindow(_session, status.Name, showBlame: false).Show(this);
+                return Task.CompletedTask;
+            },
+            ["file.blame"] = status =>
+            {
+                new FileHistoryWindow(_session, status.Name, showBlame: true).Show(this);
+                return Task.CompletedTask;
+            },
+            ["file.copyPath"] = status => CopyToClipboardAsync(status.Name),
+        };
+
+        ContextMenu menu = BuildMenu(
+            GitCommands.Actions.GridMenuRegistry.FileActions,
+            action => handlers.ContainsKey(action.Id),
+            _ => true,
+            action => handlers[action.Id](file));
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(FileTree);
         }
     }
 

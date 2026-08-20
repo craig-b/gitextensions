@@ -227,16 +227,7 @@ public partial class FormPush : GitModuleForm
     }
 
     private bool IsBranchKnownToRemote(string? remote, string branch)
-    {
-        IEnumerable<IGitRef> remoteRefs = GetRemoteBranches(remote).Where(r => r.LocalName == branch);
-        if (remoteRefs.Any())
-        {
-            return true;
-        }
-
-        IEnumerable<IGitRef> localRefs = _gitRefs!.Where(r => r.IsHead && r.Name == branch && r.TrackingRemote == remote);
-        return localRefs.Any();
-    }
+        => NewBranchWarning.IsBranchKnownToRemote(_gitRefs!, remote, branch);
 
     private bool PushChanges(IWin32Window? owner)
     {
@@ -274,21 +265,23 @@ public partial class FormPush : GitModuleForm
         // Extra check if the branch is already known to the remote, give a warning when not.
         // This is not possible when the remote is an URL, but this is ok since most users push to
         // known remotes anyway.
-        if (TabControlTagBranch.SelectedTab == BranchTab && PushToRemote.Checked &&
-            !Module.IsBareRepository())
+        // If the current branch is not the default push, and not known by the remote
+        // (as far as we know since we are disconnected....)
+        if (NewBranchWarning.ShouldWarnNewBranch(
+                TabControlTagBranch.SelectedTab == BranchTab,
+                PushToRemote.Checked,
+                Module.IsBareRepository(),
+                _NO_TRANSLATE_Branch.Text,
+                AllRefs,
+                RemoteBranch.Text,
+                _remotesManager.GetDefaultPushRemote(_selectedRemote, _NO_TRANSLATE_Branch.Text),
+                IsBranchKnownToRemote(selectedRemoteName, RemoteBranch.Text)))
         {
-            // If the current branch is not the default push, and not known by the remote
-            // (as far as we know since we are disconnected....)
-            if (_NO_TRANSLATE_Branch.Text != AllRefs &&
-                RemoteBranch.Text != _remotesManager.GetDefaultPushRemote(_selectedRemote, _NO_TRANSLATE_Branch.Text) &&
-                !IsBranchKnownToRemote(selectedRemoteName, RemoteBranch.Text))
+            // Ask if this is really what the user wants
+            if (!AppSettings.DontConfirmPushNewBranch &&
+                MessageBoxes.Show(owner, _branchNewForRemote.Text, _pushCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
             {
-                // Ask if this is really what the user wants
-                if (!AppSettings.DontConfirmPushNewBranch &&
-                    MessageBoxes.Show(owner, _branchNewForRemote.Text, _pushCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
-                {
-                    return false;
-                }
+                return false;
             }
         }
 

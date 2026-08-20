@@ -36,6 +36,34 @@ public sealed class PushDialogModelTests
             .Should().Be(("origin", " origin "));
     }
 
+    [Test]
+    public void Default_push_target_resolves_exact_then_wildcard_refspecs()
+    {
+        string[] refspecs = ["refs/heads/main:refs/heads/main-target", "refs/heads/*:refs/heads/mirror/*"];
+
+        PushRefspecResolver.ResolveDefaultPushTarget(refspecs, "main").Should().Be("main-target");
+        PushRefspecResolver.ResolveDefaultPushTarget(refspecs, "MAIN").Should().Be("main-target");
+        PushRefspecResolver.ResolveDefaultPushTarget(refspecs, "feature").Should().Be("mirror/feature");
+        PushRefspecResolver.ResolveDefaultPushTarget(["refs/tags/x:refs/heads/y"], "x").Should().BeNull();
+        PushRefspecResolver.ResolveDefaultPushTarget(null, "main").Should().BeNull();
+    }
+
+    [Test]
+    public void New_branch_warning_needs_the_full_gate_chain()
+    {
+        NewBranchWarning.ShouldWarnNewBranch(
+            isBranchTab: true, pushToRemote: true, isBareRepository: false,
+            "feature", "[ All ]", "feature", defaultPushTarget: null, knownToRemote: false).Should().BeTrue();
+        NewBranchWarning.ShouldWarnNewBranch(
+            true, true, false, "[ All ]", "[ All ]", "feature", null, false).Should().BeFalse();
+        NewBranchWarning.ShouldWarnNewBranch(
+            true, true, false, "feature", "[ All ]", "feature", "feature", false).Should().BeFalse();
+        NewBranchWarning.ShouldWarnNewBranch(
+            true, true, false, "feature", "[ All ]", "feature", null, knownToRemote: true).Should().BeFalse();
+        NewBranchWarning.ShouldWarnNewBranch(
+            true, false, false, "feature", "[ All ]", "feature", null, false).Should().BeFalse();
+    }
+
     [TestCase(GitPullAction.None, GitPullAction.Merge, false, RejectionFollowUp.GiveUp)]
     [TestCase(GitPullAction.Default, GitPullAction.None, false, RejectionFollowUp.GiveUp)]
     [TestCase(GitPullAction.Default, GitPullAction.Fetch, false, RejectionFollowUp.UnsupportedPullAction)]
