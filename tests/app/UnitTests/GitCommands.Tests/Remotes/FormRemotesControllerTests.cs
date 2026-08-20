@@ -1,7 +1,7 @@
-﻿using GitCommands.UserRepositoryHistory;
-using GitUI.CommandsDialogs;
+﻿using GitCommands.Remotes;
+using GitCommands.UserRepositoryHistory;
 
-namespace GitUITests.CommandsDialogs;
+namespace GitCommandsTests.Remotes;
 public class FormRemotesControllerTests
 {
     private FormRemotesController _controller = null!;

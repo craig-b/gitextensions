@@ -259,6 +259,10 @@ public sealed class SliceSession
 
     public IReadOnlyList<string> GetRemoteNames() => [.. _module.GetRemoteNames()];
 
+    /// <summary>The portable remotes manager (the same one FormRemotes uses).</summary>
+    public GitCommands.Remotes.IConfigFileRemoteSettingsManager CreateRemotesManager()
+        => new GitCommands.Remotes.ConfigFileRemoteSettingsManager(() => _module);
+
     /// <summary>The push dialog's prefill: tracking remote/branch, or the default remote with tracking setup.</summary>
     public (string? Remote, string? RemoteBranch, bool Track) GetPushDefaults() => ResolvePushSpec();
 

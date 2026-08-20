@@ -38,7 +38,7 @@ public partial class FormRemotes : GitModuleForm
     private readonly ListViewGroup _lvgDisabled;
     private IList<Repository>? _repositoryHistory;
 
-    private string[] _genericRemotesNames = ["origin", "upstream", "fork", "remote", "internal", .. AppSettings.CustomGenericRemoteNames];
+    private IReadOnlyCollection<string> _genericRemotesNames = RemoteUrlSuggestions.GenericRemoteNames(AppSettings.CustomGenericRemoteNames);
 
     #region Translation
     private readonly TranslationString _remoteBranchDataError =
@@ -462,25 +462,21 @@ Inactive remote is completely invisible to git.");
         Initialize(_selectedRemote.Name);
     }
 
-    private bool ValidateRemoteDoesNotExist(string remote)
+    private bool ValidateRemoteDoesNotExist(string remote, bool creatingNew)
     {
         Validates.NotNull(_remotesManager);
 
-        if (_remotesManager.EnabledRemoteExists(remote))
+        switch (RemoteNameValidator.Check(remote, creatingNew, _remotesManager.EnabledRemoteExists, _remotesManager.DisabledRemoteExists))
         {
-            MessageBoxes.Show(this, string.Format(_enabledRemoteAlreadyExists.Text, remote), _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-
-            return false;
+            case RemoteNameConflict.EnabledExists:
+                MessageBoxes.Show(this, string.Format(_enabledRemoteAlreadyExists.Text, remote), _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                return false;
+            case RemoteNameConflict.DisabledExists:
+                MessageBoxes.Show(this, string.Format(_disabledRemoteAlreadyExists.Text, remote), _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                return false;
+            default:
+                return true;
         }
-
-        if (_remotesManager.DisabledRemoteExists(remote))
-        {
-            MessageBoxes.Show(this, string.Format(_disabledRemoteAlreadyExists.Text, remote), _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-
-            return false;
-        }
-
-        return true;
     }
 
     private void SaveClick(object sender, EventArgs e)
@@ -490,10 +486,11 @@ Inactive remote is completely invisible to git.");
             return;
         }
 
-        string remote = RemoteName.Text.Trim();
-        string remoteUrl = Url.Text.Trim();
-        string remotePushUrl = comboBoxPushUrl.Text.Trim();
         bool creatingNew = _selectedRemote is null;
+        RemoteSaveRequest request = RemoteSaveRequest.Normalize(RemoteName.Text, Url.Text, comboBoxPushUrl.Text, checkBoxSepPushUrl.Checked);
+        string remote = request.Name;
+        string remoteUrl = request.Url;
+        string remotePushUrl = comboBoxPushUrl.Text.Trim();
         string remotePrefix = txtRemotePrefix.Text;
 
         string? color = null;
@@ -507,13 +504,9 @@ Inactive remote is completely invisible to git.");
             // disable the control while saving
             tabControl1.Enabled = false;
 
-            if ((string.IsNullOrEmpty(remotePushUrl) && checkBoxSepPushUrl.Checked) ||
-                (!string.IsNullOrEmpty(remotePushUrl) && remotePushUrl.Equals(remoteUrl, StringComparison.OrdinalIgnoreCase)))
-            {
-                checkBoxSepPushUrl.Checked = false;
-            }
+            checkBoxSepPushUrl.Checked = request.SeparatePushUrl;
 
-            if (creatingNew && !ValidateRemoteDoesNotExist(remote))
+            if (!ValidateRemoteDoesNotExist(remote, creatingNew))
             {
                 return;
             }
@@ -524,14 +517,15 @@ Inactive remote is completely invisible to git.");
             ConfigFileRemoteSaveResult result = _remotesManager.SaveRemote(_selectedRemote,
                                                    remote,
                                                    remoteUrl,
-                                                   checkBoxSepPushUrl.Checked ? remotePushUrl : null,
+                                                   request.PushUrl,
                                                    PuttySshKey.Text,
                                                    color,
                                                    remotePrefix);
 
-            if (!string.IsNullOrEmpty(result.UserMessage))
+            RemoteSaveReaction reaction = RemoteSaveReaction.Evaluate(result, remoteUrl, request.SeparatePushUrl);
+            if (reaction.ShowMessage)
             {
-                MessageBoxes.Show(this, result.UserMessage, _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                MessageBoxes.Show(this, reaction.Message!, _gitMessage.Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 return;
             }
             else
@@ -545,7 +539,7 @@ Inactive remote is completely invisible to git.");
 
                     await this.SwitchToMainThreadAsync();
                     _formRemotesController.RemoteUpdate(repositoryHistory, _selectedRemote?.Url, remoteUrl);
-                    if (checkBoxSepPushUrl.Checked)
+                    if (reaction.UpdatePushUrlHistory)
                     {
                         _formRemotesController.RemoteUpdate(repositoryHistory, _selectedRemote?.PushUrl, remotePushUrl);
                     }
@@ -556,8 +550,7 @@ Inactive remote is completely invisible to git.");
 
             // if the user has just created a fresh new remote
             // there may be a need to configure it
-            if (result.ShouldUpdateRemote &&
-                !string.IsNullOrEmpty(remoteUrl) &&
+            if (reaction.OfferConfigureAndFetch &&
                 MessageBoxes.Show(this,
                     _questionAutoPullBehaviour.Text,
                     _questionAutoPullBehaviourCaption.Text,
@@ -808,42 +801,11 @@ Inactive remote is completely invisible to git.");
 
     private void FillWithSomeGeneratedRemoteUrls(CaseSensitiveComboBox combobox, Func<ConfigFileRemote, string> urlGetter)
     {
-        string remoteName = RemoteName.Text;
-        bool fillEmptyUrl = true;
-
-        if (string.IsNullOrWhiteSpace(RemoteName.Text) || _genericRemotesNames.Contains(RemoteName.Text))
-        {
-            remoteName = "TO_REPLACE";
-            fillEmptyUrl = false;
-        }
-
         if (UserGitRemotes?.Count != 0)
         {
-            HashSet<string> candidates = new(UserGitRemotes!.Count);
-
             // TODO: Same thing for AzureDevOpsRemoteParser (that doesn't have the same url format!) ???
-            GitHostingRemoteParser gitHostingRemoteParser = new();
-            foreach (ConfigFileRemote remote in UserGitRemotes)
-            {
-                string url = urlGetter(remote);
-
-                if (string.IsNullOrEmpty(url))
-                {
-                    continue;
-                }
-
-                // Simple replace tentative
-                if (url.Contains(remote.Name!))
-                {
-                    candidates.Add(urlGetter(remote).Replace($"{remote.Name}/", $"{remoteName}/"));
-                }
-
-                // Extract from "known" git hosting pattern
-                if (gitHostingRemoteParser.TryExtractGitHostingDataFromRemoteUrl(remote.Url!, out _, out string? owner, out _))
-                {
-                    candidates.Add(url.Replace($"{owner}/", $"{remoteName}/"));
-                }
-            }
+            (IReadOnlyList<string> candidates, bool fillEmptyUrl) = RemoteUrlSuggestions.GenerateCandidates(
+                UserGitRemotes!, urlGetter, RemoteName.Text, _genericRemotesNames);
 
             if (candidates.Count > 0)
             {
@@ -886,8 +848,7 @@ Inactive remote is completely invisible to git.");
             return;
         }
 
-        GitHostingRemoteParser gitHostingRemoteParser = new();
-        if (gitHostingRemoteParser.TryExtractGitHostingDataFromRemoteUrl(Url.Text, out _, out string? owner, out _))
+        if (RemoteUrlSuggestions.TryInferNameFromUrl(Url.Text) is string owner)
         {
             RemoteName.Text = owner;
             RemoteName.SelectAll();

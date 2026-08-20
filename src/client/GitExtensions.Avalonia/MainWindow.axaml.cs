@@ -79,6 +79,16 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_REMOTESTEST") == "1")
+        {
+            Loaded += (_, _) =>
+            {
+                RemotesWindow remotesWindow = new(_session);
+                remotesWindow.Loaded += (_, _) => _ = remotesWindow.RunHarnessAsync();
+                remotesWindow.Show(this);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_MENUTEST") == "1")
         {
             Loaded += (_, _) => _ = RunMenuHarnessAsync();
@@ -742,6 +752,13 @@ public partial class MainWindow : Window
             item.Click += (_, _) => new FileHistoryWindow(_session, file.Name, showBlame).Show(this);
             menu.Items.Add(item);
         }
+    }
+
+    private async void OnRemotesClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        RemotesWindow remotesWindow = new(_session);
+        await remotesWindow.ShowDialog(this);
+        await LoadRefPanelAsync();
     }
 
     private void OnFileTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)

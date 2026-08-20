@@ -1,8 +1,8 @@
 ﻿using GitCommands.UserRepositoryHistory;
 
-namespace GitUI.CommandsDialogs;
+namespace GitCommands.Remotes;
 
-internal sealed class FormRemotesController
+public sealed class FormRemotesController
 {
     public void RemoteDelete(IList<Repository> remotes, string? oldRemoteUrl)
     {
