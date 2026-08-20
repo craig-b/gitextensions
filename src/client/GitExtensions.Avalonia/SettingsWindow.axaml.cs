@@ -40,6 +40,7 @@ public partial class SettingsWindow : Window
             ("Commit dialog", new CommitDialogPageModel(), null),
             ("Confirmations", new ConfirmationsPageModel(), null),
             ("Appearance", new AppearancePageModel(), null),
+            ("Colors", new ColorsPageModel(), null),
             ("Advanced", new AdvancedPageModel(), null),
             ("Detailed", new DetailedPageModel(() => AppSettings.SettingsContainer), null),
             ("Diff viewer", new DiffViewerPageModel(), null),

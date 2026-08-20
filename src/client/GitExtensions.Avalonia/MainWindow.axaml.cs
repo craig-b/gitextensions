@@ -27,6 +27,7 @@ public partial class MainWindow : Window
 
         _session = new SliceSession(repositoryPath);
         Loc.Reload();
+        ApplyThemeVariant();
         ApplyToolbarTranslations();
         Title = $"Git Extensions - {_session.WorkingDir}";
 
@@ -559,7 +560,22 @@ public partial class MainWindow : Window
         await settingsWindow.ShowDialog(this);
         RebuildHotkeyMap();
         Loc.Reload();
+        ApplyThemeVariant();
         ApplyToolbarTranslations();
+    }
+
+    /// <summary>The Colors page's variant choice, applied application-wide (blank follows the system).</summary>
+    private static void ApplyThemeVariant()
+    {
+        if (global::Avalonia.Application.Current is { } application)
+        {
+            application.RequestedThemeVariant = GitCommands.AppSettings.ClientThemeVariant switch
+            {
+                "Light" => global::Avalonia.Styling.ThemeVariant.Light,
+                "Dark" => global::Avalonia.Styling.ThemeVariant.Dark,
+                _ => global::Avalonia.Styling.ThemeVariant.Default,
+            };
+        }
     }
 
     /// <summary>The static toolbar captions go through the §11 join (menus re-render per open).</summary>

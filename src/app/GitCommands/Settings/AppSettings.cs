@@ -1037,6 +1037,13 @@ public static partial class AppSettings
         set => SetString("MenuCustomOrder", value);
     }
 
+    /// <summary>The client's theme variant: blank follows the system, else "Light"/"Dark".</summary>
+    public static string ClientThemeVariant
+    {
+        get => GetString("ClientThemeVariant", "") ?? "";
+        set => SetString("ClientThemeVariant", value);
+    }
+
     /// <summary>
     /// Gets or sets the default pull action as configured in the FormPull dialog.
     /// </summary>
