@@ -250,6 +250,15 @@ public sealed class SliceSession
         return Task.Run(() => RunGitOperation(arguments));
     }
 
+    public IReadOnlyList<string> GetRemoteNames() => [.. _module.GetRemoteNames()];
+
+    /// <summary>The push dialog's prefill: tracking remote/branch, or the default remote with tracking setup.</summary>
+    public (string? Remote, string? RemoteBranch, bool Track) GetPushDefaults() => ResolvePushSpec();
+
+    /// <summary>Runs a push built from the dialog's explicit choices (portable Commands.Push).</summary>
+    public Task<(bool Success, string Output)> PushWithOptionsAsync(string remote, string localBranch, string? remoteBranch, ForcePushOptions force, bool track)
+        => Task.Run(() => RunGitOperation(Commands.Push(remote, localBranch, remoteBranch, force, track, recursiveSubmodules: 0)));
+
     /// <summary>The same resolution as <see cref="PushTarget"/>, but with the parts separated for command building.</summary>
     private (string? Remote, string? RemoteBranch, bool Track) ResolvePushSpec()
     {

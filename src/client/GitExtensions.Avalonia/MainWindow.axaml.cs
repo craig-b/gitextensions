@@ -60,6 +60,7 @@ public partial class MainWindow : Window
 
                 await Report("create-branch", _session.CreateBranchAsync("harness-branch", checkout: true));
                 await Report("push", _session.PushAsync(forceWithLease: false));
+                await Report("push-options", _session.PushWithOptionsAsync("origin", "harness-branch", "harness-branch", GitCommands.Git.ForcePushOptions.ForceWithLease, track: false));
                 await Report("checkout", _session.CheckoutBranchAsync("main"));
                 await Report("fetch", _session.FetchAsync());
                 await Report("pull", _session.PullAsync(rebase: false));
@@ -290,19 +291,69 @@ public partial class MainWindow : Window
             is GitExtensions.Extensibility.Git.GitPullAction.FetchAll
             or GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll;
 
-        GitCommands.Pull.PullOptions options = new(
-            action.Value,
-            fetchAll ? GitCommands.Pull.PullSourceKind.AllRemotes : GitCommands.Pull.PullSourceKind.Remote,
-            Source: "",
-            RemoteBranch: null,
-            LocalBranch: null,
-            Prune: GitCommands.AppSettings.DefaultPullAction is GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll);
+        System.Collections.Generic.IReadOnlyList<string> remotes = await Task.Run(_session.GetRemoteNames);
+        if (remotes.Count == 0)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Pull", "No remote is configured.");
+            return;
+        }
 
-        await RunOperationAsync("Pull", () => _session.PullWithOptionsAsync(options));
+        (string? defaultRemote, _, _) = _session.GetPushDefaults();
+        GitCommands.Pull.PullOptions? options = await PullDialog.ShowAsync(
+            this,
+            remotes,
+            defaultRemote,
+            action.Value,
+            defaultAllRemotes: fetchAll,
+            defaultPrune: GitCommands.AppSettings.DefaultPullAction is GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll);
+        if (options is null)
+        {
+            return;
+        }
+
+        await RunOperationAsync(options.Action is GitCommands.Pull.PullActionKind.Fetch ? "Fetch" : "Pull", () => _session.PullWithOptionsAsync(options));
     }
 
     private async void OnPushClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-        => await RunOperationAsync("Push", () => _session.PushAsync(forceWithLease: false));
+    {
+        System.Collections.Generic.IReadOnlyList<string> remotes = await Task.Run(_session.GetRemoteNames);
+        if (remotes.Count == 0)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Push", "No remote is configured.");
+            return;
+        }
+
+        (string? defaultRemote, string? defaultRemoteBranch, bool defaultTrack) = _session.GetPushDefaults();
+        PushChoice? choice = await PushDialog.ShowAsync(
+            this, remotes, defaultRemote ?? remotes[0], _session.SelectedBranch, defaultRemoteBranch, defaultTrack);
+        if (choice is null)
+        {
+            return;
+        }
+
+        (bool success, string output) = await _session.PushWithOptionsAsync(
+            choice.Remote, choice.LocalBranch, choice.RemoteBranch, choice.Force, choice.Track);
+
+        if (success)
+        {
+            OperationStatus.Text = "Push: done";
+            await ReloadLogAsync();
+            return;
+        }
+
+        // The rejection analyzer recognizes a non-fast-forward refusal and offers the safe retry.
+        if (choice.Force is GitCommands.Git.ForcePushOptions.DoNotForce
+            && GitCommands.Push.PushRejectionAnalyzer.Analyze(output, choice.LocalBranch).IsRejected
+            && await ConfirmDialog.ConfirmAsync(this, "Push rejected", "The remote rejected the push (non-fast-forward).\nRetry with --force-with-lease?"))
+        {
+            await RunOperationAsync("Push (force with lease)", () => _session.PushWithOptionsAsync(
+                choice.Remote, choice.LocalBranch, choice.RemoteBranch, GitCommands.Git.ForcePushOptions.ForceWithLease, choice.Track));
+            return;
+        }
+
+        OperationStatus.Text = "Push failed";
+        await ConfirmDialog.ErrorAsync(this, "Push failed", string.IsNullOrWhiteSpace(output) ? "The push failed." : output);
+    }
 
     private async void OnNewBranchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
