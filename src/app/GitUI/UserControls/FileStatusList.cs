@@ -64,9 +64,6 @@ public sealed partial class FileStatusList : GitModuleControl
     // Enable menu item to disable AppSettings.ShowDiffForAllParents in some forms
     private bool _enableDisablingShowDiffForAllParents = false;
 
-    [GeneratedRegex(@"(^|\s)-e(\s|\s+['""])", RegexOptions.ExplicitCapture)]
-    private static partial Regex GrepStringRegex { get; }
-
     public delegate void EnterEventHandler(object? sender, EnterEventArgs e);
 
     public event EventHandler? SelectedIndexChanged;
@@ -721,53 +718,16 @@ public sealed partial class FileStatusList : GitModuleControl
 
         if (backwards)
         {
-            SetSelectedItem(FindPrevItem(currentItem) ?? (loop ? GetLastItem() ?? currentItem : currentItem), notify);
+            SetSelectedItem(FileStatusSelectionPolicy.FindPreviousItem(FileStatusListView.Items(), currentItem, IsSearchableItem)
+                ?? (loop ? GetLastItem() ?? currentItem : currentItem), notify);
         }
         else
         {
-            SetSelectedItem(FindNextItem(currentItem) ?? (loop ? GetFirstItem() ?? currentItem : currentItem), notify);
+            SetSelectedItem(FileStatusSelectionPolicy.FindNextItem(FileStatusListView.Items(), currentItem, IsSearchableItem)
+                ?? (loop ? GetFirstItem() ?? currentItem : currentItem), notify);
         }
 
         return SelectedItem;
-
-        TreeNode? FindPrevItem(TreeNode currentItem)
-        {
-            TreeNode? prevItem = null;
-            foreach (TreeNode item in FileStatusListView.Items())
-            {
-                if (item == currentItem)
-                {
-                    return prevItem;
-                }
-
-                if (IsSearchableItem(item))
-                {
-                    prevItem = item;
-                }
-            }
-
-            throw new ArgumentException(@$"{nameof(currentItem)} ""{currentItem}"" is no tree item of {nameof(FileStatusListView)} tree!");
-        }
-
-        TreeNode? FindNextItem(TreeNode currentItem)
-        {
-            bool currentItemFound = false;
-            foreach (TreeNode item in FileStatusListView.Items())
-            {
-                if (item == currentItem)
-                {
-                    currentItemFound = true;
-                    continue;
-                }
-
-                if (currentItemFound && IsSearchableItem(item))
-                {
-                    return item;
-                }
-            }
-
-            return null;
-        }
 
         TreeNode? GetFirstItem() => FileStatusListView.Items().FirstOrDefault(IsSearchableItem);
 
@@ -966,28 +926,11 @@ public sealed partial class FileStatusList : GitModuleControl
 
     public void StoreNextItemToSelect()
     {
-        if (FileStatusListView.SelectedNodes.Count > 0)
-        {
-            bool found = false;
-            foreach (TreeNode node in FileStatusListView.Items())
-            {
-                if (FileStatusListView.SelectedNodes.Contains(node))
-                {
-                    found = true;
-                    continue;
-                }
-
-                if (found && node.Tag is FileStatusItem fileStatusItem)
-                {
-                    _nextItemToSelect = fileStatusItem.Item;
-                    return;
-                }
-            }
-        }
-
-        _nextItemToSelect = FileStatusListView.Items()
-            .Select(node => (node.Tag as FileStatusItem)?.Item)
-            .FirstOrDefault(item => item is not null);
+        _nextItemToSelect = FileStatusSelectionPolicy.FindNextItemToSelect(
+            FileStatusListView.Items().ToList(),
+            hasSelection: FileStatusListView.SelectedNodes.Count > 0,
+            FileStatusListView.SelectedNodes.Contains,
+            node => (node.Tag as FileStatusItem)?.Item);
     }
 
     protected override void DisposeCustomResources()
@@ -1843,17 +1786,12 @@ public sealed partial class FileStatusList : GitModuleControl
 
         string filterText = cboFilterComboBox.Text;
 
-        if (filterText.Length > Module.WorkingDir.Length)
+        if (FileStatusFilterText.StripWorkingDirPrefix(filterText, Module.WorkingDir) is string strippedFilterText)
         {
-            string posixWorkingDir = PathUtil.ToPosixPath(Module.WorkingDir);
-            string posixFilterText = PathUtil.ToPosixPath(filterText);
-            if (posixFilterText.StartsWith(posixWorkingDir, StringComparison.InvariantCultureIgnoreCase))
-            {
-                filterText = posixFilterText.SubstringAfter(posixWorkingDir, StringComparison.InvariantCultureIgnoreCase);
+            filterText = strippedFilterText;
 
-                cboFilterComboBox.Text = filterText;
-                cboFilterComboBox.SelectionStart = filterText.Length;
-            }
+            cboFilterComboBox.Text = filterText;
+            cboFilterComboBox.SelectionStart = filterText.Length;
         }
 
         // workaround for text getting selected if it matches the start of the combobox items
@@ -1899,12 +1837,7 @@ public sealed partial class FileStatusList : GitModuleControl
         {
             // delay to handle keypresses
             await Task.Delay(delay, cancellationToken);
-            string searchArg = search;
-            if (!string.IsNullOrWhiteSpace(searchArg) && !GrepStringRegex.IsMatch(searchArg))
-            {
-                searchArg = searchArg.Replace(@"\\", @"\\\\");
-                searchArg = $@"-e ""{searchArg}""";
-            }
+            string searchArg = GitGrepQuery.BuildSearchArgument(search);
 
             _diffCalculator.SetGrep(searchArg, fileTreeMode: _isFileTreeMode && string.IsNullOrWhiteSpace(searchArg));
             IReadOnlyList<FileStatusWithDescription> gitItemStatusesWithDescription = _diffCalculator.Calculate(prevList: GitItemStatusesWithDescription, refreshDiff: false, refreshGrep: true, cancellationToken);
@@ -1999,22 +1932,18 @@ public sealed partial class FileStatusList : GitModuleControl
     private void StoreFilter(string value)
     {
         SetDeleteFilterButtonVisibility();
-        if (string.IsNullOrEmpty(value))
+        FileFilterResult result = FileFilterParser.Parse(value);
+        _filter = result.Filter;
+        cboFilterComboBox.BackColor = result.Validity switch
         {
-            cboFilterComboBox.BackColor = SystemColors.Window;
-            _filter = null;
-            return;
-        }
+            FileFilterValidity.Empty => SystemColors.Window,
+            FileFilterValidity.Valid => _activeInputColor,
+            _ => _invalidInputColor,
+        };
 
-        try
+        if (result.Validity is FileFilterValidity.Invalid)
         {
-            _filter = new Regex(value, RegexOptions.IgnoreCase);
-            cboFilterComboBox.BackColor = _activeInputColor;
-        }
-        catch
-        {
-            cboFilterComboBox.BackColor = _invalidInputColor;
-            throw;
+            throw new ArgumentException(result.ErrorMessage);
         }
     }
 
