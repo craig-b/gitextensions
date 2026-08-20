@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using GitCommands.Actions;
 using GitCommands.Branch;
 using GitCommands.Git;
@@ -103,6 +104,36 @@ public partial class MainWindow
                 ($"{(candidate.Name == defaultName ? "★ " : "")}Reset {candidate.Name} to {revision.ObjectId.ToShortString()}",
                  (Func<Task>)(() => RunOperationAsync($"Reset {candidate.Name}", () => _session.UpdateRefAsync(candidate.CompleteName, revision.ObjectId)))))];
             await CommandPalette.ShowAsync(this, entries);
+        },
+        ["commit.archive"] = async revision =>
+        {
+            if (GetTopLevel(this)?.StorageProvider is not { } storage)
+            {
+                return;
+            }
+
+            string suggestion = GitCommands.Archive.ArchiveModel.SuggestFileName(
+                new System.IO.DirectoryInfo(_session.WorkingDir).Name, revision.ObjectId.ToShortString(), []);
+            var file = await storage.SaveFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Save archive as",
+                SuggestedFileName = suggestion + ".zip",
+                FileTypeChoices =
+                [
+                    new global::Avalonia.Platform.Storage.FilePickerFileType("Zip archive") { Patterns = ["*.zip"] },
+                    new global::Avalonia.Platform.Storage.FilePickerFileType("Tar archive") { Patterns = ["*.tar"] },
+                ],
+            });
+
+            if (file?.TryGetLocalPath() is not string path)
+            {
+                return;
+            }
+
+            GitCommands.Archive.ArchiveFormat format = path.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)
+                ? GitCommands.Archive.ArchiveFormat.Tar
+                : GitCommands.Archive.ArchiveFormat.Zip;
+            await RunOperationAsync($"Archive {revision.ObjectId.ToShortString()}", () => _session.ArchiveAsync(format, revision.ObjectId.ToString(), path));
         },
         ["bisect.good"] = _ => RunOperationAsync("Bisect: mark good", () => _session.ContinueBisectAsync(GitBisectOption.Good)),
         ["bisect.bad"] = _ => RunOperationAsync("Bisect: mark bad", () => _session.ContinueBisectAsync(GitBisectOption.Bad)),

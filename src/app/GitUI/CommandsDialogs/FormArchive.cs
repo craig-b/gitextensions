@@ -1,4 +1,5 @@
-﻿using GitExtensions.Extensibility.Git;
+﻿using GitCommands.Archive;
+using GitExtensions.Extensibility.Git;
 using GitUI.HelperDialogs;
 using GitUIPluginInterfaces;
 using ResourceManager;
@@ -76,12 +77,6 @@ public partial class FormArchive : GitModuleForm
         }
     }
 
-    private enum OutputFormat
-    {
-        Zip,
-        Tar
-    }
-
     public FormArchive(IGitUICommands commands)
         : base(commands)
     {
@@ -109,16 +104,14 @@ public partial class FormArchive : GitModuleForm
 
         string? revision = SelectedRevision?.Guid;
 
-        string fileFilterCaption = GetSelectedOutputFormat() == OutputFormat.Zip ? _saveFileDialogFilterZip.Text : _saveFileDialogFilterTar.Text;
-        string fileFilterEnding = GetSelectedOutputFormat() == OutputFormat.Zip ? "zip" : "tar";
+        ArchiveFormat selectedFormat = GetSelectedOutputFormat();
+        string fileFilterCaption = selectedFormat == ArchiveFormat.Zip ? _saveFileDialogFilterZip.Text : _saveFileDialogFilterTar.Text;
+        string fileFilterEnding = ArchiveModel.FileExtension(selectedFormat);
 
         // TODO (feature): if there is a tag on the revision use the tag name as suggestion
         // TODO (feature): let user decide via GUI
-        string filenameSuggestion = string.Format("{0}_{1}", new DirectoryInfo(Module.WorkingDir).Name, revision);
-        if (checkBoxPathFilter.Checked && textBoxPaths.Lines.Length == 1 && !string.IsNullOrWhiteSpace(textBoxPaths.Lines[0]))
-        {
-            filenameSuggestion += "_" + textBoxPaths.Lines[0].Trim().Replace(".", "_");
-        }
+        string filenameSuggestion = ArchiveModel.SuggestFileName(
+            new DirectoryInfo(Module.WorkingDir).Name, revision, checkBoxPathFilter.Checked ? textBoxPaths.Lines : []);
 
         using SaveFileDialog saveFileDialog = new()
         {
@@ -128,9 +121,7 @@ public partial class FormArchive : GitModuleForm
         };
         if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
         {
-            string format = GetSelectedOutputFormat() == OutputFormat.Zip ? "zip" : "tar";
-
-            string arguments = string.Format(@"archive --format=""{0}"" {1} --output ""{2}"" {3}", format, revision, saveFileDialog.FileName, GetPathArgumentFromGui());
+            GitExtensions.Extensibility.ArgumentString arguments = ArchiveModel.BuildCommand(selectedFormat, revision, saveFileDialog.FileName, GetPathArgumentFromGui());
             FormProcess.ShowDialog(this, UICommands, arguments, Module.WorkingDir, input: null, useDialogSettings: true);
             Close();
         }
@@ -140,21 +131,12 @@ public partial class FormArchive : GitModuleForm
     {
         if (checkBoxPathFilter.Checked)
         {
-            // 1. get all lines (paths) from text box
-            // 2. wrap lines that are not empty with ""
-            // 3. join together with space as separator
-            return string.Join(" ", textBoxPaths.Lines.Select(a => a.QuoteNE()));
+            return ArchiveModel.PathArgumentsFromLines(textBoxPaths.Lines);
         }
         else if (checkboxRevisionFilter.Checked)
         {
-            // 1. get all changed (and not deleted files) from selected to current revision
-            IEnumerable<GitItemStatus> files = UICommands.Module
-                                .GetDiffFilesWithUntracked(DiffSelectedRevision?.Guid, SelectedRevision?.Guid, StagedStatus.None, noCache: false, cancellationToken: default)
-                                .Where(f => !f.IsDeleted);
-
-            // 2. wrap file names with ""
-            // 3. join together with space as separator
-            return string.Join(" ", files.Select(f => f.Name.QuoteNE()));
+            return ArchiveModel.PathArgumentsFromChangedFiles(UICommands.Module
+                .GetDiffFilesWithUntracked(DiffSelectedRevision?.Guid, SelectedRevision?.Guid, StagedStatus.None, noCache: false, cancellationToken: default));
         }
         else
         {
@@ -162,9 +144,9 @@ public partial class FormArchive : GitModuleForm
         }
     }
 
-    private OutputFormat GetSelectedOutputFormat()
+    private ArchiveFormat GetSelectedOutputFormat()
     {
-        return _NO_TRANSLATE_radioButtonFormatZip.Checked ? OutputFormat.Zip : OutputFormat.Tar;
+        return _NO_TRANSLATE_radioButtonFormatZip.Checked ? ArchiveFormat.Zip : ArchiveFormat.Tar;
     }
 
     private void btnChooseRevision_Click(object sender, EventArgs e)

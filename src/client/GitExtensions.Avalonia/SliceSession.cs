@@ -135,6 +135,10 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> ResetAsync(ResetMode mode, ObjectId commitId)
         => Task.Run(() => RunGitOperation(Commands.Reset(mode, commitId.ToString())));
 
+    /// <summary>Exports a revision with git-archive (whole tree; the model builds the command).</summary>
+    public Task<(bool Success, string Output)> ArchiveAsync(GitCommands.Archive.ArchiveFormat format, string revision, string outputFilePath)
+        => Task.Run(() => RunGitOperation(GitCommands.Archive.ArchiveModel.BuildCommand(format, revision, outputFilePath, pathArguments: "")));
+
     /// <summary>The merged-branch scan feeding the delete-branch preflight.</summary>
     public Task<MergedBranchScan> GetMergedBranchScanAsync()
         => Task.Run(() => MergedBranchScan.Parse(_module.GetMergedBranches()));
