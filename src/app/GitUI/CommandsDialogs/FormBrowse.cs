@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing.Drawing2D;
 using GitCommands;
+using GitCommands.Browse;
 using GitCommands.Config;
 using GitCommands.Git;
 using GitCommands.Git.Gpg;
@@ -230,7 +231,15 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
     private readonly Dictionary<Brush, Icon> _overlayIconByBrush = [];
 
-    private UpdateTargets _selectedRevisionUpdatedTargets = UpdateTargets.None;
+    private RevisionDetailTarget _selectedRevisionUpdatedTargets = RevisionDetailTarget.None;
+
+    /// <summary>The detail pane the selected tab shows, for the portable refresh policy.</summary>
+    private RevisionDetailTarget ActiveDetailPane
+        => CommitInfoTabControl.SelectedTab == DiffTabPage ? RevisionDetailTarget.DiffList
+        : CommitInfoTabControl.SelectedTab == TreeTabPage ? RevisionDetailTarget.FileTree
+        : CommitInfoTabControl.SelectedTab == CommitInfoTabPage ? RevisionDetailTarget.CommitInfo
+        : CommitInfoTabControl.SelectedTab == GpgInfoTabPage ? RevisionDetailTarget.GpgInfo
+        : RevisionDetailTarget.None;
 
     public RevisionGridControl RevisionGridControl => RevisionGrid;
 
@@ -1238,44 +1247,38 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             TreeTabPage.Parent = null;
         }
 
-        if (CommitInfoTabControl.SelectedTab != TreeTabPage || _selectedRevisionUpdatedTargets.HasFlag(UpdateTargets.FileTree))
+        if (!RevisionDetailRefreshPolicy.ShouldFill(RevisionDetailTarget.FileTree, _selectedRevisionUpdatedTargets, ActiveDetailPane))
         {
             return;
         }
 
-        _selectedRevisionUpdatedTargets |= UpdateTargets.FileTree;
+        _selectedRevisionUpdatedTargets |= RevisionDetailTarget.FileTree;
         fileTree.DisplayDiffTab(revision is null ? [] : [revision]);
     }
 
     private void FillDiff(IReadOnlyList<GitRevision> revisions)
     {
-        if (CommitInfoTabControl.SelectedTab != DiffTabPage)
+        if (!RevisionDetailRefreshPolicy.ShouldFill(RevisionDetailTarget.DiffList, _selectedRevisionUpdatedTargets, ActiveDetailPane))
         {
             return;
         }
 
-        if (_selectedRevisionUpdatedTargets.HasFlag(UpdateTargets.DiffList))
-        {
-            return;
-        }
-
-        _selectedRevisionUpdatedTargets |= UpdateTargets.DiffList;
+        _selectedRevisionUpdatedTargets |= RevisionDetailTarget.DiffList;
         revisionDiff.DisplayDiffTab(revisions);
     }
 
     private void FillCommitInfo(GitRevision? revision)
     {
-        if (_selectedRevisionUpdatedTargets.HasFlag(UpdateTargets.CommitInfo))
+        if (!RevisionDetailRefreshPolicy.ShouldFill(
+            RevisionDetailTarget.CommitInfo,
+            _selectedRevisionUpdatedTargets,
+            ActiveDetailPane,
+            commitInfoInTabControl: AppSettings.CommitInfoPosition == CommitInfoPosition.BelowList))
         {
             return;
         }
 
-        if (AppSettings.CommitInfoPosition == CommitInfoPosition.BelowList && CommitInfoTabControl.SelectedTab != CommitInfoTabPage)
-        {
-            return;
-        }
-
-        _selectedRevisionUpdatedTargets |= UpdateTargets.CommitInfo;
+        _selectedRevisionUpdatedTargets |= RevisionDetailTarget.CommitInfo;
 
         if (revision is null)
         {
@@ -2532,19 +2535,20 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
         static Image GetSubmoduleItemImage(DetailedSubmoduleInfo details)
         {
-            return (details.Status, details.IsDirty) switch
+            // the decision table is portable; this maps its keys onto the image resources
+            return SubmoduleImageKeys.GetMenuImageKey(details.Status, details.IsDirty) switch
             {
-                (null, _) => Images.FolderSubmodule,
-                (SubmoduleStatus.FastForward, true) => Images.SubmoduleRevisionUpDirty,
-                (SubmoduleStatus.FastForward, false) => Images.SubmoduleRevisionUp,
-                (SubmoduleStatus.Rewind, true) => Images.SubmoduleRevisionDownDirty,
-                (SubmoduleStatus.Rewind, false) => Images.SubmoduleRevisionDown,
-                (SubmoduleStatus.NewerTime, true) => Images.SubmoduleRevisionSemiUpDirty,
-                (SubmoduleStatus.NewerTime, false) => Images.SubmoduleRevisionSemiUp,
-                (SubmoduleStatus.OlderTime, true) => Images.SubmoduleRevisionSemiDownDirty,
-                (SubmoduleStatus.OlderTime, false) => Images.SubmoduleRevisionSemiDown,
-                (_, true) => Images.SubmoduleDirty,
-                (_, false) => Images.FileStatusModified
+                SubmoduleImageKeys.SubmoduleRevisionUpDirty => Images.SubmoduleRevisionUpDirty,
+                SubmoduleImageKeys.SubmoduleRevisionUp => Images.SubmoduleRevisionUp,
+                SubmoduleImageKeys.SubmoduleRevisionDownDirty => Images.SubmoduleRevisionDownDirty,
+                SubmoduleImageKeys.SubmoduleRevisionDown => Images.SubmoduleRevisionDown,
+                SubmoduleImageKeys.SubmoduleRevisionSemiUpDirty => Images.SubmoduleRevisionSemiUpDirty,
+                SubmoduleImageKeys.SubmoduleRevisionSemiUp => Images.SubmoduleRevisionSemiUp,
+                SubmoduleImageKeys.SubmoduleRevisionSemiDownDirty => Images.SubmoduleRevisionSemiDownDirty,
+                SubmoduleImageKeys.SubmoduleRevisionSemiDown => Images.SubmoduleRevisionSemiDown,
+                SubmoduleImageKeys.SubmoduleDirty => Images.SubmoduleDirty,
+                SubmoduleImageKeys.FileStatusModified => Images.FileStatusModified,
+                _ => Images.FolderSubmodule,
             };
         }
     }

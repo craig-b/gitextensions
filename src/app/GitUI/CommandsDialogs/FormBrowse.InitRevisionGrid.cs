@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Browse;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitUI.Properties;
@@ -80,7 +81,7 @@ partial class FormBrowse
 
         RevisionGrid.SelectionChanged += (sender, e) =>
         {
-            _selectedRevisionUpdatedTargets = UpdateTargets.None;
+            _selectedRevisionUpdatedTargets = RevisionDetailTarget.None;
             RefreshSelection();
         };
 
