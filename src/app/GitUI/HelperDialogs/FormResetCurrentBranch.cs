@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitCommands.Git;
+using GitCommands.Reset;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUIPluginInterfaces;
@@ -67,44 +68,32 @@ public partial class FormResetCurrentBranch : GitModuleForm
         commitSummaryUserControl1.Revision = Revision;
     }
 
+    private ResetMode SelectedResetMode
+        => Soft.Checked ? ResetMode.Soft
+        : Mixed.Checked ? ResetMode.Mixed
+        : Hard.Checked ? ResetMode.Hard
+        : Merge.Checked ? ResetMode.Merge
+        : ResetMode.Keep;
+
     private void Ok_Click(object sender, EventArgs e)
     {
-        bool updateSubmodules = AppSettings.UpdateSubmodulesOnCheckout is true && Module.HasSubmodules() && Revision.ObjectId != Module.GetCurrentCheckout();
+        bool updateSubmodules = ResetCurrentBranchPolicy.ShouldUpdateSubmodules(
+            AppSettings.UpdateSubmodulesOnCheckout, Module.HasSubmodules(), Revision.ObjectId, Module.GetCurrentCheckout());
 
-        if (Soft.Checked)
+        ResetMode mode = SelectedResetMode;
+
+        if (ResetCurrentBranchPolicy.RequiresConfirmation(mode)
+            && MessageBoxes.Show(this, _resetHardWarning.Text, _resetCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) != DialogResult.Yes)
         {
-            FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(ResetMode.Soft, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
+            return;
         }
-        else if (Mixed.Checked)
+
+        ObjectId currentCheckout = Module.GetCurrentCheckout();
+        bool success = FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(mode, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
+
+        if (mode is ResetMode.Hard && success && currentCheckout != Revision.ObjectId)
         {
-            FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(ResetMode.Mixed, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
-        }
-        else if (Hard.Checked)
-        {
-            if (MessageBoxes.Show(this, _resetHardWarning.Text, _resetCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.Yes)
-            {
-                ObjectId currentCheckout = Module.GetCurrentCheckout();
-                bool success = FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(ResetMode.Hard, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
-                if (success)
-                {
-                    if (currentCheckout != Revision.ObjectId)
-                    {
-                        UICommands.Execute(new UICmd.UpdateSubmodules(), this);
-                    }
-                }
-            }
-            else
-            {
-                return;
-            }
-        }
-        else if (Merge.Checked)
-        {
-            FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(ResetMode.Merge, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
-        }
-        else if (Keep.Checked)
-        {
-            FormProcess.ShowDialog(this, UICommands, arguments: Commands.Reset(ResetMode.Keep, Revision.Guid, quiet: false), Module.WorkingDir, input: null, useDialogSettings: true);
+            UICommands.Execute(new UICmd.UpdateSubmodules(), this);
         }
 
         if (updateSubmodules)

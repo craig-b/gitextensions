@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitCommands.Git;
+using GitCommands.Rebase;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
@@ -329,11 +330,7 @@ public partial class FormRebase : GitExtensionsDialog
 
             Skipped.Clear();
 
-            bool? updateRefChoice = null;
-            if (Module.GitVersion.SupportUpdateRefs && Module.GetEffectiveSetting<bool>("rebase.updaterefs") != checkBoxUpdateRefs.Checked)
-            {
-                updateRefChoice = checkBoxUpdateRefs.Checked;
-            }
+            RebaseTarget target = RebaseTarget.Resolve(cboBranches.Text, chkSpecificRange.Checked, txtFrom.Text, cboTo.Text);
 
             Commands.RebaseOptions rebaseOptions = new()
             {
@@ -343,31 +340,24 @@ public partial class FormRebase : GitExtensionsDialog
                 AutoStash = chkStash.Checked,
                 IgnoreDate = chkIgnoreDate.Checked,
                 CommitterDateIsAuthorDate = chkCommitterDateIsAuthorDate.Checked,
-                UpdateRefs = updateRefChoice,
+                UpdateRefs = RebasePreflight.ResolveUpdateRefsChoice(
+                    Module.GitVersion.SupportUpdateRefs,
+                    Module.GetEffectiveSetting<bool>("rebase.updaterefs"),
+                    checkBoxUpdateRefs.Checked),
+                OnTo = target.OnTo,
+                From = target.From,
+                BranchName = target.BranchName,
             };
-
-            if (chkSpecificRange.Checked && !string.IsNullOrWhiteSpace(txtFrom.Text) && !string.IsNullOrWhiteSpace(cboTo.Text))
-            {
-                // Rebase onto
-                rebaseOptions.OnTo = cboBranches.Text;
-                rebaseOptions.From = txtFrom.Text;
-                rebaseOptions.BranchName = cboTo.Text;
-            }
-            else
-            {
-                rebaseOptions.BranchName = cboBranches.Text;
-            }
 
             string rebaseCmd = Commands.Rebase(rebaseOptions);
 
             string cmdOutput = FormProcess.ReadDialog(this, UICommands, arguments: rebaseCmd, Module.WorkingDir, input: null, useDialogSettings: true);
-            if (cmdOutput.Trim() == "Current branch a is up to date.")
+            if (RebaseOutputAnalyzer.IsBranchUpToDate(cmdOutput))
             {
                 MessageBoxes.Show(this, _branchUpToDateText.Text, _branchUpToDateCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
-            if (!Module.InTheMiddleOfAction() &&
-                !Module.InTheMiddleOfPatch())
+            if (RebasePreflight.ShouldCloseAfterAction(Module.InTheMiddleOfAction(), Module.InTheMiddleOfPatch()))
             {
                 Close();
             }

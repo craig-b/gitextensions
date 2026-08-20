@@ -1,4 +1,5 @@
-﻿using GitExtensions.Extensibility.Git;
+﻿using GitCommands.Branch;
+using GitExtensions.Extensibility.Git;
 using GitUI.CommandsDialogs;
 using NSubstitute;
 
@@ -19,7 +20,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Branch, "bbb", "feature", IsDeleted: false),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, MainWorktreePath);
 
         result.HasDeletedWorktrees.Should().BeFalse();
@@ -38,7 +39,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Branch, "bbb", "feature", IsDeleted: false),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, LinkedWorktreePath);
 
         result.MainWorktreeBranches.Should().ContainSingle()
@@ -58,7 +59,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Branch, "bbb", "feature", IsDeleted: false),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, MainWorktreePath);
 
         result.LinkedWorktreeBranches.Should().ContainSingle()
@@ -79,7 +80,7 @@ public sealed class FormDeleteBranchTests
         ];
 
         // Current dir matches the linked worktree — should be skipped
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, LinkedWorktreePath);
 
         result.LinkedWorktreeBranches.Should().BeEmpty();
@@ -97,7 +98,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Branch, "bbb", "stale-branch", IsDeleted: true),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, MainWorktreePath);
 
         result.HasDeletedWorktrees.Should().BeTrue();
@@ -115,7 +116,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Branch, "bbb", "stale-branch", IsDeleted: true),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, MainWorktreePath);
 
         result.HasDeletedWorktrees.Should().BeFalse();
@@ -131,7 +132,7 @@ public sealed class FormDeleteBranchTests
             new(LinkedWorktreePath, GitWorktreeHeadType.Detached, "ccc", null, IsDeleted: false),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, @"C:\repos\other");
 
         result.MainWorktreeBranches.Should().BeEmpty();
@@ -154,7 +155,7 @@ public sealed class FormDeleteBranchTests
             new(SecondLinkedWorktreePath, GitWorktreeHeadType.Branch, "ccc", "hotfix", IsDeleted: false),
         ];
 
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, @"C:\repos\other");
 
         result.MainWorktreeBranches.Should().ContainSingle()
@@ -177,7 +178,7 @@ public sealed class FormDeleteBranchTests
         ];
 
         // Current dir is lowercase version of the linked worktree path
-        FormDeleteBranch.WorktreeBranchClassification result =
+        WorktreeBranchClassification result =
             FormDeleteBranch.ClassifyWorktreeBranches(branches, worktrees, @"C:\repos\feature");
 
         result.LinkedWorktreeBranches.Should().BeEmpty();
