@@ -42,7 +42,7 @@ public abstract class SettingsPageModel
         }
     }
 
-    public void Save()
+    public virtual void Save()
     {
         foreach (SettingsEntry entry in Entries)
         {

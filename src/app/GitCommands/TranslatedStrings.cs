@@ -60,6 +60,20 @@ Yes, I allow telemetry!");
     private readonly TranslationString _containedInTagsText = new("Contained in tags:");
     private readonly TranslationString _containedInNoTagText = new("Contained in no tag");
 
+    private readonly TranslationString _contScrollToNextFileOnlyWithAlt = new("Enable automatic continuous scroll (without ALT button)");
+    private readonly TranslationString _showDiffForAllParentsText = new("Show file differences for all parents in browse dialog");
+    private readonly TranslationString _showDiffForAllParentsTooltip = new(@"Show all differences between the selected commits, not limiting to only one difference.
+
+- For a single selected commit, show the difference with its parent commit.
+- For a single selected merge commit, show the difference with all parents.
+- For two selected commits with a common ancestor (BASE), show the difference
+between the commits as well as the difference from BASE to the selected commits.
+See documentation for more details about icons and range diffs.
+- For multiple selected commits (up to four), show the difference for
+all the first selected with the last selected commit.
+- For more than four selected commits, show the difference from the first to
+the last selected commit.");
+
     // public only because of FormTranslate
     public TranslatedStrings()
     {
@@ -91,6 +105,10 @@ Yes, I allow telemetry!");
 
     public static string TelemetryPermissionCaption => _instance.Value._telemetryPermissionCaption.Text;
     public static string TelemetryPermissionMessage => _instance.Value._telemetryPermissionMessage.Text;
+
+    public static string ContScrollToNextFileOnlyWithAlt => _instance.Value._contScrollToNextFileOnlyWithAlt.Text;
+    public static string ShowDiffForAllParentsText => _instance.Value._showDiffForAllParentsText.Text;
+    public static string ShowDiffForAllParentsTooltip => _instance.Value._showDiffForAllParentsTooltip.Text;
 
     public static string Date => _instance.Value._dateText.Text;
     public static string DiffWithParent => _instance.Value._diffWithParent.Text;

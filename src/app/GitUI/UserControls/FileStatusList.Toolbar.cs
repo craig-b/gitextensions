@@ -205,7 +205,7 @@ partial class FileStatusList
 
         tsmiShowDiffForAllParents.Visible = _enableDisablingShowDiffForAllParents;
         tsmiShowDiffForAllParents.Checked = AppSettings.ShowDiffForAllParents;
-        tsmiShowDiffForAllParents.ToolTipText = TranslatedStrings.ShowDiffForAllParentsTooltip;
+        tsmiShowDiffForAllParents.ToolTipText = ResourceManager.TranslatedStrings.ShowDiffForAllParentsTooltip;
     }
 
     private void FindInFilesGitGrep_DropDownOpening(object sender, EventArgs e)

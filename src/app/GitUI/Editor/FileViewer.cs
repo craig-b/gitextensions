@@ -141,7 +141,7 @@ public partial class FileViewer : GitModuleControl
         showSyntaxHighlighting.Checked = ShowSyntaxHighlightingInDiff;
         showSyntaxHighlightingToolStripMenuItem.AdaptImageLightness();
         showSyntaxHighlightingToolStripMenuItem.Checked = ShowSyntaxHighlightingInDiff;
-        automaticContinuousScrollToolStripMenuItem.Text = TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
+        automaticContinuousScrollToolStripMenuItem.Text = ResourceManager.TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
 
         showGitWordColoringToolStripMenuItem.AdaptImageLightness();
 

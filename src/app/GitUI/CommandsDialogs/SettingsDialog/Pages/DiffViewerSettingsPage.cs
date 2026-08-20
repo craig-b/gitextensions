@@ -1,4 +1,4 @@
-﻿using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
 using GitUI.UserControls.RevisionGrid;
 using ResourceManager;
@@ -14,33 +14,46 @@ public partial class DiffViewerSettingsPage : SettingsPageWithHeader
         and must be explicitly saved to become persistent defaults.
         """);
 
+    private readonly DiffViewerPageModel _model = new();
+
     public DiffViewerSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
     {
         InitializeComponent();
         InitializeComplete();
 
-        chkShowDiffForAllParents.Text = TranslatedStrings.ShowDiffForAllParentsText;
-        chkShowDiffForAllParents.ToolTipText = TranslatedStrings.ShowDiffForAllParentsTooltip;
-        chkContScrollToNextFileOnlyWithAlt.Text = TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
+        chkShowDiffForAllParents.Text = ResourceManager.TranslatedStrings.ShowDiffForAllParentsText;
+        chkShowDiffForAllParents.ToolTipText = ResourceManager.TranslatedStrings.ShowDiffForAllParentsTooltip;
+        chkContScrollToNextFileOnlyWithAlt.Text = ResourceManager.TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
     }
+
+    private IEnumerable<(BoolSettingsEntry Entry, Control Control)> BoolEntryControls =>
+    [
+        (_model.RememberIgnoreWhiteSpacePreference, chkRememberIgnoreWhiteSpacePreference),
+        (_model.RememberShowNonPrintingCharsPreference, chkRememberShowNonPrintingCharsPreference),
+        (_model.RememberShowEntireFilePreference, chkRememberShowEntireFilePreference),
+        (_model.RememberDiffAppearancePreference, chkRememberDiffAppearancePreference),
+        (_model.RememberNumberOfContextLines, chkRememberNumberOfContextLines),
+        (_model.RememberShowSyntaxHighlightingInDiff, chkRememberShowSyntaxHighlightingInDiff),
+        (_model.OmitUninterestingDiff, chkOmitUninterestingDiff),
+        (_model.AutomaticContinuousScroll, chkContScrollToNextFileOnlyWithAlt),
+        (_model.OpenSubmoduleDiffInSeparateWindow, chkOpenSubmoduleDiffInSeparateWindow),
+        (_model.ShowDiffForAllParents, chkShowDiffForAllParents),
+        (_model.ShowAllCustomDiffTools, chkShowAllCustomDiffTools),
+        (_model.UseGitColoring, chkUseGitColoring),
+        (_model.ReverseGitColoring, chkUseGEThemeGitColoring),
+    ];
 
     protected override void SettingsToPage()
     {
-        chkRememberIgnoreWhiteSpacePreference.Checked = AppSettings.RememberIgnoreWhiteSpacePreference;
-        chkOmitUninterestingDiff.Checked = AppSettings.OmitUninterestingDiff;
-        chkRememberShowEntireFilePreference.Checked = AppSettings.RememberShowEntireFilePreference;
-        chkRememberDiffAppearancePreference.Checked = AppSettings.RememberDiffDisplayAppearance.Value;
-        chkRememberShowNonPrintingCharsPreference.Checked = AppSettings.RememberShowNonPrintingCharsPreference;
-        chkRememberNumberOfContextLines.Checked = AppSettings.RememberNumberOfContextLines;
-        chkRememberShowSyntaxHighlightingInDiff.Checked = AppSettings.RememberShowSyntaxHighlightingInDiff;
-        chkOpenSubmoduleDiffInSeparateWindow.Checked = AppSettings.OpenSubmoduleDiffInSeparateWindow;
-        chkContScrollToNextFileOnlyWithAlt.Checked = AppSettings.AutomaticContinuousScroll;
-        chkShowDiffForAllParents.Checked = AppSettings.ShowDiffForAllParents;
-        chkShowAllCustomDiffTools.Checked = AppSettings.ShowAvailableDiffTools;
-        VerticalRulerPosition.Value = AppSettings.DiffVerticalRulerPosition;
-        chkUseGitColoring.Checked = AppSettings.UseGitColoring.Value;
-        chkUseGEThemeGitColoring.Checked = AppSettings.ReverseGitColoring.Value;
+        _model.Load();
+
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            SettingsPageBindings.SetChecked(control, entry.Value);
+        }
+
+        VerticalRulerPosition.Value = _model.VerticalRulerPosition.Value;
         chkUseGEThemeGitColoring.Enabled = chkUseGitColoring.Checked;
 
         base.SettingsToPage();
@@ -48,20 +61,14 @@ public partial class DiffViewerSettingsPage : SettingsPageWithHeader
 
     protected override void PageToSettings()
     {
-        AppSettings.RememberIgnoreWhiteSpacePreference = chkRememberIgnoreWhiteSpacePreference.Checked;
-        AppSettings.OmitUninterestingDiff = chkOmitUninterestingDiff.Checked;
-        AppSettings.RememberShowEntireFilePreference = chkRememberShowEntireFilePreference.Checked;
-        AppSettings.RememberDiffDisplayAppearance.Value = chkRememberDiffAppearancePreference.Checked;
-        AppSettings.RememberShowNonPrintingCharsPreference = chkRememberShowNonPrintingCharsPreference.Checked;
-        AppSettings.RememberNumberOfContextLines = chkRememberNumberOfContextLines.Checked;
-        AppSettings.RememberShowSyntaxHighlightingInDiff = chkRememberShowSyntaxHighlightingInDiff.Checked;
-        AppSettings.OpenSubmoduleDiffInSeparateWindow = chkOpenSubmoduleDiffInSeparateWindow.Checked;
-        AppSettings.AutomaticContinuousScroll = chkContScrollToNextFileOnlyWithAlt.Checked;
-        AppSettings.ShowDiffForAllParents = chkShowDiffForAllParents.Checked;
-        AppSettings.ShowAvailableDiffTools = chkShowAllCustomDiffTools.Checked;
-        AppSettings.DiffVerticalRulerPosition = (int)VerticalRulerPosition.Value;
-        AppSettings.UseGitColoring.Value = chkUseGitColoring.Checked;
-        AppSettings.ReverseGitColoring.Value = chkUseGEThemeGitColoring.Checked;
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            entry.Value = SettingsPageBindings.GetChecked(control);
+        }
+
+        _model.VerticalRulerPosition.Value = (int)VerticalRulerPosition.Value;
+
+        _model.Save();
 
         base.PageToSettings();
     }

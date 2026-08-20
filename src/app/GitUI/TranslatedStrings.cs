@@ -44,7 +44,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _tag = new("Tag");
     private readonly TranslationString _remote = new("Remote");
     private readonly TranslationString _openWithGitExtensions = new("&Open with Git Extensions");
-    private readonly TranslationString _contScrollToNextFileOnlyWithAlt = new("Enable automatic continuous scroll (without ALT button)");
     private readonly TranslationString _noRevision = new("No revision");
 
     private readonly TranslationString _authored = new("authored");
@@ -77,19 +76,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _sortOrder = new("&Sort order");
 
     private readonly TranslationString _diffSelectedWithRememberedFile = new("&Diff with \"{0}\"");
-
-    private readonly TranslationString _showDiffForAllParentsText = new("Show file differences for all parents in browse dialog");
-    private readonly TranslationString _showDiffForAllParentsTooltip = new(@"Show all differences between the selected commits, not limiting to only one difference.
-
-- For a single selected commit, show the difference with its parent commit.
-- For a single selected merge commit, show the difference with all parents.
-- For two selected commits with a common ancestor (BASE), show the difference
-between the commits as well as the difference from BASE to the selected commits.
-See documentation for more details about icons and range diffs.
-- For multiple selected commits (up to four), show the difference for
-all the first selected with the last selected commit.
-- For more than four selected commits, show the difference from the first to
-the last selected commit.");
 
     private readonly TranslationString _stageSelectedLines = new("Stage selected line(s)");
     private readonly TranslationString _unstageSelectedLines = new("Unstage selected line(s)");
@@ -243,7 +229,6 @@ Copy error details to clipboard?");
     public static string Remote => _instance.Value._remote.Text;
     public static string OpenWithGitExtensions => _instance.Value._openWithGitExtensions.Text;
     public static string FilterFileInGrid => _instance.Value._filterFileInGrid.Text;
-    public static string ContScrollToNextFileOnlyWithAlt => _instance.Value._contScrollToNextFileOnlyWithAlt.Text;
     public static string NoRevision => _instance.Value._noRevision.Text;
 
     public static string OpenReport => _instance.Value._openReport.Text;
@@ -285,9 +270,6 @@ Copy error details to clipboard?");
     public static string SortOrder => _instance.Value._sortOrder.Text;
 
     public static string DiffSelectedWithRememberedFile => _instance.Value._diffSelectedWithRememberedFile.Text;
-    public static string ShowDiffForAllParentsText => _instance.Value._showDiffForAllParentsText.Text;
-    public static string ShowDiffForAllParentsTooltip => _instance.Value._showDiffForAllParentsTooltip.Text;
-
     public static string StageSelectedLines => _instance.Value._stageSelectedLines.Text;
     public static string UnstageSelectedLines => _instance.Value._unstageSelectedLines.Text;
     public static string ResetSelectedLines => _instance.Value._resetSelectedLines.Text;

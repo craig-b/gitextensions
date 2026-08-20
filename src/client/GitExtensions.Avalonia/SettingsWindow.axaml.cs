@@ -22,6 +22,10 @@ public partial class SettingsWindow : Window
         new GeneralPageModel(),
         new CommitDialogPageModel(),
         new ConfirmationsPageModel(),
+        new AdvancedPageModel(),
+        new DiffViewerPageModel(),
+        new BlameViewerPageModel(),
+        new SortingPageModel(),
     ];
 
     private readonly Dictionary<SettingsEntry, Control> _editors = [];
