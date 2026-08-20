@@ -162,8 +162,19 @@ public sealed class SliceSession
         return (defaultRemote, currentBranch, Track: true);
     }
 
-    public Task<(bool Success, string Output)> CheckoutBranchAsync(string branchName)
-        => Task.Run(() => RunGitOperation(Commands.Checkout(branchName, LocalChangesAction.DontChange)));
+    public Task<(bool Success, string Output)> CheckoutBranchAsync(string branchName, LocalChangesAction localChanges = LocalChangesAction.DontChange)
+        => Task.Run(() => RunGitOperation(Commands.Checkout(branchName, localChanges)));
+
+    /// <summary>Whether the working tree has uncommitted changes (the checkout dialog's gate).</summary>
+    public Task<bool> IsDirtyAsync()
+        => Task.Run(() => _module.IsDirtyDir());
+
+    public Task<(bool Success, string Output)> StashSaveAsync()
+        => Task.Run(() => RunGitOperation(Commands.StashSave(
+            AppSettings.IncludeUntrackedFilesInAutoStash, keepIndex: false, message: "", selectedFiles: null)));
+
+    public Task<(bool Success, string Output)> StashPopAsync()
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "pop" }));
 
     public Task<(bool Success, string Output)> CreateBranchAsync(string branchName, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, CurrentCheckout, checkout)));

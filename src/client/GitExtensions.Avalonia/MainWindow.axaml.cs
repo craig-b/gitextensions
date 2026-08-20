@@ -172,10 +172,64 @@ public partial class MainWindow : Window
 
     private async void OnRefTreeDoubleTapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
     {
-        if (RefTree.SelectedItem is GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.LocalBranch, IsCurrent: false } branch)
+        if (RefTree.SelectedItem is not GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.LocalBranch, IsCurrent: false } branch)
         {
-            await RunOperationAsync($"Checkout {branch.FullPath}", () => _session.CheckoutBranchAsync(branch.FullPath));
+            return;
         }
+
+        // the checkout dialog's local-changes choice, backed by the portable policy
+        GitCommands.LocalChangesAction localChanges = GitCommands.LocalChangesAction.DontChange;
+        bool stashThenReapply = false;
+        if (await _session.IsDirtyAsync())
+        {
+            int choice = await ConfirmDialog.ShowAsync(
+                this,
+                "Checkout branch",
+                $"You have uncommitted changes. How should they be handled when checking out {branch.FullPath}?",
+                "Stash & reapply", "Merge", "Discard (reset)", "Leave as-is", "Cancel");
+
+            switch (choice)
+            {
+                case 0:
+                    localChanges = GitCommands.LocalChangesAction.Stash;
+                    stashThenReapply = true;
+                    break;
+                case 1:
+                    localChanges = GitCommands.LocalChangesAction.Merge;
+                    break;
+                case 2:
+                    localChanges = GitCommands.LocalChangesAction.Reset;
+                    break;
+                case 3:
+                    localChanges = GitCommands.LocalChangesAction.DontChange;
+                    break;
+                default:
+                    return;
+            }
+        }
+
+        if (stashThenReapply)
+        {
+            await RunOperationAsync($"Checkout {branch.FullPath}", async () =>
+            {
+                (bool stashed, string stashOutput) = await _session.StashSaveAsync();
+                if (!stashed)
+                {
+                    return (false, stashOutput);
+                }
+
+                (bool success, string output) = await _session.CheckoutBranchAsync(branch.FullPath);
+                if (!success)
+                {
+                    return (false, output);
+                }
+
+                return await _session.StashPopAsync();
+            });
+            return;
+        }
+
+        await RunOperationAsync($"Checkout {branch.FullPath}", () => _session.CheckoutBranchAsync(branch.FullPath, localChanges));
     }
 
     private async void OnFetchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
