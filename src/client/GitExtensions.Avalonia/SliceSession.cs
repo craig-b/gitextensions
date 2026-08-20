@@ -534,6 +534,12 @@ public sealed class SliceSession
     public GitBlame GetBlame(string fileName, ObjectId objectId, CancellationToken cancellationToken)
         => _module.Blame(fileName, objectId.ToString(), _module.FilesEncoding, lines: null, cancellationToken: cancellationToken);
 
+    public GitRevision GetRevision(ObjectId objectId) => _module.GetRevision(objectId);
+
+    /// <summary>The blame-previous line mapping (GitBlameParser's diff-chunk walk).</summary>
+    public int GetOriginalLineInPreviousCommit(GitRevision blamedRevision, string fileName, int line)
+        => new GitCommands.Blame.GitBlameParser(() => _module).GetOriginalLineInPreviousCommit(blamedRevision, fileName, line);
+
     /// <summary>The file's content at a revision, or null when the blob does not exist there.</summary>
     public string? GetFileTextAtRevision(string fileName, ObjectId objectId)
     {

@@ -157,18 +157,17 @@ public partial class FileHistoryWindow : Window
             }
             else if (Tabs.SelectedItem == BlameTab)
             {
-                BlameContents contents = await Task.Run(
-                    () =>
-                    {
-                        GitBlame blame = _session.GetBlame(fileName, revision.ObjectId, cancellationToken);
-                        return BlameGutterModel.Build(blame, fileName, CurrentBlameDisplayOptions(), CultureInfo.CurrentCulture);
-                    },
-                    cancellationToken);
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                // A blame-previous drill-down carries its own file name and target line
+                // through the grid jump (the WinForms _clickedBlameLine pattern).
+                if (_pendingBlame is { } pending && pending.CommitId == revision.ObjectId)
                 {
-                    BlameGutter.Text = contents.Gutter;
-                    BlameBody.Text = contents.Body;
-                });
+                    _pendingBlame = null;
+                    await RenderBlameAsync(revision.ObjectId, pending.FileName, pending.Line, cancellationToken);
+                }
+                else
+                {
+                    await RenderBlameAsync(revision.ObjectId, fileName, targetLine: null, cancellationToken);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -177,6 +176,128 @@ public partial class FileHistoryWindow : Window
         catch (Exception ex)
         {
             CommitBody.Text = ex.Message;
+        }
+    }
+
+    private GitBlame? _blame;
+    private string? _blameFileName;
+    private GitBlameLine? _selectedBlameLine;
+    private (ObjectId CommitId, string FileName, int Line)? _pendingBlame;
+
+    // ColorBrewer Greens (the same ramp BlameControl uses), light-theme leaning.
+    private static readonly global::Avalonia.Media.IBrush[] AgeBucketBrushes =
+        [.. new[] { 0xF7FCF5u, 0xC7E9C0u, 0xA1D99Bu, 0x74C476u, 0x41AB5Du, 0x238B45u, 0x00441Bu }
+            .Select(rgb => (global::Avalonia.Media.IBrush)new global::Avalonia.Media.SolidColorBrush(
+                global::Avalonia.Media.Color.FromArgb(0x60, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb)))];
+
+    /// <summary>Renders a blame (grid selection or blame-previous drill-down) with the age-gradient gutter.</summary>
+    private async Task RenderBlameAsync(ObjectId objectId, string fileName, int? targetLine, CancellationToken cancellationToken)
+    {
+        (GitBlame blame, BlameContents contents, IReadOnlyList<int> buckets) = await Task.Run(
+            () =>
+            {
+                GitBlame blame = _session.GetBlame(fileName, objectId, cancellationToken);
+                BlameContents contents = BlameGutterModel.Build(blame, fileName, CurrentBlameDisplayOptions(), CultureInfo.CurrentCulture);
+                return (blame, contents, BlameAgeBuckets.Compute(blame.Lines, DateTime.Now));
+            },
+            cancellationToken);
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _blame = blame;
+            _blameFileName = fileName;
+            _selectedBlameLine = null;
+            BlameInfo.Text = "";
+            BlamePreviousButton.IsEnabled = false;
+
+            BlameGutter.Inlines!.Clear();
+            string[] gutterLines = contents.Gutter.Split('\n');
+            for (int i = 0; i < blame.Lines.Count && i < gutterLines.Length; i++)
+            {
+                BlameGutter.Inlines.Add(new global::Avalonia.Controls.Documents.Run(gutterLines[i].TrimEnd('\r') + "\n")
+                {
+                    Background = AgeBucketBrushes[buckets[i]],
+                });
+            }
+
+            BlameBody.Text = contents.Body;
+
+            if (targetLine is int line)
+            {
+                // Positioning must wait for the text layout; one background dispatch suffices.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    int clamped = BlameTargetLine.Clamp(line, blame.Lines.Count);
+                    double lineHeight = BlameBody.TextLayout.Height / Math.Max(1, blame.Lines.Count);
+                    BlameScroll.Offset = new global::Avalonia.Vector(0, Math.Max(0, (clamped - 3) * lineHeight));
+                    SelectBlameLine(clamped - 1);
+                }, DispatcherPriority.Background);
+            }
+        });
+    }
+
+    /// <summary>Click in either pane selects the line's commit (the WinForms SelectedLineChanged).</summary>
+    private void OnBlamePanePressed(object? sender, global::Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (_blame is null || sender is not SelectableTextBlock pane || string.IsNullOrEmpty(pane.Text))
+        {
+            return;
+        }
+
+        double lineHeight = pane.TextLayout.Height / Math.Max(1, _blame.Lines.Count);
+        int line = (int)(e.GetPosition(pane).Y / lineHeight);
+        SelectBlameLine(line);
+    }
+
+    private void SelectBlameLine(int lineIndex)
+    {
+        if (_blame is null || lineIndex < 0 || lineIndex >= _blame.Lines.Count)
+        {
+            return;
+        }
+
+        GitBlameLine line = _blame.Lines[lineIndex];
+        _selectedBlameLine = line;
+        BlameInfo.Text = $"{line.Commit.ObjectId.ToShortString()} - {line.Commit.Author} - {line.Commit.AuthorTime:d} - {line.Commit.Summary}";
+
+        GitRevision revision = _session.GetRevision(line.Commit.ObjectId);
+        BlamePreviousButton.IsEnabled = revision.HasParent;
+    }
+
+    /// <summary>The blame-previous drill-down: map the line through the commit's diff, blame the parent.</summary>
+    private async void OnBlamePreviousClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await BlamePreviousAsync();
+
+    internal async Task BlamePreviousAsync()
+    {
+        if (_blame is null || _selectedBlameLine is not GitBlameLine line)
+        {
+            return;
+        }
+
+        try
+        {
+            GitRevision revision = await Task.Run(() => _session.GetRevision(line.Commit.ObjectId));
+            if (!revision.HasParent)
+            {
+                return;
+            }
+
+            string fileName = line.Commit.FileName;
+            int originalLine = await Task.Run(() => _session.GetOriginalLineInPreviousCommit(revision, fileName, line.OriginLineNumber));
+
+            // A successful grid jump re-enters the blame render with the pending target;
+            // outside the filtered history, render directly.
+            _pendingBlame = (revision.FirstParentId, fileName, originalLine);
+            if (!LogControl.TryJumpTo(revision.FirstParentId))
+            {
+                _pendingBlame = null;
+                await RenderBlameAsync(revision.FirstParentId, fileName, originalLine, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            BlameInfo.Text = ex.Message;
         }
     }
 
@@ -194,9 +315,20 @@ public partial class FileHistoryWindow : Window
             await Task.Delay(1200);
         }
 
-        Console.Error.WriteLine($"[fh] diff: {DiffText.Inlines?.Count ?? 0} inlines | view: {ViewText.Text?.Length ?? 0} chars | blame: {BlameBody.Text?.Split('\n').Length ?? 0} lines, gutter {BlameGutter.Text?.Split('\n').Length ?? 0} lines");
-        string? firstGutter = BlameGutter.Text?.Split('\n').FirstOrDefault(line => !string.IsNullOrWhiteSpace(line));
-        Console.Error.WriteLine($"[fh] first blame caption: {firstGutter?.TrimEnd()}");
+        Console.Error.WriteLine($"[fh] diff: {DiffText.Inlines?.Count ?? 0} inlines | view: {ViewText.Text?.Length ?? 0} chars | blame: {BlameBody.Text?.Split('\n').Length ?? 0} lines, gutter {BlameGutter.Inlines?.Count ?? 0} runs");
+
+        Tabs.SelectedItem = BlameTab;
+        await Task.Delay(800);
+        SelectBlameLine(10);
+        Console.Error.WriteLine($"[fh] blame line 10: {BlameInfo.Text} | previous enabled: {BlamePreviousButton.IsEnabled}");
+        if (BlamePreviousButton.IsEnabled)
+        {
+            await BlamePreviousAsync();
+            await Task.Delay(2500);
+            SelectBlameLine(10);
+            Console.Error.WriteLine($"[fh] after blame-previous: {BlameInfo.Text} | lines: {_blame?.Lines.Count}");
+        }
+
         Environment.Exit(0);
     }
 

@@ -35,12 +35,18 @@
                 </ScrollViewer>
             </TabItem>
             <TabItem x:Name="BlameTab" Header="Blame">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Horizontal" Margin="8,4">
-                        <SelectableTextBlock x:Name="BlameGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
-                        <SelectableTextBlock x:Name="BlameBody" FontFamily="monospace" FontSize="12.5" />
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="8,4">
+                        <Button x:Name="BlamePreviousButton" Content="Blame previous revision" IsEnabled="False" Click="OnBlamePreviousClick" FontSize="12" />
+                        <SelectableTextBlock x:Name="BlameInfo" FontSize="12" Foreground="Gray" VerticalAlignment="Center" />
                     </StackPanel>
-                </ScrollViewer>
+                    <ScrollViewer x:Name="BlameScroll" Grid.Row="1" HorizontalScrollBarVisibility="Auto">
+                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                            <SelectableTextBlock x:Name="BlameGutter" FontFamily="monospace" FontSize="12.5" Foreground="Black" Margin="0,0,10,0" PointerPressed="OnBlamePanePressed" />
+                            <SelectableTextBlock x:Name="BlameBody" FontFamily="monospace" FontSize="12.5" PointerPressed="OnBlamePanePressed" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>
