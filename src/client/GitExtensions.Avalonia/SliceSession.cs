@@ -77,11 +77,32 @@ public sealed class SliceSession
         IReadOnlyList<IGitRef> refs = _module.GetRefs(RefsFilter.NoFilter);
         string currentBranch = SelectedBranch;
 
+        IReadOnlyList<Remote> remotes = ThreadHelper.JoinableTaskFactory.Run(_module.GetRemotesAsync);
+        GitCommands.Remotes.ConfigFileRemoteSettingsManager remotesManager = new(() => _module);
+
         return (
             RefTreeBuilder.Build(refs.Where(r => r.IsHead), r => r.LocalName, AppSettings.PrioritizedBranchNames, currentBranch, RefTreeNodeKind.LocalBranch),
-            RefTreeBuilder.Build(refs.Where(r => r.IsRemote), r => r.LocalName, AppSettings.PrioritizedRemoteNames, leafKind: RefTreeNodeKind.RemoteBranch),
+            RemoteTreeBuilder.Build(
+                [.. refs.Where(r => r.IsRemote)],
+                remotes,
+                remotesManager.GetDisabledRemotes(),
+                AppSettings.PrioritizedBranchNames,
+                AppSettings.PrioritizedRemoteNames),
             RefTreeBuilder.Build(refs.Where(r => r.IsTag), r => r.LocalName, prioritySetting: "", leafKind: RefTreeNodeKind.Tag));
     }
+
+    /// <summary>The stash rows for the left panel, with each stash's commit resolved so log jumps work.</summary>
+    public IReadOnlyList<StashTreeNode> GetStashPanel()
+        => StashTreeBuilder.Build(_module.GetStashes()
+            .Select(stash => new GitRevision(_module.RevParse(stash.Name))
+            {
+                ReflogSelector = stash.Name,
+                Subject = stash.Message,
+            }));
+
+    /// <summary>The worktree rows for the left panel.</summary>
+    public IReadOnlyList<WorktreeTreeNode> GetWorktreePanel()
+        => WorktreeTreeBuilder.Build(_module.GetWorktrees(), _module.WorkingDir);
 
     private (bool Success, string Output) RunGitOperation(ArgumentString arguments)
     {

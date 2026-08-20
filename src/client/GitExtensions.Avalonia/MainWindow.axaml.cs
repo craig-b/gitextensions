@@ -120,19 +120,45 @@ public partial class MainWindow : Window
     private async Task LoadRefPanelAsync()
     {
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
+        IReadOnlyList<GitCommands.LeftPanel.StashTreeNode> stashes = await Task.Run(_session.GetStashPanel);
+        IReadOnlyList<GitCommands.LeftPanel.WorktreeTreeNode> worktrees = await Task.Run(_session.GetWorktreePanel);
 
-        GitCommands.LeftPanel.RefTreeNode Section(string name, IReadOnlyList<GitCommands.LeftPanel.RefTreeNode> children)
+        GitCommands.LeftPanel.RefTreeNode Section(string name, IEnumerable<GitCommands.LeftPanel.RefTreeNode> children)
         {
             GitCommands.LeftPanel.RefTreeNode section = new() { Name = name, FullPath = "" };
             section.Children.AddRange(children);
             return section;
         }
 
+        // the builder leaves the inactive group's caption to the views
+        IEnumerable<GitCommands.LeftPanel.RefTreeNode> remoteNodes = remotes.Select(node =>
+        {
+            if (node.Kind is not GitCommands.LeftPanel.RefTreeNodeKind.InactiveGroup)
+            {
+                return node;
+            }
+
+            GitCommands.LeftPanel.RefTreeNode inactive = new() { Name = "Inactive", FullPath = "" };
+            inactive.Children.AddRange(node.Children);
+            return inactive;
+        });
+
         RefTree.ItemsSource = new[]
         {
             Section($"Branches ({branches.Count})", branches),
-            Section($"Remotes ({remotes.Count})", remotes),
+            Section($"Remotes ({remotes.Count})", remoteNodes),
             Section($"Tags ({tags.Count})", tags),
+            Section($"Stashes ({stashes.Count})", stashes.Select(stash => new GitCommands.LeftPanel.RefTreeNode
+            {
+                Name = stash.DisplayName,
+                FullPath = stash.FullPath,
+                ObjectId = stash.ObjectId,
+            })),
+            Section($"Worktrees ({worktrees.Count})", worktrees.Select(worktree => new GitCommands.LeftPanel.RefTreeNode
+            {
+                Name = worktree.IsCurrent ? $"{worktree.DisplayPath} (current)" : worktree.DisplayPath,
+                FullPath = worktree.Worktree.Path,
+            })),
         };
     }
 
