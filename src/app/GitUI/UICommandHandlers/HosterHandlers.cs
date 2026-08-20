@@ -35,7 +35,7 @@ internal sealed class CloneForkFromHosterHandler(GitUICommands commands) : IUICo
     {
         Hoster.WrapRepoHostingCall(commands, TranslatedStrings.ForkCloneRepo, command.GitHoster, gh =>
         {
-            using ForkAndCloneForm frm = new(commands, gh, command.GitModuleChanged);
+            using ForkAndCloneForm frm = new(commands, gh);
             frm.ShowDialog(owner);
         });
 

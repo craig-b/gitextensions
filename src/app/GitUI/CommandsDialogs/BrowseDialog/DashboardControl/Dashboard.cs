@@ -123,7 +123,7 @@ public partial class Dashboard : GitModuleControl
                         foreach (IRepositoryHostPlugin gitHoster in PluginRegistry.GitHosters)
                         {
                             lastControl = CreateLink(panel, string.Format(_cloneFork.Text, gitHoster.Name), Images.CloneRepoGitHub,
-                                (repoSender, eventArgs) => UICommands.Execute(new UICmd.CloneForkFromHoster(gitHoster, GitModuleChanged), this));
+                                (repoSender, eventArgs) => UICommands.ExecuteWithRepositoryAcquired(new UICmd.CloneForkFromHoster(gitHoster), this, OnModuleChanged));
                         }
 
                         return lastControl;
@@ -218,21 +218,17 @@ public partial class Dashboard : GitModuleControl
 
     private void openItem_Click(object? sender, EventArgs e)
     {
-        IGitModule? module = FormOpenDirectory.OpenModule(this, UICommands.GetRequiredService<IGitExecutorProvider>(), currentModule: null);
-        if (module is not null)
-        {
-            OnModuleChanged(this, new GitModuleEventArgs(module));
-        }
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.OpenRepository(), this, OnModuleChanged);
     }
 
     private void cloneItem_Click(object? sender, EventArgs e)
     {
-        UICommands.Execute(new UICmd.Clone(GitModuleChanged: OnModuleChanged), this);
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.Clone(), this, OnModuleChanged);
     }
 
     private void createItem_Click(object? sender, EventArgs e)
     {
-        UICommands.Execute(new UICmd.InitializeRepository(Module.WorkingDir, OnModuleChanged), this);
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.InitializeRepository(Module.WorkingDir), this, OnModuleChanged);
     }
 
     private static void DonateItem_Click(object? sender, EventArgs e)

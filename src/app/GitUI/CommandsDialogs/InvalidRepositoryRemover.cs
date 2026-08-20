@@ -1,4 +1,5 @@
 using GitCommands;
+using GitCommands.Open;
 using GitCommands.UserRepositoryHistory;
 
 namespace GitUI.CommandsDialogs;
@@ -21,8 +22,9 @@ internal sealed class InvalidRepositoryRemover : IInvalidRepositoryRemover
 {
     public bool ShowDeleteInvalidRepositoryDialog(string repositoryPath)
     {
-        int invalidPathCount = ThreadHelper.JoinableTaskFactory.Run(RepositoryHistoryManager.Locals.LoadRecentHistoryAsync)
-                                                               .Count(repo => !GitModule.IsValidGitWorkingDir(repo.Path));
+        InvalidRepositoryPromptOptions options = InvalidRepositoryPromptOptions.Evaluate(
+            ThreadHelper.JoinableTaskFactory.Run(RepositoryHistoryManager.Locals.LoadRecentHistoryAsync).Select(repo => repo.Path),
+            GitModule.IsValidGitWorkingDir);
 
         TaskDialogPage page = new()
         {
@@ -36,8 +38,8 @@ internal sealed class InvalidRepositoryRemover : IInvalidRepositoryRemover
         TaskDialogCommandLinkButton btnRemoveSelectedInvalidRepository = new(TranslatedStrings.RemoveSelectedInvalidRepository);
         page.Buttons.Add(btnRemoveSelectedInvalidRepository);
 
-        TaskDialogCommandLinkButton btnRemoveAllInvalidRepositories = new(string.Format(TranslatedStrings.RemoveAllInvalidRepositories, invalidPathCount));
-        if (invalidPathCount > 1)
+        TaskDialogCommandLinkButton btnRemoveAllInvalidRepositories = new(string.Format(TranslatedStrings.RemoveAllInvalidRepositories, options.InvalidCount));
+        if (options.OfferRemoveAll)
         {
             page.Buttons.Add(btnRemoveAllInvalidRepositories);
         }

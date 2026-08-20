@@ -20,20 +20,16 @@ public partial class FormInit : GitExtensionsDialog
     private readonly TranslationString _initMsgBoxCaption =
         new("Create new repository");
 
-    private readonly EventHandler<GitModuleEventArgs>? _gitModuleChanged;
-
     /// <summary>
     ///  Initializes a new instance of the <see cref="FormInit"/> class.
     /// </summary>
     /// <param name="commands">The <see cref="IGitUICommands"/> instance, mainly in its role as <see cref="IServiceProvider"/>.</param>
     /// <param name="dir">The initial directory path.</param>
-    /// <param name="gitModuleChanged">The event handler for Git module changes.</param>
-    public FormInit(IGitUICommands commands, string dir, EventHandler<GitModuleEventArgs>? gitModuleChanged)
+    public FormInit(IGitUICommands commands, string dir)
         : base(commands, enablePositionRestore: true)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
 
-        _gitModuleChanged = gitModuleChanged;
         InitializeComponent();
 
         InitializeComplete();
@@ -71,7 +67,7 @@ public partial class FormInit : GitExtensionsDialog
 
         MessageBoxes.Show(this, module.Init(Central.Checked, Central.Checked), _initMsgBoxCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-        _gitModuleChanged?.Invoke(this, new GitModuleEventArgs(module));
+        UICommands.RaiseRepositoryAcquired(module);
 
         ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(directoryPath));
         Close();

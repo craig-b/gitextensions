@@ -111,7 +111,7 @@ public sealed class RemoteRepositoryManager : IRepositoryManager
     /// </summary>
     /// <param name="repositoryHistory">A list of recently used remote git repositories.</param>
     /// <returns>An awaitable task.</returns>
-    /// <remarks>The size of the history will be adjusted as per <see cref="AppSettings.RecentRepositoriesHistorySize"/> setting.</remarks>
+    /// <remarks>The size of the history will be adjusted as per <see cref="AppSettings.RemotesCacheLength"/> setting, matching <see cref="LoadRecentHistoryAsync"/>.</remarks>
     /// <exception cref="ArgumentNullException"><paramref name="repositoryHistory"/> is <see langword="null"/>.</exception>
     public async Task SaveRecentHistoryAsync(IEnumerable<Repository> repositoryHistory)
     {
@@ -119,9 +119,7 @@ public sealed class RemoteRepositoryManager : IRepositoryManager
 
         await TaskScheduler.Default;
 
-        // BUG: this must be a separate settings
-        // TODO: to be addressed separately
-        _repositoryStorage.Save(KeyRemoteHistory, AdjustHistorySize(repositoryHistory, AppSettings.RecentRepositoriesHistorySize));
+        _repositoryStorage.Save(KeyRemoteHistory, AdjustHistorySize(repositoryHistory, AppSettings.RemotesCacheLength));
     }
 
     private static IEnumerable<Repository> AdjustHistorySize(IEnumerable<Repository> repositories, int recentRepositoriesHistorySize)

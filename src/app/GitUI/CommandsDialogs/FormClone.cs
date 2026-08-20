@@ -28,14 +28,12 @@ public partial class FormClone : GitExtensionsDialog
     private readonly bool _openedFromProtocolHandler;
     private readonly string? _url;
     private readonly CancellationTokenSequence _branchLoaderSequence = new();
-    private readonly EventHandler<GitModuleEventArgs>? _gitModuleChanged;
     private readonly IReadOnlyList<string> _defaultBranchItems;
     private string? _puttySshKey;
 
-    public FormClone(IGitUICommands commands, string? url, bool openedFromProtocolHandler, EventHandler<GitModuleEventArgs>? gitModuleChanged)
+    public FormClone(IGitUICommands commands, string? url, bool openedFromProtocolHandler)
         : base(commands, enablePositionRestore: false)
     {
-        _gitModuleChanged = gitModuleChanged;
         InitializeComponent();
 
         MinimumSize = new Size(Width, PreferredMinimumHeight);
@@ -254,10 +252,10 @@ public partial class FormClone : GitExtensionsDialog
                 IGitUICommands uiCommands = UICommands.WithWorkingDirectory(dirTo);
                 uiCommands.Execute(new UICmd.Browse(), null);
             }
-            else if (ShowInTaskbar == false && _gitModuleChanged is not null &&
+            else if (ShowInTaskbar == false && UICommands.HasRepositoryAcquiredSubscribers &&
                 AskIfNewRepositoryShouldBeOpened(dirTo))
             {
-                _gitModuleChanged(this, new GitModuleEventArgs(new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), dirTo)));
+                UICommands.RaiseRepositoryAcquired(new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), dirTo));
             }
 
             Close();

@@ -6,6 +6,7 @@ using GitCommands.Browse;
 using GitCommands.Config;
 using GitCommands.Git;
 using GitCommands.Git.Gpg;
+using GitCommands.Open;
 using GitCommands.Submodules;
 using GitCommands.Utils;
 using GitExtensions.Extensibility;
@@ -1725,15 +1726,18 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
         UICommands = UICommands.WithGitModule(e.GitModule);
         RevisionGrid.OnRepositoryChanged();
-        if (Module.IsValidGitWorkingDir())
+        RepoSwitchPlan plan = RepoSwitchPlan.Create(originalWorkingDir, Module.WorkingDir, Module.IsValidGitWorkingDir());
+        if (plan.IsValid)
         {
             RevisionGrid.SuspendRefreshRevisions();
-            string path = Module.WorkingDir;
-            AppSettings.RecentWorkingDir = path;
+            if (plan.PersistRecentWorkingDir)
+            {
+                AppSettings.RecentWorkingDir = Module.WorkingDir;
+            }
 
             HideDashboard();
 
-            if (!string.Equals(originalWorkingDir, Module.WorkingDir, StringComparison.Ordinal))
+            if (plan.ResetRepositoryScopedViewState)
             {
                 ChangeTerminalActiveFolder(Module.WorkingDir);
 
@@ -1876,7 +1880,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
     {
         if (PluginRegistry.GitHosters.Count > 0)
         {
-            UICommands.Execute(new UICmd.CloneForkFromHoster(PluginRegistry.GitHosters[0], SetGitModule), this);
+            UICommands.ExecuteWithRepositoryAcquired(new UICmd.CloneForkFromHoster(PluginRegistry.GitHosters[0]), this, SetGitModule);
             RefreshRevisions();
         }
         else

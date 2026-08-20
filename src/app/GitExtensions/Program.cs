@@ -2,6 +2,8 @@
 using System.Configuration;
 using System.Diagnostics;
 using GitCommands;
+using GitCommands.Open;
+using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -269,11 +271,17 @@ internal static class Program
             }
         }
 
-        if (args.Length <= 1 && workingDir is null && AppSettings.StartWithRecentWorkingDir)
+        if (args.Length <= 1 && workingDir is null)
         {
-            if (GitModule.IsValidGitWorkingDir(AppSettings.RecentWorkingDir))
+            StartupWorkingDir startup = StartupWorkingDir.Resolve(AppSettings.StartWithRecentWorkingDir, AppSettings.RecentWorkingDir, GitModule.IsValidGitWorkingDir);
+            workingDir = startup.WorkingDir;
+
+            if (startup.StalePathToPrune is string stalePath)
             {
-                workingDir = AppSettings.RecentWorkingDir;
+                // The remembered repository no longer exists: forget it instead of re-checking it
+                // (and silently landing on the dashboard) on every launch.
+                AppSettings.RecentWorkingDir = string.Empty;
+                ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.RemoveRecentAsync(stalePath));
             }
         }
 

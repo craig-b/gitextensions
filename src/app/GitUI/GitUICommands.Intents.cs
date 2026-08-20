@@ -68,6 +68,7 @@ partial class GitUICommands
             Intent.MailMap c => new MailMapHandler(this).Execute(c, owner),
             Intent.MergeBranch c => new MergeBranchHandler(this).Execute(c, owner),
             Intent.OpenPluginSettings c => new OpenPluginSettingsHandler(this).Execute(c, owner),
+            Intent.OpenRepository c => new OpenRepositoryHandler(this).Execute(c, owner),
             Intent.OpenSettings c => new OpenSettingsHandler(this).Execute(c, owner),
             Intent.OpenWithDifftool c => new OpenWithDifftoolHandler(this).Execute(c, owner),
             Intent.PluginSettings c => new PluginSettingsHandler(this).Execute(c, owner),

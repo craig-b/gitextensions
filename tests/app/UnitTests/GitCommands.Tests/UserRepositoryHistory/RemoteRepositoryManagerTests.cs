@@ -6,6 +6,7 @@ namespace GitCommandsTests.UserRepositoryHistory;
 public class RemoteRepositoryManagerTests
 {
     private const string Key = "history remote";
+    private const string RemotesCacheLengthKey = "RemotesCacheLength";
     private IRepositoryStorage _repositoryStorage = null!;
     private RemoteRepositoryManager _manager = null!;
     private int _userSetting;
@@ -14,8 +15,8 @@ public class RemoteRepositoryManagerTests
     public void Setup()
     {
         // backup the user setting, will restore it at the end of the test run
-        _userSetting = AppSettings.RecentRepositoriesHistorySize;
-        AppSettings.RecentRepositoriesHistorySize = 30;
+        _userSetting = AppSettings.RemotesCacheLength;
+        AppSettings.SetInt(RemotesCacheLengthKey, 30);
 
         _repositoryStorage = Substitute.For<IRepositoryStorage>();
         _manager = new RemoteRepositoryManager(_repositoryStorage);
@@ -24,7 +25,7 @@ public class RemoteRepositoryManagerTests
     [TearDown]
     public void TearDown()
     {
-        AppSettings.RecentRepositoriesHistorySize = _userSetting;
+        AppSettings.SetInt(RemotesCacheLengthKey, _userSetting);
     }
 
     [Test]
@@ -163,10 +164,10 @@ public class RemoteRepositoryManagerTests
     }
 
     [Test]
-    public async Task SaveRecentHistoryAsync_should_trim_history_size()
+    public async Task SaveRecentHistoryAsync_should_trim_history_to_RemotesCacheLength()
     {
         const int size = 3;
-        AppSettings.RecentRepositoriesHistorySize = size;
+        AppSettings.SetInt(RemotesCacheLengthKey, size);
         List<Repository> history =
         [
             new Repository("path1"),
@@ -179,5 +180,29 @@ public class RemoteRepositoryManagerTests
         await _manager.SaveRecentHistoryAsync(history);
 
         _repositoryStorage.Received(1).Save(Key, Arg.Is<IEnumerable<Repository>>(h => h.Count() == size));
+    }
+
+    [Test]
+    public async Task Save_and_load_should_apply_the_same_cap_RemotesCacheLength()
+    {
+        const int size = 2;
+        AppSettings.SetInt(RemotesCacheLengthKey, size);
+        List<Repository> history =
+        [
+            new Repository("path1"),
+            new Repository("path2"),
+            new Repository("path3"),
+            new Repository("path4"),
+        ];
+        _repositoryStorage.Load(Key).Returns(x => history);
+
+        // Load caps at RemotesCacheLength...
+        IList<Repository> loaded = await _manager.LoadRecentHistoryAsync();
+        loaded.Should().HaveCount(size);
+        loaded.Select(r => r.Path).Should().Equal("path1", "path2");
+
+        // ...and save caps at the SAME setting, so an entry surviving a load also survives the save.
+        await _manager.SaveRecentHistoryAsync(history);
+        _repositoryStorage.Received(1).Save(Key, Arg.Is<IEnumerable<Repository>>(h => h.Count() == size && h.First().Path == "path1"));
     }
 }

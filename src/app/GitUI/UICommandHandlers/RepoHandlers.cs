@@ -1,5 +1,10 @@
-﻿using GitExtensions.Extensibility;
+﻿using GitCommands;
+using GitCommands.Open;
+using GitCommands.UserRepositoryHistory;
+using GitExtensions.Extensibility;
+using GitExtensions.Extensibility.Git;
 using GitUI.CommandsDialogs;
+using GitUI.CommandsDialogs.BrowseDialog;
 using GitUI.HelperDialogs;
 using Intent = GitExtensions.Extensibility.Git.UICommands;
 
@@ -30,7 +35,7 @@ internal sealed class CloneHandler(GitUICommands commands) : IUICommandHandler<I
     {
         bool Action()
         {
-            using FormClone form = new(commands, command.Url, command.OpenedFromProtocolHandler, command.GitModuleChanged);
+            using FormClone form = new(commands, command.Url, command.OpenedFromProtocolHandler);
             form.ShowDialog(owner);
             return true;
         }
@@ -47,8 +52,37 @@ internal sealed class InitializeRepositoryHandler(GitUICommands commands) : IUIC
         {
             string dir = command.Directory ?? (commands.Module.IsValidGitWorkingDir() ? commands.Module.WorkingDir : string.Empty);
 
-            using FormInit frm = new(commands, dir, command.GitModuleChanged);
+            using FormInit frm = new(commands, dir);
             frm.ShowDialog(owner);
+            return true;
+        }
+
+        return commands.DoActionOnRepo(owner, Action, requiresValidWorkingDir: false, changesRepo: false);
+    }
+}
+
+internal sealed class OpenRepositoryHandler(GitUICommands commands) : IUICommandHandler<Intent.OpenRepository>
+{
+    public bool Execute(Intent.OpenRepository command, IWin32Window? owner)
+    {
+        bool Action()
+        {
+            IGitExecutorProvider executorProvider = commands.GetRequiredService<IGitExecutorProvider>();
+
+            IGitModule? module = null;
+            if (OpenRepositoryModel.TryGetOpenablePath(command.Path, System.IO.Directory.Exists, GitModule.IsValidGitWorkingDir) is string openablePath)
+            {
+                module = new GitModule(executorProvider, openablePath);
+                ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(module.WorkingDir));
+            }
+
+            module ??= FormOpenDirectory.OpenModule(owner, executorProvider, commands.Module);
+            if (module is null)
+            {
+                return false;
+            }
+
+            commands.RaiseRepositoryAcquired(module);
             return true;
         }
 

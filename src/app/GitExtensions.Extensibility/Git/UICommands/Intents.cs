@@ -34,11 +34,11 @@ public sealed record CherryPick(IReadOnlyList<GitRevision>? Revisions = null) : 
 
 public sealed record CleanupRepository(string? Path = null) : IUICommand;
 
-/// <summary>Wart: <paramref name="GitModuleChanged"/> is a callback, not data - kept so the intent stays usable until handlers raise a proper event.</summary>
-public sealed record Clone(string? Url = null, bool OpenedFromProtocolHandler = false, EventHandler<GitModuleEventArgs>? GitModuleChanged = null) : IUICommand;
+/// <summary>An acquired repository is announced through <see cref="IGitUICommands.RepositoryAcquired"/>.</summary>
+public sealed record Clone(string? Url = null, bool OpenedFromProtocolHandler = false) : IUICommand;
 
-/// <summary>Wart: <paramref name="GitModuleChanged"/> is a callback, not data - see <see cref="Clone"/>.</summary>
-public sealed record CloneForkFromHoster(IRepositoryHostPlugin GitHoster, EventHandler<GitModuleEventArgs>? GitModuleChanged = null) : IUICommand;
+/// <summary>An acquired repository is announced through <see cref="IGitUICommands.RepositoryAcquired"/>.</summary>
+public sealed record CloneForkFromHoster(IRepositoryHostPlugin GitHoster) : IUICommand;
 
 public sealed record CommandLineProcess(string? Command, ArgumentString Arguments) : IUICommand;
 public sealed record Commit(string? CommitMessage = null, bool ShowOnlyWhenChanges = false) : IUICommand;
@@ -70,12 +70,19 @@ public sealed record GeneralSettings : IUICommand;
 public sealed record GitCommandLineProcess(IGitCommand Command) : IUICommand;
 public sealed record GitCommandProcess(ArgumentString Arguments) : IUICommand;
 
-/// <summary>Wart: <paramref name="GitModuleChanged"/> is a callback, not data - see <see cref="Clone"/>.</summary>
-public sealed record InitializeRepository(string? Directory = null, EventHandler<GitModuleEventArgs>? GitModuleChanged = null) : IUICommand;
+/// <summary>An acquired repository is announced through <see cref="IGitUICommands.RepositoryAcquired"/>.</summary>
+public sealed record InitializeRepository(string? Directory = null) : IUICommand;
 
 public sealed record MailMap : IUICommand;
 public sealed record MergeBranch(string? Branch) : IUICommand;
 public sealed record OpenPluginSettings(IGitPlugin Plugin) : IUICommand;
+/// <summary>
+///  Opens an existing repository: with a <paramref name="Path"/> that is a valid working
+///  directory, directly; otherwise via the open-repository dialog. The acquired repository is
+///  announced through <see cref="IGitUICommands.RepositoryAcquired"/>.
+/// </summary>
+public sealed record OpenRepository(string? Path = null) : IUICommand;
+
 public sealed record OpenSettings(SettingsPageReference? InitialPage = null) : IUICommand;
 public sealed record OpenWithDifftool(IReadOnlyList<GitRevision?> Revisions, string FileName, string? OldFileName, RevisionDiffKind DiffKind, bool IsTracked, string? CustomTool = null) : IUICommand;
 public sealed record PluginSettings : IUICommand;

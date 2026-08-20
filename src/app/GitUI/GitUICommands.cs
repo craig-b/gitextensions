@@ -80,6 +80,9 @@ public sealed partial class GitUICommands : IGitUICommands, IServiceProvider
 
     public event EventHandler<GitUIEventArgs>? PostRegisterPlugin;
 
+    /// <inheritdoc />
+    public event EventHandler<GitModuleEventArgs>? RepositoryAcquired;
+
     // Field-like event delegates are only readable inside the declaring class; these internal
     // accessors hand them to the UI command handlers, which raise them through DoActionOnRepo.
     internal EventHandler<GitUIEventArgs>? PreCheckoutBranchEvent => PreCheckoutBranch;
@@ -884,6 +887,15 @@ public sealed partial class GitUICommands : IGitUICommands, IServiceProvider
     public void RaisePostBrowseInitialize(object? ownerWindow)
     {
         InvokeEvent(ownerWindow, PostBrowseInitialize);
+    }
+
+    /// <inheritdoc />
+    public bool HasRepositoryAcquiredSubscribers => RepositoryAcquired is not null;
+
+    /// <inheritdoc />
+    public void RaiseRepositoryAcquired(IGitModule gitModule)
+    {
+        RepositoryAcquired?.Invoke(this, new GitModuleEventArgs(gitModule));
     }
 
     public void RaisePostRegisterPlugin(object? ownerWindow)
