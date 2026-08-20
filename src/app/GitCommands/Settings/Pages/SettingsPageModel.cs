@@ -20,7 +20,10 @@ public sealed class SettingsGroup
 ///  Portable presentation model for one settings page: the page's entries in display order,
 ///  detached from any UI toolkit. Views bind entry values; hosts call <see cref="Load"/>
 ///  before showing and <see cref="Save"/> on apply.
+///  Not a translation source: without the attribute, the WinForms translation walker would
+///  emit each page's <see cref="Title"/> through the views' model fields.
 /// </summary>
+[GitExtensions.Extensibility.Translations.Xliff.LocalizableProperties]
 public abstract class SettingsPageModel
 {
     protected SettingsPageModel(string title)
