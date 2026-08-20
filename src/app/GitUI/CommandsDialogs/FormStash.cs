@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Stash;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI;
 using GitUIPluginInterfaces;
@@ -29,14 +30,7 @@ public sealed partial class FormStash : GitModuleForm
         View.ExtraDiffArgumentsChanged += delegate { StashedSelectedIndexChanged(this, EventArgs.Empty); };
         View.TopScrollReached += FileViewer_TopScrollReached;
         View.BottomScrollReached += FileViewer_BottomScrollReached;
-        if (initialStash is not null)
-        {
-            string initialIndex = initialStash.SubstringAfter('{').SubstringUntil('}');
-            if (int.TryParse(initialIndex, out int res))
-            {
-                _lastSelectedStashIndex = res + 1;
-            }
-        }
+        _lastSelectedStashIndex = StashSelectionPolicy.ParseInitialIndex(initialStash) ?? -1;
 
         CompleteTheInitialization();
     }
@@ -139,29 +133,20 @@ public sealed partial class FormStash : GitModuleForm
             Stashes.Items.Add(stashedItem);
         }
 
+        int selection = StashSelectionPolicy.ResolveStartupSelection(_lastSelectedStashIndex, ManageStashes, Stashes.Items.Count);
         if (_lastSelectedStashIndex > 0)
         {
-            // Last operation was a drop, select next index
-            if (_lastSelectedStashIndex >= Stashes.Items.Count)
-            {
-                _lastSelectedStashIndex--;
-            }
-
-            Stashes.SelectedIndex = _lastSelectedStashIndex;
             _lastSelectedStashIndex = -1;
         }
         else if (ManageStashes && Stashes.Items.Count > 1)
         {
-            // more than just the default ("Current working directory changes")
-            Stashes.SelectedIndex = 1; // -> auto-select first non-default
-
             // First load done, show worktree on next refresh
             ManageStashes = false;
         }
-        else if (Stashes.Items.Count > 0)
+
+        if (selection >= 0)
         {
-            // (no stashes) -> select default ("Current working directory changes")
-            Stashes.SelectedIndex = 0;
+            Stashes.SelectedIndex = selection;
         }
     }
 
@@ -175,18 +160,16 @@ public sealed partial class FormStash : GitModuleForm
         Loading.IsAnimating = true;
         Stashes.Enabled = false;
         StashMessage.ReadOnly = true;
-        if (gitStash == _currentWorkingDirStashItem)
+        if (gitStash is not null)
         {
-            StashMessage.ReadOnly = false;
-            _asyncLoader.LoadAsync(() => Module.GetAllChangedFiles(), LoadGitItemStatuses);
-            Clear.Enabled = false; // disallow Drop  (of current working directory)
-            Apply.Enabled = false; // disallow Apply (of current working directory)
-        }
-        else if (gitStash is not null)
-        {
-            _asyncLoader.LoadAsync(() => Module.GetStashDiffFiles(gitStash.Name), LoadGitItemStatuses);
-            Clear.Enabled = true; // allow Drop
-            Apply.Enabled = true; // allow Apply
+            StashSelectionCapabilities capabilities = StashSelectionCapabilities.Evaluate(isWorkingDirItem: gitStash == _currentWorkingDirStashItem);
+            StashMessage.ReadOnly = !capabilities.MessageEditable;
+            Clear.Enabled = capabilities.DropAllowed;
+            Apply.Enabled = capabilities.ApplyAllowed;
+            Func<IReadOnlyList<GitItemStatus>> loadItems = gitStash == _currentWorkingDirStashItem
+                ? () => Module.GetAllChangedFiles()
+                : () => Module.GetStashDiffFiles(gitStash.Name);
+            _asyncLoader.LoadAsync(loadItems, LoadGitItemStatuses);
         }
     }
 
@@ -215,10 +198,7 @@ public sealed partial class FormStash : GitModuleForm
 
     private bool ChangeSelectedStash(bool next = true)
     {
-        // Move in list similar to RevGrid, so newest is first in list
-        int index = Stashes.SelectedIndex + (next ? -1 : 1);
-
-        if (index >= Stashes.Items.Count || index < 0)
+        if (StashSelectionPolicy.Navigate(Stashes.SelectedIndex, Stashes.Items.Count, next) is not int index)
         {
             return false;
         }
@@ -247,46 +227,29 @@ public sealed partial class FormStash : GitModuleForm
         {
             // FileStatusList has no interface for both worktree<-index, index<-HEAD at the same time
             // Must be handled when displaying
-            ObjectId headId = Module.RevParse("HEAD");
-            GitRevision workTreeRev = new(ObjectId.WorkTreeId)
+            StashDiffRevisions revisions = StashDiffRevisions.ForWorkingDir(Module.RevParse("HEAD"));
+            if (revisions is { First: GitRevision headRev, SplitIndexRevision: GitRevision indexRev })
             {
-                ParentIds = new[] { ObjectId.IndexId }
-            };
-            if (headId.IsZero)
-            {
-                // Likely a detached head
-                Stashed.SetDiffs(null, workTreeRev, gitItemStatuses);
+                List<GitItemStatus> indexItems = [.. gitItemStatuses.Where(item => item.Staged == StagedStatus.Index)];
+                List<GitItemStatus> workTreeItems = [.. gitItemStatuses.Where(item => item.Staged != StagedStatus.Index)];
+                Stashed.SetStashDiffs(headRev, indexRev, ResourceManager.TranslatedStrings.Index, indexItems, revisions.Second, ResourceManager.TranslatedStrings.Workspace, workTreeItems);
             }
             else
             {
-                GitRevision headRev = new(headId);
-                GitRevision indexRev = new(ObjectId.IndexId)
-                {
-                    ParentIds = new[] { headId }
-                };
-                List<GitItemStatus> indexItems = [.. gitItemStatuses.Where(item => item.Staged == StagedStatus.Index)];
-                List<GitItemStatus> workTreeItems = [.. gitItemStatuses.Where(item => item.Staged != StagedStatus.Index)];
-                Stashed.SetStashDiffs(headRev, indexRev, ResourceManager.TranslatedStrings.Index, indexItems, workTreeRev, ResourceManager.TranslatedStrings.Workspace, workTreeItems);
+                // Likely a detached head
+                Stashed.SetDiffs(revisions.First, revisions.Second, gitItemStatuses);
             }
         }
         else
         {
-            ObjectId firstId = Module.RevParse(gitStash.Name + "^");
-            GitRevision? firstRev = firstId.IsZero ? null : new(firstId);
-
             ObjectId selectedId = Module.RevParse(gitStash.Name);
             if (selectedId.IsZero)
             {
                 throw new InvalidOperationException("selectedId must not be zero");
             }
 
-            GitRevision secondRev = new(selectedId);
-            if (!firstId.IsZero)
-            {
-                secondRev.ParentIds = new[] { firstId };
-            }
-
-            Stashed.SetDiffs(firstRev, secondRev, gitItemStatuses);
+            StashDiffRevisions revisions = StashDiffRevisions.ForStash(Module.RevParse(gitStash.Name + "^"), selectedId);
+            Stashed.SetDiffs(revisions.First, revisions.Second, gitItemStatuses);
         }
 
         Loading.Visible = false;
@@ -312,7 +275,7 @@ public sealed partial class FormStash : GitModuleForm
     {
         using (WaitCursorScope.Enter())
         {
-            string msg = !string.IsNullOrWhiteSpace(StashMessage.Text) ? " " + StashMessage.Text.Trim() : string.Empty;
+            string msg = StashSaveMessage.Normalize(StashMessage.Text);
             UICommands.Execute(new UICmd.StashSave(chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg), this);
             Initialize();
         }
@@ -322,7 +285,7 @@ public sealed partial class FormStash : GitModuleForm
     {
         using (WaitCursorScope.Enter())
         {
-            string msg = !string.IsNullOrWhiteSpace(StashMessage.Text) ? " " + StashMessage.Text.Trim() : string.Empty;
+            string msg = StashSaveMessage.Normalize(StashMessage.Text);
             UICommands.Execute(new UICmd.StashSave(chkIncludeUntrackedFiles.Checked, StashKeepIndex.Checked, msg, Stashed.SelectedItems.Select(i => i.Item.Name).ToList()), this);
             Initialize();
         }
@@ -405,7 +368,8 @@ public sealed partial class FormStash : GitModuleForm
 
     private void EnablePartialStash()
     {
-        StashSelectedFiles.Enabled = Stashes.SelectedIndex == 0 && Stashed.SelectedItems.Any();
+        StashSelectedFiles.Enabled = StashSelectionCapabilities.PartialStashAllowed(
+            isWorkingDirItem: Stashes.SelectedIndex == 0, hasSelectedFiles: Stashed.SelectedItems.Any());
     }
 
     private void Stashes_DropDown(object sender, EventArgs e)
