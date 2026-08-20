@@ -59,6 +59,28 @@ public sealed class SliceSession
 
     public bool InConflictedMerge => _module.InTheMiddleOfConflictedMerge();
 
+    public bool InPatch => _module.InTheMiddleOfPatch();
+
+    /// <summary>The current conflicts (stage 1/2/3 triples).</summary>
+    public Task<List<ConflictData>> GetConflictsAsync() => _module.GetConflictsAsync();
+
+    /// <summary>Resolves a conflict to one side: checkout-index --stage=N then git add.</summary>
+    public Task<bool> ResolveConflictSideAsync(string fileName, GitCommands.Conflicts.ConflictSide side)
+        => Task.Run(() => _module.HandleConflictSelectSide(fileName, side switch
+        {
+            GitCommands.Conflicts.ConflictSide.Base => "BASE",
+            GitCommands.Conflicts.ConflictSide.Local => "LOCAL",
+            _ => "REMOTE",
+        }));
+
+    /// <summary>Resolves a delete/modify conflict by removing the file.</summary>
+    public Task<(bool Success, string Output)> RemoveConflictedFileAsync(string fileName)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("rm") { "--", fileName.Quote() }));
+
+    /// <summary>Marks a conflict resolved (git add).</summary>
+    public Task<(bool Success, string Output)> StageConflictedFileAsync(string fileName)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("add") { "--", fileName.Quote() }));
+
     public bool IsDetachedHead => _module.IsDetachedHead();
 
     public bool InRebase => _module.InTheMiddleOfRebase();

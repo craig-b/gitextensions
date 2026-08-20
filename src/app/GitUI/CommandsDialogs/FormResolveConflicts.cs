@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using GitCommands;
 using GitCommands.Config;
+using GitCommands.Conflicts;
 using GitCommands.Git;
 using GitCommands.Settings;
 using GitExtensions.Extensibility;
@@ -281,19 +282,24 @@ public partial class FormResolveConflicts : GitModuleForm
 
             ContextChooseBase.ToolTipText = _contextChooseBaseTooltip.Text;
 
-            if (!Module.InTheMiddleOfConflictedMerge() && _thereWhereMergeConflicts)
+            ConflictCompletionDecision completion = ConflictCompletionDecision.Evaluate(
+                Module.InTheMiddleOfConflictedMerge(), _thereWhereMergeConflicts, Module.InTheMiddleOfPatch(), _inTheMiddleOfRebase, _offerCommit);
+            if (completion.ShouldUpdateSubmodules)
             {
                 UICommands.Execute(new UICmd.UpdateSubmodules(), this);
+            }
 
-                if (!Module.InTheMiddleOfPatch() && !_inTheMiddleOfRebase && _offerCommit)
+            if (completion.ShouldOfferCommit)
+            {
+                if (AppSettings.DontConfirmCommitAfterConflictsResolved ||
+                    MessageBoxes.Show(this, _allConflictsResolved.Text, _allConflictsResolvedCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
-                    if (AppSettings.DontConfirmCommitAfterConflictsResolved ||
-                        MessageBoxes.Show(this, _allConflictsResolved.Text, _allConflictsResolvedCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                    {
-                        UICommands.Execute(new UICmd.Commit(), this);
-                    }
+                    UICommands.Execute(new UICmd.Commit(), this);
                 }
+            }
 
+            if (completion.ShouldClose)
+            {
                 Close();
             }
 
@@ -328,26 +334,10 @@ public partial class FormResolveConflicts : GitModuleForm
         _conflictItemsCount = conflicts.Count;
         StartProgressBarWithMaxValue(_conflictItemsCount);
 
-        List<ConflictData> filesDeletedLocallyAndModifiedRemotely = [];
-        List<ConflictData> filesModifiedLocallyAndDeletedRemotely = [];
-        List<ConflictData> filesRemaining = [];
-
-        // Insert(0, conflictData) is needed the task dialog shows the same order of files as selected in the grid
-        foreach (ConflictData conflictData in conflicts)
-        {
-            if (string.IsNullOrEmpty(conflictData.Local.Filename) && !string.IsNullOrEmpty(conflictData.Remote.Filename))
-            {
-                filesDeletedLocallyAndModifiedRemotely.Insert(0, conflictData);
-            }
-            else if (!string.IsNullOrEmpty(conflictData.Local.Filename) && string.IsNullOrEmpty(conflictData.Remote.Filename))
-            {
-                filesModifiedLocallyAndDeletedRemotely.Insert(0, conflictData);
-            }
-            else
-            {
-                filesRemaining.Insert(0, conflictData);
-            }
-        }
+        ConflictSelectionBuckets buckets = ConflictClassifier.Bucket(conflicts);
+        IReadOnlyList<ConflictData> filesDeletedLocallyAndModifiedRemotely = buckets.DeletedLocallyModifiedRemotely;
+        IReadOnlyList<ConflictData> filesModifiedLocallyAndDeletedRemotely = buckets.ModifiedLocallyDeletedRemotely;
+        IReadOnlyList<ConflictData> filesRemaining = buckets.Remaining;
 
         _filesDeletedLocallyAndModifiedRemotelyCount = filesDeletedLocallyAndModifiedRemotely.Count;
         _filesModifiedLocallyAndDeletedRemotelyCount = filesModifiedLocallyAndDeletedRemotely.Count;
@@ -483,19 +473,7 @@ public partial class FormResolveConflicts : GitModuleForm
     private void Use2WayMerge(ref string arguments)
     {
         Validates.NotNull(_mergetool);
-        string mergeToolLower = _mergetool.ToLowerInvariant();
-        switch (mergeToolLower)
-        {
-            case "kdiff3":
-            case "diffmerge":
-            case "smerge":
-                arguments = arguments.Replace("\"$BASE\"", "");
-                break;
-            case "tortoisemerge":
-                arguments = arguments.Replace("-base:\"$BASE\"", "").Replace("/base:\"$BASE\"", "");
-                arguments = arguments.Replace("mine:\"$LOCAL\"", "base:\"$LOCAL\"");
-                break;
-        }
+        arguments = MergeToolArguments.To2Way(_mergetool, arguments);
     }
 
     private enum ItemType
@@ -622,10 +600,7 @@ public partial class FormResolveConflicts : GitModuleForm
                     }
                 }
 
-                arguments = arguments.Replace("$BASE", baseFile);
-                arguments = arguments.Replace("$LOCAL", localFile);
-                arguments = arguments.Replace("$REMOTE", remoteFile);
-                arguments = arguments.Replace("$MERGED", item.Filename);
+                arguments = MergeToolArguments.Substitute(arguments, baseFile, localFile, remoteFile, item.Filename);
 
                 // get timestamp of file before merge. This is an extra check to verify if merge was successful
                 string? filePath = _fullPathResolver.Resolve(item.Filename);
@@ -651,15 +626,16 @@ public partial class FormResolveConflicts : GitModuleForm
 
                 // Check exitcode AND timestamp of the file. If exitcode is success and
                 // time timestamp is changed, we are pretty sure the merge was done.
-                if (res.ExitedSuccessfully && lastWriteTimeBeforeMerge != lastWriteTimeAfterMerge)
+                MergeToolResultDecision decision = MergeToolResultDecision.Evaluate(
+                    res.ExitCode ?? -1, res.ExitedSuccessfully, lastWriteTimeBeforeMerge != lastWriteTimeAfterMerge);
+                if (decision.ShouldStage)
                 {
                     StageFile(item.Filename);
                 }
 
                 // If the exitcode is 1, but the file is changed, ask if the merge conflict is solved.
                 // If the exitcode is 0, but the file is not changed, ask if the merge conflict is solved.
-                if ((res.ExitCode == 1 && lastWriteTimeBeforeMerge != lastWriteTimeAfterMerge) ||
-                    (res.ExitCode == 0 && lastWriteTimeBeforeMerge == lastWriteTimeAfterMerge))
+                if (decision.ShouldAskUser)
                 {
                     if (MessageBoxes.Show(this, _askMergeConflictSolved.Text, _askMergeConflictSolvedCaption.Text,
                         MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
@@ -692,54 +668,23 @@ public partial class FormResolveConflicts : GitModuleForm
         // All _mergetool related is for native ("Windows")
         Executable nativeGit = new(AppSettings.GitCommand, Module.WorkingDir);
         EffectiveGitConfigSettings nativeSettings = new(nativeGit);
-        if (GitVersion.CurrentVersion(nativeGit).SupportGuiMergeTool)
-        {
-            _mergetool = nativeSettings.GetValue(SettingKeyString.MergeToolKey);
-        }
+        MergeToolConfiguration configuration = MergeToolConfiguration.Resolve(
+            nativeSettings.GetValue,
+            GitVersion.CurrentVersion(nativeGit).SupportGuiMergeTool,
+            OperatingSystem.IsWindows());
 
-        // Fallback and older Git
-        if (string.IsNullOrEmpty(_mergetool))
-        {
-            _mergetool = nativeSettings.GetValue(SettingKeyString.MergeToolNoGuiKey);
-        }
-
-        if (string.IsNullOrEmpty(_mergetool))
+        if (string.IsNullOrEmpty(configuration.Tool))
         {
             MessageBoxes.Show(this, _noMergeTool.Text, TranslatedStrings.Error, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
         }
 
+        _mergetool = configuration.Tool;
+        _mergetoolCmd = configuration.Command;
+        _mergetoolPath = configuration.Path;
+
         using (WaitCursorScope.Enter())
         {
-            _mergetoolCmd = nativeSettings.GetValue($"mergetool.{_mergetool}.cmd");
-            _mergetoolPath = nativeSettings.GetValue($"mergetool.{_mergetool}.path");
-
-            // Temporary compatibility with GE <3.3
-            if (_mergetool == "kdiff3")
-            {
-                if (string.IsNullOrEmpty(_mergetoolPath))
-                {
-                    _mergetoolPath = "kdiff3";
-                }
-
-                if (string.IsNullOrEmpty(_mergetoolCmd))
-                {
-                    _mergetoolCmd = "\"$BASE\" \"$LOCAL\" \"$REMOTE\" -o \"$MERGED\"";
-                }
-            }
-
-            if (OperatingSystem.IsWindows() && _mergetoolCmd is not null)
-            {
-                // This only works when on Windows....
-                const string executablePattern = ".exe";
-                int idx = _mergetoolCmd.IndexOf(executablePattern);
-                if (idx >= 0)
-                {
-                    _mergetoolPath = _mergetoolCmd[..(idx + executablePattern.Length + 1)].Trim('\"', ' ');
-                    _mergetoolCmd = _mergetoolCmd[(idx + executablePattern.Length + 1)..];
-                }
-            }
-
             if (!PathUtil.TryFindFullPath(_mergetoolPath!, out string? fullPath))
             {
                 MessageBoxes.Show(this, _noMergeToolConfigured.Text, TranslatedStrings.Warning, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -780,9 +725,11 @@ public partial class FormResolveConflicts : GitModuleForm
         }
     }
 
-    private string GetRemoteSideString() => _inTheMiddleOfRebase ? _ours.Text : _theirs.Text;
+    private ConflictSideLabels SideLabels => ConflictSideLabels.Resolve(_inTheMiddleOfRebase, _ours.Text, _theirs.Text);
 
-    private string GetLocalSideString() => _inTheMiddleOfRebase ? _theirs.Text : _ours.Text;
+    private string GetRemoteSideString() => SideLabels.RemoteLabel;
+
+    private string GetLocalSideString() => SideLabels.LocalLabel;
 
     private string GetShortHash(ConflictedFileData item)
         => $"@{(item.ObjectId.IsZero ? _deleted.Text : item.ObjectId.ToShortString())}";

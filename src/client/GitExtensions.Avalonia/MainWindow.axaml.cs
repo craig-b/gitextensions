@@ -102,6 +102,22 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_CONFLICTSTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(2000);
+                Console.Error.WriteLine($"[conflicts] in conflicted merge: {_session.InConflictedMerge}");
+                ConflictsWindow conflictsWindow = new(_session);
+                TaskCompletionSource<string> harness = new();
+                conflictsWindow.Loaded += async (_, _) => harness.SetResult(await conflictsWindow.RunHarnessAsync(GitCommands.Conflicts.ConflictOutcome.TakeRemote));
+                conflictsWindow.Show(this);
+                string report = await harness.Task;
+                Console.Error.WriteLine($"[conflicts] {report} | still conflicted: {_session.InConflictedMerge}");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_REWRITETEST") == "1")
         {
             Loaded += async (_, _) =>
@@ -548,6 +564,27 @@ public partial class MainWindow : Window
         bool inRebase = _session.InRebase;
         RebaseContinueButton.IsVisible = inRebase;
         RebaseAbortButton.IsVisible = inRebase;
+        ResolveConflictsButton.IsVisible = _session.InConflictedMerge;
+    }
+
+    private async void OnResolveConflictsClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await ShowConflictsWindowAsync();
+
+    /// <summary>The conflicts window; on the all-resolved close it offers the commit (the WinForms flow).</summary>
+    private async Task ShowConflictsWindowAsync()
+    {
+        ConflictsWindow conflictsWindow = new(_session);
+        await conflictsWindow.ShowDialog(this);
+        UpdateRebaseBar();
+
+        if (conflictsWindow.ShouldOfferCommit
+            && await ConfirmDialog.ConfirmAsync(this, "Conflicts resolved", "All conflicts are resolved. Commit the merge now?"))
+        {
+            CommitWindow commitWindow = new(_session);
+            await commitWindow.ShowDialog(this);
+        }
+
+        await ReloadLogAsync();
     }
 
     private async void OnRebaseContinueClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
