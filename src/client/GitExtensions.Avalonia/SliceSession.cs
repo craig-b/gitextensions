@@ -110,6 +110,34 @@ public sealed class SliceSession
         return (result.ExitedSuccessfully, result.AllOutput);
     }
 
+    public Task<(bool Success, string Output)> CherryPickAsync(ObjectId commitId)
+        => Task.Run(() => RunGitOperation(Commands.CherryPick(commitId, commit: true, arguments: "")));
+
+    public Task<(bool Success, string Output)> RevertAsync(ObjectId commitId)
+        => Task.Run(() => RunGitOperation(Commands.Revert(commitId, autoCommit: true, parentIndex: 0)));
+
+    public Task<(bool Success, string Output)> MergeAsync(string refName)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("merge") { refName.QuoteNE() }));
+
+    public Task<(bool Success, string Output)> CreateBranchAtAsync(string branchName, ObjectId commitId, bool checkout)
+        => Task.Run(() => RunGitOperation(Commands.Branch(branchName, commitId, checkout)));
+
+    public Task<(bool Success, string Output)> DeleteBranchAsync(string branchName)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("branch") { "-d", branchName.QuoteNE() }));
+
+    public Task<(bool Success, string Output)> DeleteTagAsync(string tagName)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("tag") { "-d", tagName.QuoteNE() }));
+
+    public Task<(bool Success, string Output)> StashApplyAsync(string reflogSelector)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "apply", reflogSelector.QuoteNE() }));
+
+    public Task<(bool Success, string Output)> StashDropAsync(string reflogSelector)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "drop", reflogSelector.QuoteNE() }));
+
+    public bool InBisect => _module.InTheMiddleOfBisect();
+
+    public bool IsBareRepository => _module.IsBareRepository();
+
     /// <summary>Runs a pull/fetch built from the portable PullOptions model.</summary>
     public Task<(bool Success, string Output)> PullWithOptionsAsync(GitCommands.Pull.PullOptions options)
         => Task.Run(() => RunGitOperation(options.ToArguments(_module)));

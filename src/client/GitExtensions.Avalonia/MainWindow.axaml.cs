@@ -17,6 +17,7 @@ namespace GitExtensions.Avalonia;
 public partial class MainWindow : Window
 {
     private readonly SliceSession _session;
+    private GitRevision? _selectedRevision;
     private CancellationTokenSource? _selectionCts;
     private CancellationTokenSource _logCts = new();
 
@@ -27,7 +28,22 @@ public partial class MainWindow : Window
         _session = new SliceSession(repositoryPath);
         Title = $"Git Extensions - {_session.WorkingDir}";
 
-        LogControl.RevisionSelected += (_, revision) => _ = ShowRevisionAsync(revision);
+        LogControl.RevisionSelected += (_, revision) =>
+        {
+            _selectedRevision = revision;
+            _ = ShowRevisionAsync(revision);
+        };
+        LogControl.ContextRequested += OnLogContextRequested;
+        RefTree.ContextRequested += OnRefTreeContextRequested;
+        KeyDown += (_, keyArgs) =>
+        {
+            if (keyArgs.Key == global::Avalonia.Input.Key.P
+                && keyArgs.KeyModifiers == (global::Avalonia.Input.KeyModifiers.Control | global::Avalonia.Input.KeyModifiers.Shift))
+            {
+                keyArgs.Handled = true;
+                _ = ShowCommandPaletteAsync();
+            }
+        };
 
         Loaded += (_, _) => StartLogStream();
         Closed += (_, _) => _logCts.Cancel();
@@ -49,6 +65,11 @@ public partial class MainWindow : Window
                 await Report("pull", _session.PullAsync(rebase: false));
                 Environment.Exit(0);
             };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_MENUTEST") == "1")
+        {
+            Loaded += (_, _) => _ = RunMenuHarnessAsync();
         }
 
         if (Environment.GetEnvironmentVariable("GE_SPIKE_SETTINGSTEST") is string settingsSnapshotDirectory)
