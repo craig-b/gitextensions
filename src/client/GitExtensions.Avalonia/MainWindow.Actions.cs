@@ -401,6 +401,15 @@ public partial class MainWindow
 
     private void OnLogContextRequested(object? sender, ContextRequestedEventArgs e)
     {
+        // Right-clicking a branch/tag chip opens the ref menu for that ref.
+        if (e.TryGetPosition(LogControl, out global::Avalonia.Point position)
+            && LogControl.HitTestRefChip(position) is IGitRef chipRef)
+        {
+            e.Handled = true;
+            OpenRefMenuForChip(chipRef);
+            return;
+        }
+
         if (_selectedRevision is not GitRevision revision)
         {
             return;
@@ -415,6 +424,34 @@ public partial class MainWindow
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
             action => handlers[action.Id](revision));
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(LogControl);
+        }
+    }
+
+    /// <summary>The ref menu for a clicked chip - the same registry projection the sidebar uses.</summary>
+    private void OpenRefMenuForChip(IGitRef chipRef)
+    {
+        RefMenuKind kind = chipRef.IsTag ? RefMenuKind.Tag
+            : chipRef.IsRemote ? RefMenuKind.RemoteBranch
+            : RefMenuKind.LocalBranch;
+        RefTreeNode node = new()
+        {
+            Name = chipRef.LocalName,
+            FullPath = chipRef.IsTag || chipRef.IsRemote ? chipRef.Name : chipRef.LocalName,
+            Kind = chipRef.IsTag ? RefTreeNodeKind.Tag : chipRef.IsRemote ? RefTreeNodeKind.RemoteBranch : RefTreeNodeKind.LocalBranch,
+        };
+
+        RefMenuContext context = new(kind, IsCurrent: !chipRef.IsRemote && !chipRef.IsTag && chipRef.LocalName == _session.SelectedBranch);
+        Dictionary<string, Func<RefTreeNode, Task>> handlers = RefActionHandlers;
+
+        ContextMenu menu = BuildMenu(
+            GridMenuRegistry.RefActions,
+            action => handlers.ContainsKey(action.Id),
+            action => GridMenuRegistry.IsApplicable(action, context),
+            action => handlers[action.Id](node));
 
         if (menu.Items.Count > 0)
         {
@@ -516,6 +553,18 @@ public partial class MainWindow
 
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         Console.Error.WriteLine($"[menu] palette would list commands + {branches.Count + remotes.Count + tags.Count}+ ref sections for jumps");
+
+        // Scan the visible rows for a rendered ref chip.
+        IGitRef? chip = null;
+        for (double y = 8; y < LogControl.Bounds.Height && chip is null; y += 8)
+        {
+            for (double x = 0; x < LogControl.Bounds.Width && chip is null; x += 8)
+            {
+                chip = LogControl.HitTestRefChip(new global::Avalonia.Point(x, y));
+            }
+        }
+
+        Console.Error.WriteLine($"[menu] chip hit-test: {(chip is null ? "none found" : $"{chip.Name}")}");
 
         Environment.Exit(0);
     }

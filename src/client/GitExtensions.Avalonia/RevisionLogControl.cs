@@ -34,6 +34,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     private bool _canScroll;
     private int _selectedIndex = -1;
     private readonly SortedSet<int> _selectedIndexes = [];
+    private readonly List<(Rect Bounds, IGitRef Ref)> _chipHitRects = [];
 
     private readonly Typeface _typeface = new("monospace");
     private readonly Typeface _textTypeface = Typeface.Default;
@@ -291,6 +292,20 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         }
     }
 
+    /// <summary>The ref chip under a viewport point, for chip context menus.</summary>
+    public IGitRef? HitTestRefChip(Point point)
+    {
+        foreach ((Rect bounds, IGitRef gitRef) in _chipHitRects)
+        {
+            if (bounds.Contains(point))
+            {
+                return gitRef;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The selected revisions in row order (primary selection included).</summary>
     public IReadOnlyList<GitRevision> SelectedRevisions
         => [.. _selectedIndexes
@@ -376,6 +391,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
 
         Palette palette = CurrentPalette;
         context.FillRectangle(palette.Background, new Rect(Bounds.Size));
+        _chipHitRects.Clear();
 
         int count = _graph.Count;
         if (count == 0)
@@ -535,7 +551,9 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
                 break;
             }
 
-            textX += DrawRefChip(context, gitRef, textX, yMid, chipLimit - textX);
+            double chipAdvance = DrawRefChip(context, gitRef, textX, yMid, chipLimit - textX);
+            _chipHitRects.Add((new Rect(textX, yMid - 9, chipAdvance, 18), gitRef));
+            textX += chipAdvance;
         }
 
         subjectWidth = Math.Max(20, subjectRight - textX);
