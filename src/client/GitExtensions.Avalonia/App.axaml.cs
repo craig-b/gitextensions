@@ -23,13 +23,36 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            string repositoryPath = desktop.Args is [{ Length: > 0 } path, ..]
-                ? path
-                : Environment.CurrentDirectory;
-
-            desktop.MainWindow = new MainWindow(repositoryPath);
+            desktop.MainWindow = new MainWindow(ResolveStartupRepository(desktop.Args));
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    ///  An explicit argument wins; otherwise the WinForms startup rule via StartupWorkingDir:
+    ///  the remembered repository when the setting asks for it (pruning it when it went stale),
+    ///  falling back to the current directory.
+    /// </summary>
+    private static string ResolveStartupRepository(string[]? args)
+    {
+        if (args is [{ Length: > 0 } path, ..])
+        {
+            return path;
+        }
+
+        GitCommands.Open.StartupWorkingDir startup = GitCommands.Open.StartupWorkingDir.Resolve(
+            GitCommands.AppSettings.StartWithRecentWorkingDir,
+            GitCommands.AppSettings.RecentWorkingDir,
+            GitCommands.GitModule.IsValidGitWorkingDir);
+
+        if (startup.StalePathToPrune is string stalePath)
+        {
+            // The remembered repository no longer exists: forget it instead of re-checking it on every launch.
+            GitCommands.AppSettings.RecentWorkingDir = string.Empty;
+            GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveRecentAsync(stalePath).GetAwaiter().GetResult();
+        }
+
+        return startup.WorkingDir ?? Environment.CurrentDirectory;
     }
 }

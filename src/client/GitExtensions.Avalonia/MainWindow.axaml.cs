@@ -16,7 +16,7 @@ namespace GitExtensions.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private readonly SliceSession _session;
+    private SliceSession _session;
     private GitRevision? _selectedRevision;
     private CancellationTokenSource? _selectionCts;
     private CancellationTokenSource _logCts = new();
@@ -55,6 +55,26 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) => StartLogStream();
         Closed += (_, _) => _logCts.Cancel();
+
+        // Verification hook: switch to the given repository after startup and report whether the
+        // switch landed (session re-targeted, MRU promoted, log streamed).
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_OPENTEST") is { Length: > 0 } openTarget)
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(1500);
+                await SwitchRepositoryAsync(openTarget);
+                await Task.Delay(2500);
+
+                string expected = System.IO.Path.GetFullPath(openTarget).TrimEnd('/', '\\');
+                bool switched = _session.WorkingDir.TrimEnd('/', '\\') == expected;
+                var history = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+                bool promoted = history.Count > 0 && history[0].Path.TrimEnd('/', '\\') == expected;
+                int commits = LogControl.Count;
+                Console.Error.WriteLine($"[open] switched:{switched} mru:{promoted} commits:{commits} dir:{_session.WorkingDir}");
+                Environment.Exit(switched && promoted && commits > 0 ? 0 : 1);
+            };
+        }
 
         if (Environment.GetEnvironmentVariable("GE_SPIKE_OPSTEST") == "1")
         {
@@ -601,6 +621,54 @@ public partial class MainWindow : Window
         Loc.Reload();
         ApplyThemeVariant();
         ApplyToolbarTranslations();
+    }
+
+    private async void OnOpenRepositoryClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        string? path = await OpenRepositoryDialog.ShowAsync(this, _session.IsValidRepository ? _session.WorkingDir : null);
+        if (path is not null)
+        {
+            await SwitchRepositoryAsync(path);
+        }
+    }
+
+    /// <summary>
+    ///  The client's repository-switch transaction, driven by the same RepoSwitchPlan FormBrowse
+    ///  binds: persist the new working dir + MRU on a valid switch, reset repository-scoped view
+    ///  state only when the path actually changed, then restart the log stream.
+    /// </summary>
+    internal async Task SwitchRepositoryAsync(string path)
+    {
+        SliceSession newSession = new(path);
+        if (!newSession.IsValidRepository)
+        {
+            await ConfirmDialog.ErrorAsync(this, Loc.T("Open repository"), Loc.T("The selected directory is not a valid git repository."));
+            return;
+        }
+
+        GitCommands.Open.RepoSwitchPlan plan = GitCommands.Open.RepoSwitchPlan.Create(_session.WorkingDir, newSession.WorkingDir, isValidWorkingDir: true);
+        _session = newSession;
+
+        if (plan.PersistRecentWorkingDir)
+        {
+            GitCommands.AppSettings.RecentWorkingDir = newSession.WorkingDir;
+            await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.AddAsMostRecentAsync(newSession.WorkingDir);
+            GitCommands.AppSettings.SaveSettings();
+        }
+
+        if (plan.ResetRepositoryScopedViewState)
+        {
+            _selectedRevision = null;
+            _compareBaseRevision = null;
+            _fileGroups.Clear();
+            FileTree.ItemsSource = null;
+            CommitHeader.Inlines?.Clear();
+            CommitBody.Inlines?.Clear();
+            RefTree.ItemsSource = null;
+        }
+
+        Title = $"Git Extensions - {_session.WorkingDir}";
+        await ReloadLogAsync();
     }
 
     /// <summary>The Colors page's variant choice, applied application-wide (blank follows the system).</summary>
