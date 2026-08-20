@@ -1,18 +1,17 @@
 ﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
-using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitUIPluginInterfaces;
 
-namespace GitUI.UserControls;
+namespace GitCommands.Blame;
 
-internal interface IGitBlameParser
+public interface IGitBlameParser
 {
     int GetOriginalLineInPreviousCommit(GitRevision selectedBlamedRevision, string filename, int selectedLine);
 }
 
-internal partial class GitBlameParser : IGitBlameParser
+public partial class GitBlameParser : IGitBlameParser
 {
     private readonly Func<IGitModule> _getModule;
 

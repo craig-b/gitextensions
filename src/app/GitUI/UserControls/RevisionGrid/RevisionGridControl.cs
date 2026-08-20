@@ -7,6 +7,7 @@ using System.Reactive.Subjects;
 using System.Runtime.ExceptionServices;
 using GitCommands;
 using GitCommands.Config;
+using GitCommands.FileHistory;
 using GitCommands.Git;
 using GitCommands.Utils;
 using GitExtensions.Extensibility;
@@ -476,11 +477,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
     // returns " --find-renames=... --find-copies=..." according to app settings
     private static ArgumentString FindRenamesAndCopiesOpts()
-    {
-        return AppSettings.FollowRenamesInFileHistoryExactOnly
-            ? " --find-renames=\"100%\" --find-copies=\"100%\""
-            : " --find-renames --find-copies";
-    }
+        => FileHistoryPathFilter.FindRenamesAndCopiesOptions(AppSettings.FollowRenamesInFileHistoryExactOnly);
 
     public void ResetAllFilters()
     {
@@ -1247,33 +1244,9 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
             // Manual arguments must be quoted if needed (internal paths are quoted)
             // except for simple arguments without any quotes or spaces
-            path = path.Trim();
-            bool multpleArgs = false;
-            if (!path.Any(c => c == '"') && !path.Any(c => c == '\''))
-            {
-                if (!path.Any(c => c == ' '))
-                {
-                    path = path.Quote();
-                }
-                else
-                {
-                    multpleArgs = true;
-                }
-            }
-            else if (path.Count(c => c == '"') + path.Count(c => c == '\'') > 2)
-            {
-                // Basic detection of multiple quoted strings (let the Git command fail for more advanced usage)
-                multpleArgs = true;
-            }
+            (path, bool multipleArgs) = FileHistoryPathFilter.NormalizeArgument(path);
 
-            if (!AppSettings.FollowRenamesInFileHistory
-
-                // The command line can be very long for folders, just ignore.
-                || path.EndsWith('/')
-                || path.EndsWith("/\"")
-
-                // --follow only accepts exactly one argument, error for all other
-                || multpleArgs)
+            if (!FileHistoryPathFilter.ShouldCollectHistoricalNames(path, multipleArgs, AppSettings.FollowRenamesInFileHistory))
             {
                 return path;
             }
@@ -1284,16 +1257,7 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
             //  1. use git log --follow to get all previous filenames of the file we are interested in
             //  2. use git log "list of files names" to get the history graph
 
-            GitArgumentBuilder args = new("log")
-            {
-                // --name-only will list each filename on a separate line, ending with an empty line
-                $"--format=\"{_objectIdPrefix}%H\"",
-                "--name-only",
-                "--follow",
-                FindRenamesAndCopiesOpts(),
-                "--",
-                path.QuoteIfNotQuotedAndNE()
-            };
+            GitArgumentBuilder args = FileHistoryPathFilter.FollowNamesCommand(path, _objectIdPrefix, AppSettings.FollowRenamesInFileHistoryExactOnly);
 
             HashSet<string?> setOfFileNames = [];
 
@@ -1304,20 +1268,15 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
             // Add path in case of no matches so result is never empty
             // This also occurs if Git detects more than one path argument
-            string pathFilter = setOfFileNames.Count == 0
-                ? path
-                : string.Join("", setOfFileNames.Select(s => @$" ""{s}"""));
+            (string pathFilter, bool tooLong) = FileHistoryPathFilter.Combine(path, setOfFileNames);
 
-            // Windows commands have a max length of 32267 characters,
-            // git-log command is normally around 200 characters.
-            if (pathFilter.Length > 31000)
+            if (tooLong)
             {
                 this.InvokeAndForget(()
                     => MessageBoxes.ShowError(
                         this,
-                        $"Ignoring too long pathfilter ({pathFilter.Length}). (Are you trying to filter a folder?)",
+                        "Ignoring too long pathfilter. (Are you trying to filter a folder?)",
                         "Cannot follow file renames"));
-                return path;
             }
 
             return pathFilter;

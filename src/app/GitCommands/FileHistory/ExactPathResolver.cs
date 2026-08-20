@@ -1,10 +1,12 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft;
 
-namespace GitUI.CommandsDialogs;
+namespace GitCommands.FileHistory;
 
-public sealed class FormFileHistoryController
+/// <summary>Resolves the exact on-disk casing of a path (moved from FormFileHistoryController).</summary>
+public static class ExactPathResolver
 {
     /// <summary>
     /// Gets the exact case used on the file system for an existing file or directory.
@@ -16,7 +18,7 @@ public sealed class FormFileHistoryController
     /// This supports drive-lettered paths and UNC paths, but a UNC root
     /// will be returned in lowercase (e.g., \\server\share).
     /// </remarks>
-    public bool TryGetExactPath(string? path, [NotNullWhen(returnValue: true)] out string? exactPath)
+    public static bool TryGetExactPath(string? path, [NotNullWhen(returnValue: true)] out string? exactPath)
     {
         if (!File.Exists(path) && !Directory.Exists(path))
         {
@@ -47,5 +49,14 @@ public sealed class FormFileHistoryController
 
         exactPath = path;
         return true;
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        internal static extern uint GetShortPathNameW(string lpszLongPath, StringBuilder lpszShortPath, int cchBuffer);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        internal static extern uint GetLongPathNameW(string lpszShortPath, StringBuilder lpszLongPath, int cchBuffer);
     }
 }

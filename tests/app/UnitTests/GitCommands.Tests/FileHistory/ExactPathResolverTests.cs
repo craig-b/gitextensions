@@ -1,24 +1,19 @@
 ﻿using CommonTestUtils;
-using GitUI.CommandsDialogs;
+using GitCommands.FileHistory;
 
-namespace GitUITests.CommandsDialogs;
-public sealed class FormFileHistoryControllerTests
+namespace GitCommandsTests.FileHistory;
+// Exact-casing resolution is a Windows concern (8.3 short-path round-trip); on other
+// platforms TryGetExactPath returns the input unchanged.
+[Platform(Include = "Win")]
+public sealed class ExactPathResolverTests
 {
-    private FormFileHistoryController _controller = null!;
-
-    [SetUp]
-    public void Setup()
-    {
-        _controller = new FormFileHistoryController();
-    }
-
     [TestCase(@"Does not exist")]
     [TestCase("")]
     [TestCase(" ")]
     public void TryGetExactPathName_Should_return_null_on_not_existing_file(string path)
     {
         string lowercasePath = path.ToLower();
-        bool isExistingOnFileSystem = _controller.TryGetExactPath(lowercasePath, out string? exactPath);
+        bool isExistingOnFileSystem = ExactPathResolver.TryGetExactPath(lowercasePath, out string? exactPath);
 
         isExistingOnFileSystem.Should().BeFalse();
         exactPath.Should().BeNull();
@@ -30,7 +25,7 @@ public sealed class FormFileHistoryControllerTests
         string path = @"\\" + Environment.MachineName.ToLower() + @"\c$\Windows\System32";
 
         string lowercasePath = path.ToLower();
-        bool isExistingOnFileSystem = _controller.TryGetExactPath(lowercasePath, out string? exactPath);
+        bool isExistingOnFileSystem = ExactPathResolver.TryGetExactPath(lowercasePath, out string? exactPath);
 
         isExistingOnFileSystem.Should().BeTrue();
 
@@ -50,7 +45,7 @@ public sealed class FormFileHistoryControllerTests
 
         string expected = Path.Combine(repo.TemporaryPath, relativePath);
 
-        _controller.TryGetExactPath(expected, out string? exactPath).Should().Be(isResolved);
+        ExactPathResolver.TryGetExactPath(expected, out string? exactPath).Should().Be(isResolved);
         if (doesMatch)
         {
             exactPath.Should().Be(expected);
