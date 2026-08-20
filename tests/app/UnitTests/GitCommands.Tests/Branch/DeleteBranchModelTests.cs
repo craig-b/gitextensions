@@ -13,6 +13,11 @@ public sealed class DeleteBranchModelTests
         return gitRef;
     }
 
+    // Classify runs worktree paths through Path.GetFullPath, so tests must use OS-rooted paths
+    // (a Unix-style "/repo/x" resolves to "C:\repo\x" on Windows and never matches).
+    private static string Rooted(string name)
+        => Path.Combine(Path.GetFullPath(Path.GetTempPath()), "repo", name);
+
     private static GitWorktree Worktree(string path, string? branch, bool isDeleted = false)
         => new(path, GitWorktreeHeadType.Branch, Sha1: "0000000000000000000000000000000000000000", branch, isDeleted);
 
@@ -74,12 +79,12 @@ public sealed class DeleteBranchModelTests
         WorktreeBranchClassification classification = WorktreeBranchClassification.Classify(
             [inMain, inLinked, inStale, unrelated],
             [
-                Worktree("/repo/main", "in-main"),
-                Worktree("/repo/linked", "in-linked"),
-                Worktree("/repo/stale", "in-stale", isDeleted: true),
-                Worktree("/repo/other", "elsewhere"),
+                Worktree(Rooted("main"), "in-main"),
+                Worktree(Rooted("linked"), "in-linked"),
+                Worktree(Rooted("stale"), "in-stale", isDeleted: true),
+                Worktree(Rooted("other"), "elsewhere"),
             ],
-            currentWorkingDir: "/repo/current");
+            currentWorkingDir: Rooted("current"));
 
         classification.HasDeletedWorktrees.Should().BeTrue();
         classification.MainWorktreeBranches.Should().ContainSingle().Which.Branch.Should().Be(inMain);
@@ -93,8 +98,8 @@ public sealed class DeleteBranchModelTests
 
         WorktreeBranchClassification classification = WorktreeBranchClassification.Classify(
             [branch],
-            [Worktree("/repo/current/", "here")],
-            currentWorkingDir: "/repo/current");
+            [Worktree(Rooted("current") + Path.DirectorySeparatorChar, "here")],
+            currentWorkingDir: Rooted("current"));
 
         classification.MainWorktreeBranches.Should().BeEmpty();
         classification.LinkedWorktreeBranches.Should().BeEmpty();
@@ -106,8 +111,8 @@ public sealed class DeleteBranchModelTests
     {
         WorktreeBranchClassification classification = WorktreeBranchClassification.Classify(
             [Ref("feature")],
-            [new GitWorktree("/repo/detached", GitWorktreeHeadType.Detached, Sha1: "0000000000000000000000000000000000000000", Branch: null, IsDeleted: false)],
-            currentWorkingDir: "/repo/current");
+            [new GitWorktree(Rooted("detached"), GitWorktreeHeadType.Detached, Sha1: "0000000000000000000000000000000000000000", Branch: null, IsDeleted: false)],
+            currentWorkingDir: Rooted("current"));
 
         classification.MainWorktreeBranches.Should().BeEmpty();
         classification.LinkedWorktreeBranches.Should().BeEmpty();
