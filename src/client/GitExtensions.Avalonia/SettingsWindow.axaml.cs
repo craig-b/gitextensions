@@ -17,28 +17,41 @@ namespace GitExtensions.Avalonia;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private readonly List<SettingsPageModel> _pages =
-    [
-        new GeneralPageModel(),
-        new CommitDialogPageModel(),
-        new ConfirmationsPageModel(),
-        new AppearancePageModel(),
-        new AdvancedPageModel(),
-        new DiffViewerPageModel(),
-        new BlameViewerPageModel(),
-        new SortingPageModel(),
-        new BrowseRepoPageModel(),
-    ];
+    private readonly List<(string Label, SettingsPageModel Page, Action? AfterSave)> _pages;
 
     private readonly Dictionary<SettingsEntry, Control> _editors = [];
     private readonly Dictionary<SettingsPageModel, Control> _builtPages = [];
     private readonly Dictionary<SettingsPageModel, List<Action>> _pullValueActions = [];
 
-    public SettingsWindow()
+    public SettingsWindow(SliceSession session)
     {
         InitializeComponent();
 
-        PageList.ItemsSource = _pages.Select(page => page.Title).ToList();
+        // the git-config pages write at the global level; the WinForms level-switch
+        // header (effective/local/global/system) is a client follow-on
+        GitCommands.Settings.GitConfigSettings globalGitConfig = new(session.Module.GitExecutable, GitExtensions.Extensibility.Git.GitSettingLevel.Global);
+        GitExtensions.Extensibility.Settings.SettingsSource gitConfigSource =
+            new GitCommands.Settings.SettingsSource<GitExtensions.Extensibility.Configurations.IPersistentConfigValueStore>(globalGitConfig);
+        Action saveGitConfig = globalGitConfig.Save;
+
+        _pages =
+        [
+            ("General", new GeneralPageModel(), null),
+            ("Commit dialog", new CommitDialogPageModel(), null),
+            ("Confirmations", new ConfirmationsPageModel(), null),
+            ("Appearance", new AppearancePageModel(), null),
+            ("Advanced", new AdvancedPageModel(), null),
+            ("Detailed", new DetailedPageModel(() => AppSettings.SettingsContainer), null),
+            ("Diff viewer", new DiffViewerPageModel(), null),
+            ("Blame viewer", new BlameViewerPageModel(), null),
+            ("Sorting", new SortingPageModel(), null),
+            ("Browse repository window", new BrowseRepoPageModel(), null),
+            ("Git: Paths", new GitPathsPageModel(), null),
+            ("Git: Config", new GitConfigPageModel(() => gitConfigSource, () => true), saveGitConfig),
+            ("Git: Advanced", new GitConfigAdvancedPageModel(() => gitConfigSource), saveGitConfig),
+        ];
+
+        PageList.ItemsSource = _pages.Select(page => page.Label).ToList();
         PageList.SelectedIndex = 0;
     }
 
@@ -47,7 +60,7 @@ public partial class SettingsWindow : Window
         int index = PageList.SelectedIndex;
         if (index >= 0 && index < _pages.Count)
         {
-            ShowPage(_pages[index]);
+            ShowPage(_pages[index].Page);
         }
     }
 
@@ -208,14 +221,20 @@ public partial class SettingsWindow : Window
     /// <summary>Pushes every shown page's editor states through its model and persists.</summary>
     private void Apply()
     {
-        foreach ((SettingsPageModel page, List<Action> pullValues) in _pullValueActions)
+        foreach ((_, SettingsPageModel page, Action? afterSave) in _pages)
         {
+            if (!_pullValueActions.TryGetValue(page, out List<Action>? pullValues))
+            {
+                continue;
+            }
+
             foreach (Action pullValue in pullValues)
             {
                 pullValue();
             }
 
             page.Save();
+            afterSave?.Invoke();
         }
 
         AppSettings.SaveSettings();
@@ -241,8 +260,8 @@ public partial class SettingsWindow : Window
         await Task.Delay(800);
         Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_general.png"));
 
-        ConfirmationsPageModel page = _pages.OfType<ConfirmationsPageModel>().Single();
-        PageList.SelectedIndex = _pages.IndexOf(page);
+        ConfirmationsPageModel page = _pages.Select(entry => entry.Page).OfType<ConfirmationsPageModel>().Single();
+        PageList.SelectedIndex = _pages.FindIndex(entry => entry.Page == page);
         await Task.Delay(400);
         Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_confirmations.png"));
 
@@ -260,6 +279,13 @@ public partial class SettingsWindow : Window
         amend.IsChecked = original;
         Apply();
         Console.Error.WriteLine($"[settings] after restore: DontConfirmAmend={AppSettings.DontConfirmAmend}");
+
+        PageList.SelectedIndex = _pages.FindIndex(entry => entry.Page is GitConfigPageModel);
+        await Task.Delay(400);
+        Snapshot(System.IO.Path.Combine(snapshotDirectory, "settings_gitconfig.png"));
+
+        GitConfigPageModel gitConfig = (GitConfigPageModel)_pages.Single(entry => entry.Page is GitConfigPageModel).Page;
+        Console.Error.WriteLine($"[settings] git config global user.name loads as: '{gitConfig.UserName.Value}'");
 
         Close();
 

@@ -5,11 +5,18 @@ public static class EnvironmentConfiguration
     private static readonly IEnvironmentAbstraction Env = new EnvironmentAbstraction();
 
     /// <summary>
-    /// The <c>USER</c> environment variable's value for the user/machine.
+    ///  The <c>HOME</c> environment variable's value for the user/machine, as captured at startup.
+    ///  The user/machine targets are a Windows (registry) concept; on Unix they read as empty, so
+    ///  the process value - the OS-provided home - is captured instead. Without this, the fallback
+    ///  resolved <see cref="Environment.SpecialFolder.Personal"/> (the XDG documents directory on
+    ///  Linux) and every git child process ran with HOME pointing at ~/Documents, hiding the real
+    ///  global configuration.
     /// </summary>
     private static readonly string? UserHomeDir
-        = Env.GetEnvironmentVariable("HOME", EnvironmentVariableTarget.User)
-       ?? Env.GetEnvironmentVariable("HOME", EnvironmentVariableTarget.Machine);
+        = OperatingSystem.IsWindows()
+            ? Env.GetEnvironmentVariable("HOME", EnvironmentVariableTarget.User)
+                ?? Env.GetEnvironmentVariable("HOME", EnvironmentVariableTarget.Machine)
+            : Env.GetEnvironmentVariable("HOME");
 
     public static string? GetEnvironmentVariable(string name) => Env.GetEnvironmentVariable(name);
 

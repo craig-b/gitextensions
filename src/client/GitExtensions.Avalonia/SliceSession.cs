@@ -30,6 +30,8 @@ public sealed class SliceSession
     private readonly ICommitDataHeaderRenderer _headerRenderer;
     private readonly ICommitDataBodyRenderer _bodyRenderer;
 
+    internal GitModule Module => _module;
+
     public SliceSession(string repositoryPath)
     {
         _module = new GitModule(new GitExecutorProvider(new GitDirectoryResolver()), repositoryPath);

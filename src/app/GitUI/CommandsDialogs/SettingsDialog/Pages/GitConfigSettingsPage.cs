@@ -5,6 +5,7 @@ using GitCommands;
 using GitCommands.Config;
 using GitCommands.DiffMergeTools;
 using GitCommands.Settings;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Configurations;
 using GitExtensions.Extensibility.Settings;
 using Microsoft;
@@ -16,6 +17,7 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
 {
     private readonly TranslationString _selectFile = new("Select file");
     private readonly GitConfigSettingsPageController _controller;
+    private readonly GitConfigPageModel _model;
     private DiffMergeToolConfigurationManager? _diffMergeToolConfigurationManager;
 
     [GeneratedRegex(@"\$(?:LOCAL|REMOTE|BASE|MERGED)", RegexOptions.ExplicitCapture)]
@@ -42,6 +44,7 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
         InitializeComplete();
 
         _controller = new GitConfigSettingsPageController();
+        _model = new GitConfigPageModel(GetCurrentSettings, () => CheckSettingsLogic.CanFindGitCmd());
     }
 
     private string? AdaptCommandIfWsl(string? command)
@@ -155,12 +158,13 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
         string? mergeTool = _diffMergeToolConfigurationManager.ConfiguredMergeTool;
         string? diffTool = _diffMergeToolConfigurationManager.ConfiguredDiffTool;
 
-        Global_FilesEncoding.SelectedItem = new GitEncodingSettingsGetter(CurrentSettings).FilesEncoding;
+        _model.Load();
+        Global_FilesEncoding.SelectedIndex = _model.FilesEncoding.SelectedIndex;
 
-        GlobalUserName.Text = CurrentSettings.GetValue(SettingKeyString.UserName);
-        GlobalUserEmail.Text = CurrentSettings.GetValue(SettingKeyString.UserEmail);
-        GlobalEditor.Text = CurrentSettings.GetValue("core.editor");
-        txtCommitTemplatePath.Text = CurrentSettings.GetValue("commit.template");
+        GlobalUserName.Text = _model.UserName.Value;
+        GlobalUserEmail.Text = _model.UserEmail.Value;
+        GlobalEditor.Text = _model.Editor.Value;
+        txtCommitTemplatePath.Text = _model.CommitTemplatePath.Value;
 
         // Hide credential helper because EffectiveGitConfigSettings can only return the last value
         GitConfigSettings? gitConfigSettings = TryGetGitConfigSettings(CurrentSettings);
@@ -183,12 +187,11 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
         txtDiffToolPath.Text = _diffMergeToolConfigurationManager.GetToolPath(diffTool, DiffMergeToolType.Diff);
         txtDiffToolCommand.Text = _diffMergeToolConfigurationManager.GetToolCommand(diffTool, DiffMergeToolType.Diff);
 
-        AutoCRLFType? autocrlf = ((ISettingsValueGetter)CurrentSettings).GetValue<AutoCRLFType>("core.autocrlf");
-
-        globalAutoCrlfFalse.Checked = autocrlf is AutoCRLFType.@false;
-        globalAutoCrlfInput.Checked = autocrlf is AutoCRLFType.input;
-        globalAutoCrlfTrue.Checked = autocrlf is AutoCRLFType.@true;
-        globalAutoCrlfNotSet.Checked = autocrlf is null;
+        // model choice order: true, input, false, not set
+        globalAutoCrlfTrue.Checked = _model.LineEndings.SelectedIndex is 0;
+        globalAutoCrlfInput.Checked = _model.LineEndings.SelectedIndex is 1;
+        globalAutoCrlfFalse.Checked = _model.LineEndings.SelectedIndex is 2;
+        globalAutoCrlfNotSet.Checked = _model.LineEndings.SelectedIndex is 3;
 
         base.SettingsToPage();
 
@@ -212,7 +215,17 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
     {
         Validates.NotNull(CurrentSettings);
 
-        new GitEncodingSettingsSetter(CurrentSettings).FilesEncoding = (Encoding?)Global_FilesEncoding.SelectedItem;
+        _model.FilesEncoding.SelectedIndex = Global_FilesEncoding.SelectedIndex;
+        _model.UserName.Value = GlobalUserName.Text;
+        _model.UserEmail.Value = GlobalUserEmail.Text;
+        _model.Editor.Value = GlobalEditor.Text;
+        _model.CommitTemplatePath.Value = txtCommitTemplatePath.Text;
+        _model.LineEndings.SelectedIndex =
+            globalAutoCrlfTrue.Checked ? 0
+            : globalAutoCrlfInput.Checked ? 1
+            : globalAutoCrlfFalse.Checked ? 2
+            : 3;
+        _model.Save();
 
         base.PageToSettings();
 
@@ -221,10 +234,6 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
             return;
         }
 
-        CurrentSettings.SetValue(SettingKeyString.UserName, GlobalUserName.Text);
-        CurrentSettings.SetValue(SettingKeyString.UserEmail, GlobalUserEmail.Text);
-        CurrentSettings.SetValue("commit.template", txtCommitTemplatePath.Text);
-        CurrentSettings.SetValue("core.editor", GlobalEditor.Text.ConvertPathToGitSetting());
         if (cbxCredentialHelper.Enabled)
         {
             CurrentSettings.SetValue(SettingKeyString.CredentialHelper, cbxCredentialHelper.Text);
@@ -253,13 +262,6 @@ public partial class GitConfigSettingsPage : GitConfigBaseSettingsPage
         {
             _diffMergeToolConfigurationManager.UnsetCurrentTool(DiffMergeToolType.Merge);
         }
-
-        AutoCRLFType? autoCRLFType =
-            globalAutoCrlfFalse.Checked ? AutoCRLFType.@false
-            : globalAutoCrlfInput.Checked ? AutoCRLFType.input
-            : globalAutoCrlfTrue.Checked ? AutoCRLFType.@true
-            : null;
-        CurrentSettings.SetValue("core.autocrlf", autoCRLFType?.ToString());
     }
 
     private string BrowseDiffMergeTool(string toolName, string path, DiffMergeToolType toolType)

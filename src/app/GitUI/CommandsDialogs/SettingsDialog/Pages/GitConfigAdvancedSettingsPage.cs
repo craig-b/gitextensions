@@ -1,12 +1,12 @@
 using GitCommands.Git;
-using Microsoft;
+using GitCommands.Settings.Pages;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages;
 
 public partial class GitConfigAdvancedSettingsPage : GitConfigBaseSettingsPage
 {
-    private record GitSettingUiMapping(string GitSettingKey, CheckBox MappedCheckbox);
-    private readonly List<GitSettingUiMapping> _gitSettings;
+    private readonly GitConfigAdvancedPageModel _model;
+    private readonly CheckBox[] _checkBoxes;
 
     public GitConfigAdvancedSettingsPage(IServiceProvider serviceProvider)
        : base(serviceProvider)
@@ -14,16 +14,19 @@ public partial class GitConfigAdvancedSettingsPage : GitConfigBaseSettingsPage
         InitializeComponent();
         InitializeComplete();
 
-        _gitSettings =
+        _model = new GitConfigAdvancedPageModel(GetCurrentSettings);
+
+        // same order as the model's entries
+        _checkBoxes =
         [
-            new("pull.rebase", checkBoxPullRebase),
-            new("fetch.prune", checkBoxFetchPrune),
-            new("merge.autostash", checkboxMergeAutoStash),
-            new("rebase.autostash", checkBoxRebaseAutostash),
-            new("rebase.autosquash", checkBoxRebaseAutosquash),
-            new("rebase.updaterefs", checkBoxUpdateRefs),
-            new("rerere.enabled", checkBoxReReReEnabled),
-            new("rerere.autoupdate", checkBoxReReReAutoUpdate),
+            checkBoxPullRebase,
+            checkBoxFetchPrune,
+            checkboxMergeAutoStash,
+            checkBoxRebaseAutostash,
+            checkBoxRebaseAutosquash,
+            checkBoxUpdateRefs,
+            checkBoxReReReEnabled,
+            checkBoxReReReAutoUpdate,
         ];
 
         checkBoxUpdateRefs.Visible = GitVersion.Current.SupportUpdateRefs;
@@ -31,25 +34,32 @@ public partial class GitConfigAdvancedSettingsPage : GitConfigBaseSettingsPage
         Load += GitConfigAdvancedSettingsPage_Load;
     }
 
+    private IEnumerable<(TriStateSettingsEntry Entry, CheckBox Control)> EntryControls()
+        => _model.Entries.Cast<TriStateSettingsEntry>().Zip(_checkBoxes);
+
     private void GitConfigAdvancedSettingsPage_Load(object? sender, EventArgs e)
     {
-        foreach (GitSettingUiMapping gitSetting in _gitSettings)
+        // the model captions already carry the keys; this view keeps its translated
+        // captions and appends the key the same way
+        foreach ((TriStateSettingsEntry entry, CheckBox checkBox) in EntryControls())
         {
-            gitSetting.MappedCheckbox.Text += $" [{gitSetting.GitSettingKey}]";
+            int keyStart = entry.Caption.LastIndexOf(" [", StringComparison.Ordinal);
+            checkBox.Text += entry.Caption[keyStart..];
         }
     }
 
     protected override void SettingsToPage()
     {
-        Validates.NotNull(CurrentSettings);
-        foreach (GitSettingUiMapping gitSetting in _gitSettings)
+        _model.Load();
+
+        foreach ((TriStateSettingsEntry entry, CheckBox checkBox) in EntryControls())
         {
-            gitSetting.MappedCheckbox.CheckState = CurrentSettings.GetValue(gitSetting.GitSettingKey) switch
-                {
-                    "true" or "yes" or "on" or "1" => CheckState.Checked,
-                    "false" or "no" or "off" or "0" or "" => CheckState.Unchecked,
-                    _ => CheckState.Indeterminate
-                };
+            checkBox.CheckState = entry.Value switch
+            {
+                true => CheckState.Checked,
+                false => CheckState.Unchecked,
+                null => CheckState.Indeterminate,
+            };
         }
 
         base.SettingsToPage();
@@ -57,11 +67,17 @@ public partial class GitConfigAdvancedSettingsPage : GitConfigBaseSettingsPage
 
     protected override void PageToSettings()
     {
-        Validates.NotNull(CurrentSettings);
-        foreach (GitSettingUiMapping gitSetting in _gitSettings)
+        foreach ((TriStateSettingsEntry entry, CheckBox checkBox) in EntryControls())
         {
-            CurrentSettings.SetValue(gitSetting.GitSettingKey, gitSetting.MappedCheckbox.CheckState switch { CheckState.Checked => "true", CheckState.Unchecked => "false", _ => null });
+            entry.Value = checkBox.CheckState switch
+            {
+                CheckState.Checked => true,
+                CheckState.Unchecked => false,
+                _ => null,
+            };
         }
+
+        _model.Save();
 
         base.PageToSettings();
     }

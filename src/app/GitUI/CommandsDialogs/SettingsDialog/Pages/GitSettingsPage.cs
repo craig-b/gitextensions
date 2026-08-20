@@ -1,4 +1,5 @@
-﻿using GitCommands;
+using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
 using ResourceManager;
 
@@ -8,6 +9,8 @@ public partial class GitSettingsPage : SettingsPageWithHeader
 {
     private readonly TranslationString _envIsSetToString = new("{0} is set to: {1}");
     private readonly TranslationString _envIsNotSetString = new("{0} is not set.");
+
+    private readonly GitPathsPageModel _model = new();
 
     public GitSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
@@ -29,29 +32,25 @@ public partial class GitSettingsPage : SettingsPageWithHeader
 
     protected override void SettingsToPage()
     {
-        EnvironmentConfiguration.SetEnvironmentVariables();
-        string envName = "GIT_CONFIG_GLOBAL";
-        string? envValue = EnvironmentConfiguration.GetEnvironmentVariable(envName);
-        string additionalText = "";
-        if (envValue is null)
-        {
-            additionalText = $"    ({string.Format(_envIsNotSetString.Text, $"%{envName}%")})";
-            envValue = EnvironmentConfiguration.GetHomeDir();
-            envName = "HOME";
-        }
+        (string envName, string? envValue, bool configEnvIsSet) = GitPathsPageModel.GetEffectiveConfigEnvironment();
+        string additionalText = configEnvIsSet
+            ? ""
+            : $"    ({string.Format(_envIsNotSetString.Text, "%GIT_CONFIG_GLOBAL%")})";
 
         homeIsSetToLabel.Text = string.Format(_envIsSetToString.Text, $"%{envName}%", envValue) + additionalText;
 
-        GitPath.Text = AppSettings.GitCommandValue;
-        LinuxToolsDir.Text = AppSettings.LinuxToolsDir;
+        _model.Load();
+        GitPath.Text = _model.GitCommand.Value;
+        LinuxToolsDir.Text = _model.LinuxToolsDir.Value;
 
         base.SettingsToPage();
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.GitCommandValue = GitPath.Text;
-        AppSettings.LinuxToolsDir = LinuxToolsDir.Text;
+        _model.GitCommand.Value = GitPath.Text;
+        _model.LinuxToolsDir.Value = LinuxToolsDir.Text;
+        _model.Save();
 
         base.PageToSettings();
     }
@@ -111,13 +110,5 @@ public partial class GitSettingsPage : SettingsPageWithHeader
         PageHost.LoadAll();
 
         // TODO?: rescan
-
-        // original:
-        ////            throw new NotImplementedException(@"
-        ////            Save();
-        ////            using (FormFixHome frm = new()) frm.ShowDialog(this);
-        ////            LoadSettings();
-        ////            Rescan_Click(null, null);
-        ////            ");
     }
 }

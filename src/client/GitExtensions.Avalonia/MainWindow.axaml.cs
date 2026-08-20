@@ -55,7 +55,7 @@ public partial class MainWindow : Window
         {
             Loaded += async (_, _) =>
             {
-                SettingsWindow settingsWindow = new();
+                SettingsWindow settingsWindow = new(_session);
                 Task harness = null!;
                 settingsWindow.Loaded += (_, _) => harness = settingsWindow.RunHarnessAsync(settingsSnapshotDirectory);
                 await settingsWindow.ShowDialog(this);
@@ -240,7 +240,7 @@ public partial class MainWindow : Window
 
     private async void OnSettingsClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
-        SettingsWindow settingsWindow = new();
+        SettingsWindow settingsWindow = new(_session);
         await settingsWindow.ShowDialog(this);
     }
 
