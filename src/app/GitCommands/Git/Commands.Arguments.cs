@@ -650,6 +650,16 @@ public static partial class Commands
         return new GitArgumentBuilder("bisect") { "start" };
     }
 
+    /// <summary>Removes remote-tracking refs the remote no longer has.</summary>
+    public static ArgumentString RemotePrune(string remote)
+    {
+        return new GitArgumentBuilder("remote")
+        {
+            "prune",
+            remote
+        };
+    }
+
     public static ArgumentString StashSave(bool untracked, bool keepIndex, string message, IReadOnlyList<string>? selectedFiles)
     {
         selectedFiles ??= [];

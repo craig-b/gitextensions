@@ -236,7 +236,49 @@ public partial class MainWindow : Window
         => await RunOperationAsync("Fetch", _session.FetchAsync);
 
     private async void OnPullClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-        => await RunOperationAsync("Pull", () => _session.PullAsync(rebase: false));
+    {
+        // honor the "Default pull action" setting; ask when it is unset
+        GitCommands.Pull.PullActionKind? action = GitCommands.AppSettings.DefaultPullAction switch
+        {
+            GitExtensions.Extensibility.Git.GitPullAction.Merge => GitCommands.Pull.PullActionKind.Merge,
+            GitExtensions.Extensibility.Git.GitPullAction.Rebase => GitCommands.Pull.PullActionKind.Rebase,
+            GitExtensions.Extensibility.Git.GitPullAction.Fetch
+                or GitExtensions.Extensibility.Git.GitPullAction.FetchAll
+                or GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll => GitCommands.Pull.PullActionKind.Fetch,
+            _ => null,
+        };
+
+        if (action is null)
+        {
+            int choice = await ConfirmDialog.ShowAsync(this, "Pull", "How should the remote changes be integrated?", "Merge", "Rebase", "Fetch only", "Cancel");
+            action = choice switch
+            {
+                0 => GitCommands.Pull.PullActionKind.Merge,
+                1 => GitCommands.Pull.PullActionKind.Rebase,
+                2 => GitCommands.Pull.PullActionKind.Fetch,
+                _ => null,
+            };
+
+            if (action is null)
+            {
+                return;
+            }
+        }
+
+        bool fetchAll = GitCommands.AppSettings.DefaultPullAction
+            is GitExtensions.Extensibility.Git.GitPullAction.FetchAll
+            or GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll;
+
+        GitCommands.Pull.PullOptions options = new(
+            action.Value,
+            fetchAll ? GitCommands.Pull.PullSourceKind.AllRemotes : GitCommands.Pull.PullSourceKind.Remote,
+            Source: "",
+            RemoteBranch: null,
+            LocalBranch: null,
+            Prune: GitCommands.AppSettings.DefaultPullAction is GitExtensions.Extensibility.Git.GitPullAction.FetchPruneAll);
+
+        await RunOperationAsync("Pull", () => _session.PullWithOptionsAsync(options));
+    }
 
     private async void OnPushClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         => await RunOperationAsync("Push", () => _session.PushAsync(forceWithLease: false));

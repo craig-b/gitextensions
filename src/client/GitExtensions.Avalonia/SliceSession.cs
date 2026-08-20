@@ -110,6 +110,10 @@ public sealed class SliceSession
         return (result.ExitedSuccessfully, result.AllOutput);
     }
 
+    /// <summary>Runs a pull/fetch built from the portable PullOptions model.</summary>
+    public Task<(bool Success, string Output)> PullWithOptionsAsync(GitCommands.Pull.PullOptions options)
+        => Task.Run(() => RunGitOperation(options.ToArguments(_module)));
+
     /// <summary>Fetches the default remote (plain "git fetch", via the module's FetchCmd).</summary>
     public Task<(bool Success, string Output)> FetchAsync()
         => Task.Run(() => RunGitOperation(_module.FetchCmd(remote: null, remoteBranch: null, localBranch: null)));
