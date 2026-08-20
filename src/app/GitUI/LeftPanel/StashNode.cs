@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using GitCommands;
+using GitCommands.LeftPanel;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
 using UICmd = GitExtensions.Extensibility.Git.UICommands;
@@ -9,12 +10,12 @@ namespace GitUI.LeftPanel;
 [DebuggerDisplay("(Tag) FullPath = {FullPath}, Hash = {ObjectId}, Visible: {Visible}")]
 internal sealed class StashNode : BaseRevisionNode
 {
-    public StashNode(Tree tree, in ObjectId objectId, string reflogSelector, string subject, bool visible)
-        : base(tree, reflogSelector.RemovePrefix("refs/"), visible)
+    public StashNode(Tree tree, StashTreeNode stash, bool visible)
+        : base(tree, stash.FullPath, visible)
     {
-        ObjectId = objectId;
-        DisplayName = $"{reflogSelector.RemovePrefix(GitRefName.RefsStashPrefix)}: {subject}";
-        ReflogSelector = reflogSelector;
+        ObjectId = stash.ObjectId;
+        DisplayName = stash.DisplayName;
+        ReflogSelector = stash.ReflogSelector;
     }
 
     public string DisplayName { get; }

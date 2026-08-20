@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitCommands.Git;
+using GitCommands.LeftPanel;
 using GitCommands.Remotes;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -21,102 +22,65 @@ internal sealed class RemoteBranchTree : BaseRefTree
 
     protected override Nodes FillTree(IReadOnlyList<IGitRef> branches, CancellationToken token)
     {
-        // More than one local can point to a single remote branch, pick one of them.
         Nodes nodes = new(this);
-        Dictionary<string, BaseRevisionNode> pathToNodes = [];
+
+        // More than one local can point to a single remote branch, pick one of them.
         IDictionary<string, AheadBehindData>? aheadBehindData = _aheadBehindDataProvider?.GetData()?.DistinctBy(r => r.Value.RemoteRef).ToDictionary(r => r.Value.RemoteRef, r => r.Value);
 
-        List<RemoteRepoNode> enabledRemoteRepoNodes = [];
-        Dictionary<string, Remote> remoteByName = ThreadHelper.JoinableTaskFactory.Run(Module.GetRemotesAsync).ToDictionary(r => r.Name);
-
+        IReadOnlyList<Remote> remotes = ThreadHelper.JoinableTaskFactory.Run(Module.GetRemotesAsync);
         ConfigFileRemoteSettingsManager remotesManager = new(() => Module);
 
-        // Create nodes for enabled remotes with branches
-        foreach (IGitRef branch in PrioritizedBranches(branches))
+        IReadOnlyList<RefTreeNode> roots = RemoteTreeBuilder.Build(
+            branches,
+            remotes,
+            remotesManager.GetDisabledRemotes(),
+            AppSettings.PrioritizedBranchNames,
+            AppSettings.PrioritizedRemoteNames,
+            aheadBehindData);
+
+        foreach (RefTreeNode root in roots)
         {
-            token.ThrowIfCancellationRequested();
-
-            if (branch.ObjectId.IsZero)
-            {
-                throw new InvalidOperationException($"Branch '{branch.Name}' has no ObjectId.");
-            }
-
-            string remoteName = branch.Name.SubstringUntil('/');
-            if (remoteByName.TryGetValue(remoteName, out Remote remote))
-            {
-                RemoteBranchNode remoteBranchNode = new(this, branch.ObjectId, branch.Name, visible: true);
-                if (aheadBehindData?.TryGetValue(branch.CompleteName, out AheadBehindData aheadBehind) is true)
-                {
-                    remoteBranchNode.UpdateAheadBehind(aheadBehind.ToDisplay(reverse: true), $"{GitRefName.RefsHeadsPrefix}{aheadBehind.Branch}");
-                }
-
-                BaseRevisionNode? parent = remoteBranchNode.CreateRootNode(
-                    pathToNodes,
-                    (tree, parentPath) => CreateRemoteBranchPathNode(tree, parentPath, remote));
-
-                if (parent is not null)
-                {
-                    enabledRemoteRepoNodes.Add((RemoteRepoNode)parent);
-                }
-            }
-        }
-
-        // Create nodes for enabled remotes without branches
-        IReadOnlyList<string> enabledRemotesNoBranches = GetEnabledRemoteNamesWithoutBranches(branches, remoteByName);
-        foreach (string remoteName in enabledRemotesNoBranches)
-        {
-            if (remoteByName.TryGetValue(remoteName, out Remote remote))
-            {
-                RemoteRepoNode node = new(this, remoteName, remotesManager, remote, true);
-                enabledRemoteRepoNodes.Add(node);
-            }
-        }
-
-        // Add enabled remote nodes in order
-        foreach (RemoteRepoNode node in PrioritizedRemotes(enabledRemoteRepoNodes))
-        {
-            nodes.AddNode(node);
-        }
-
-        // Add disabled remotes, if any
-        IReadOnlyList<Remote> disabledRemotes = remotesManager.GetDisabledRemotes();
-        if (disabledRemotes.Count > 0)
-        {
-            List<RemoteRepoNode> disabledRemoteRepoNodes = [];
-            foreach (Remote remote in disabledRemotes)
-            {
-                RemoteRepoNode node = new(this, remote.Name, remotesManager, remote, false);
-                disabledRemoteRepoNodes.Add(node);
-            }
-
-            RemoteRepoFolderNode disabledFolderNode = new(this, TranslatedStrings.Inactive);
-            foreach (RemoteRepoNode node in PrioritizedRemotes(disabledRemoteRepoNodes))
-            {
-                disabledFolderNode.Nodes.AddNode(node);
-            }
-
-            nodes.AddNode(disabledFolderNode);
+            nodes.AddNode(Convert(root));
         }
 
         return nodes;
 
-        BaseRevisionNode CreateRemoteBranchPathNode(Tree tree, string parentPath, Remote remote)
+        Node Convert(RefTreeNode node)
         {
-            if (parentPath == remote.Name)
+            token.ThrowIfCancellationRequested();
+
+            Node converted;
+            switch (node.Kind)
             {
-                return new RemoteRepoNode(tree, parentPath, remotesManager, remote, true);
+                case RefTreeNodeKind.RemoteRepo:
+                    converted = new RemoteRepoNode(this, node.FullPath, remotesManager, node.Remote!.Value, node.Enabled);
+                    break;
+
+                case RefTreeNodeKind.InactiveGroup:
+                    converted = new RemoteRepoFolderNode(this, TranslatedStrings.Inactive);
+                    break;
+
+                case RefTreeNodeKind.RemoteBranch:
+                    RemoteBranchNode remoteBranchNode = new(this, node.ObjectId!.Value, node.FullPath, visible: true);
+                    if (node.AheadBehindDisplay is not null)
+                    {
+                        remoteBranchNode.UpdateAheadBehind(node.AheadBehindDisplay, node.RelatedBranch!);
+                    }
+
+                    converted = remoteBranchNode;
+                    break;
+
+                default:
+                    converted = new BasePathNode(this, node.FullPath);
+                    break;
             }
 
-            return new BasePathNode(tree, parentPath);
-        }
+            foreach (RefTreeNode child in node.Children)
+            {
+                converted.Nodes.AddNode(Convert(child));
+            }
 
-        IReadOnlyList<string> GetEnabledRemoteNamesWithoutBranches(IReadOnlyList<IGitRef> branches, Dictionary<string, Remote> remoteByName)
-        {
-            HashSet<string> remotesWithBranches = [.. branches.Select(branch => branch.Name.SubstringUntil('/'))];
-
-            HashSet<string> allRemotes = [.. remoteByName.Select(kv => kv.Value.Name)];
-
-            return allRemotes.Except(remotesWithBranches).ToList();
+            return converted;
         }
     }
 

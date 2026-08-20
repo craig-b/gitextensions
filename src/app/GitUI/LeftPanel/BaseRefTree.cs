@@ -79,14 +79,4 @@ internal abstract class BaseRefTree : BaseRevisionTree
 
         base.UpdateVisibility();
     }
-
-    protected IEnumerable<IGitRef> PrioritizedBranches(IReadOnlyList<IGitRef> branches)
-    {
-        return RefPriorityOrder.OrderByPriority(branches, node => node.LocalName, AppSettings.PrioritizedBranchNames);
-    }
-
-    protected IEnumerable<RemoteRepoNode> PrioritizedRemotes(IReadOnlyList<RemoteRepoNode> remotes)
-    {
-        return RefPriorityOrder.OrderByPriority(remotes.OrderBy(node => node.FullPath).ToList(), node => node.FullPath, AppSettings.PrioritizedRemoteNames);
-    }
 }

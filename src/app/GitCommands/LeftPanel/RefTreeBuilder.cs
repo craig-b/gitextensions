@@ -8,6 +8,12 @@ public enum RefTreeNodeKind
     LocalBranch,
     RemoteBranch,
     Tag,
+
+    /// <summary>A configured remote repository (the first path segment of its branches).</summary>
+    RemoteRepo,
+
+    /// <summary>The group holding disabled remotes; views supply its localized caption.</summary>
+    InactiveGroup,
 }
 
 /// <summary>A node of the left panel's ref hierarchy: a folder, or a ref leaf carrying its ObjectId.</summary>
@@ -23,6 +29,18 @@ public sealed class RefTreeNode
     public bool IsCurrent { get; init; }
 
     public RefTreeNodeKind Kind { get; init; } = RefTreeNodeKind.Folder;
+
+    /// <summary>The remote, on <see cref="RefTreeNodeKind.RemoteRepo"/> nodes.</summary>
+    public Remote? Remote { get; init; }
+
+    /// <summary>Whether the remote is enabled, on <see cref="RefTreeNodeKind.RemoteRepo"/> nodes.</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>The "n↑ m↓" decoration on branch leaves that track (or are tracked by) another branch.</summary>
+    public string? AheadBehindDisplay { get; set; }
+
+    /// <summary>The counterpart branch the ahead/behind decoration relates to.</summary>
+    public string? RelatedBranch { get; set; }
 
     public List<RefTreeNode> Children { get; } = [];
 }

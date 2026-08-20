@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.LeftPanel;
 using GitUI.UserControls.RevisionGrid;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
@@ -36,12 +37,12 @@ internal sealed class StashTree : BaseRevisionTree
         Nodes nodes = new(this);
         Dictionary<string, BaseRevisionNode> pathToNodes = [];
 
-        foreach (GitRevision stash in stashes)
+        foreach (StashTreeNode stash in StashTreeBuilder.Build(stashes))
         {
             token.ThrowIfCancellationRequested();
 
             // Visibility is set after the grid is loaded
-            StashNode node = new(this, stash.ObjectId, stash.ReflogSelector!, stash.Subject, visible: false);
+            StashNode node = new(this, stash, visible: false);
             Node? parent = node.CreateRootNode(pathToNodes, (tree, parentPath) => new BasePathNode(tree, parentPath));
 
             if (parent is not null)
