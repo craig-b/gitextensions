@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         };
         LogControl.ContextRequested += OnLogContextRequested;
         RefTree.ContextRequested += OnRefTreeContextRequested;
+        FileTree.ContextRequested += OnFileTreeContextRequested;
         KeyDown += (_, keyArgs) =>
         {
             if (keyArgs.Key == global::Avalonia.Input.Key.P
@@ -65,6 +66,16 @@ public partial class MainWindow : Window
                 await Report("fetch", _session.FetchAsync());
                 await Report("pull", _session.PullAsync(rebase: false));
                 Environment.Exit(0);
+            };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_FILEHISTORYTEST") is string fileHistoryFile)
+        {
+            Loaded += (_, _) =>
+            {
+                FileHistoryWindow fileHistoryWindow = new(_session, fileHistoryFile);
+                fileHistoryWindow.Loaded += (_, _) => _ = fileHistoryWindow.RunHarnessAsync();
+                fileHistoryWindow.Show(this);
             };
         }
 
@@ -708,6 +719,29 @@ public partial class MainWindow : Window
 
         static IEnumerable<StatusNode> Leaves(StatusNode node)
             => node.Status is not null ? [node] : node.Children.SelectMany(Leaves);
+    }
+
+    /// <summary>File history and blame open in their own windows, like the WinForms app.</summary>
+    private void OnFileTreeContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        GitItemStatus? file = FileTree.SelectedItems!.OfType<StatusNode>().FirstOrDefault()?.Status;
+        if (file is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ContextMenu menu = new();
+        AddItem("File history", showBlame: false);
+        AddItem("Blame", showBlame: true);
+        menu.Open(FileTree);
+
+        void AddItem(string caption, bool showBlame)
+        {
+            MenuItem item = new() { Header = caption };
+            item.Click += (_, _) => new FileHistoryWindow(_session, file.Name, showBlame).Show(this);
+            menu.Items.Add(item);
+        }
     }
 
     private void OnFileTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)

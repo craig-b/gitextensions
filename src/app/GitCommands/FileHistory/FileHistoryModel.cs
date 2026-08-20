@@ -1,4 +1,5 @@
 using GitExtensions.Extensibility;
+using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 
 namespace GitCommands.FileHistory;
@@ -70,6 +71,48 @@ public static class FileHistoryPathFilter
             "--",
             normalizedPath.QuoteIfNotQuotedAndNE()
         };
+
+    /// <summary>
+    ///  Parses the <see cref="FollowNamesCommand"/> output: prefixed lines carry the commit,
+    ///  other non-empty lines are filenames. Returns the distinct historical names and the
+    ///  first file seen per commit (the per-revision filename resolution cache).
+    /// </summary>
+    public static (IReadOnlyCollection<string> Names, IReadOnlyDictionary<ObjectId, string> FirstFileByCommit) ParseFollowNamesOutput(
+        IEnumerable<string> outputLines, string objectIdPrefix)
+    {
+        HashSet<string> names = [];
+        Dictionary<ObjectId, string> firstFileByCommit = [];
+        ObjectId currentObjectId = default;
+
+        foreach (string line in outputLines)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                // empty line after sha
+                continue;
+            }
+
+            if (line.StartsWith(objectIdPrefix))
+            {
+                currentObjectId = line.Length >= ObjectId.Sha1CharCount + objectIdPrefix.Length
+                    && ObjectId.TryParse(line, offset: objectIdPrefix.Length, out ObjectId parsedId)
+                    ? parsedId
+                    : default;
+                continue;
+            }
+
+            if (currentObjectId.IsZero)
+            {
+                // Parsing has failed, ignore
+                continue;
+            }
+
+            names.Add(line);
+            firstFileByCommit.TryAdd(currentObjectId, line);
+        }
+
+        return (names, firstFileByCommit);
+    }
 
     /// <summary>
     ///  Joins the collected names into the real path filter. Falls back to the plain path

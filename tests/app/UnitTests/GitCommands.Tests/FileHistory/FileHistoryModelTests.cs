@@ -47,6 +47,33 @@ public sealed class FileHistoryModelTests
     }
 
     [Test]
+    public void Follow_names_output_parses_names_and_first_file_per_commit()
+    {
+        string shaA = "aaaa111111111111111111111111111111111111";
+        string shaB = "bbbb222222222222222222222222222222222222";
+        string[] output =
+        [
+            $"????{shaA}",
+            "",
+            "new/name.cs",
+            $"????{shaB}",
+            "",
+            "old/name.cs",
+            "????garbage",
+            "ignored-after-parse-error.cs",
+            $"????{shaA[..20]}",
+            "also-ignored.cs",
+        ];
+
+        var (names, firstFileByCommit) = FileHistoryPathFilter.ParseFollowNamesOutput(output, "????");
+
+        names.Should().BeEquivalentTo(["new/name.cs", "old/name.cs"]);
+        firstFileByCommit.Should().HaveCount(2);
+        firstFileByCommit[GitExtensions.Extensibility.Git.ObjectId.Parse(shaA)].Should().Be("new/name.cs");
+        firstFileByCommit[GitExtensions.Extensibility.Git.ObjectId.Parse(shaB)].Should().Be("old/name.cs");
+    }
+
+    [Test]
     public void Combine_joins_names_and_falls_back_when_empty_or_too_long()
     {
         FileHistoryPathFilter.Combine("\"a.cs\"", ["a.cs", "old/a.cs"])

@@ -473,20 +473,93 @@ public sealed class SliceSession
         }
     }
 
+    private const string FollowNamesPrefix = "????";
+
+    /// <summary>
+    ///  The file-history path filter with the --follow workaround (collect all historical
+    ///  names first), plus the per-commit filename cache for later resolution.
+    /// </summary>
+    public (string PathFilter, IReadOnlyDictionary<ObjectId, string> FileByCommit) BuildFileHistoryFilter(string fileName)
+    {
+        (string path, bool multipleArgs) = GitCommands.FileHistory.FileHistoryPathFilter.NormalizeArgument(fileName);
+        if (!GitCommands.FileHistory.FileHistoryPathFilter.ShouldCollectHistoricalNames(path, multipleArgs, AppSettings.FollowRenamesInFileHistory))
+        {
+            return (path, new Dictionary<ObjectId, string>());
+        }
+
+        GitArgumentBuilder args = GitCommands.FileHistory.FileHistoryPathFilter.FollowNamesCommand(
+            path, FollowNamesPrefix, AppSettings.FollowRenamesInFileHistoryExactOnly);
+        ExecutionResult result = _module.GitExecutable.Execute(args, outputEncoding: GitModule.LosslessEncoding, throwOnErrorExit: false);
+        if (!result.ExitedSuccessfully)
+        {
+            return (path, new Dictionary<ObjectId, string>());
+        }
+
+        var (names, fileByCommit) = GitCommands.FileHistory.FileHistoryPathFilter.ParseFollowNamesOutput(
+            result.StandardOutput.LazySplit('\n').Select(GitModule.ReEncodeFileNameFromLossless).WhereNotNull(),
+            FollowNamesPrefix);
+        (string filter, bool tooLong) = GitCommands.FileHistory.FileHistoryPathFilter.Combine(path, [.. names]);
+        if (tooLong)
+        {
+            Console.Error.WriteLine("[file-history] path filter too long, following disabled for this file");
+        }
+
+        return (filter, fileByCommit);
+    }
+
+    /// <summary>Streams the file-filtered log (FilterInfo's --parents/--full-history/--simplify-merges rules).</summary>
+    public void StreamFileLog(string pathFilter, Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
+        => StreamLogCore($"{DefaultRevisionFilter} {BuildFileHistoryRevisionFilter()}", pathFilter, onBatch, onCompleted, onError, cancellationToken);
+
+    private static string BuildFileHistoryRevisionFilter()
+    {
+        string filter = "--parents";
+        if (AppSettings.FullHistoryInFileHistory)
+        {
+            filter += " --full-history";
+            if (AppSettings.SimplifyMergesInFileHistory)
+            {
+                filter += " --simplify-merges";
+            }
+        }
+
+        return filter;
+    }
+
+    /// <summary>The blame of a file at a revision (portable GitBlame; the model builds the gutter).</summary>
+    public GitBlame GetBlame(string fileName, ObjectId objectId, CancellationToken cancellationToken)
+        => _module.Blame(fileName, objectId.ToString(), _module.FilesEncoding, lines: null, cancellationToken: cancellationToken);
+
+    /// <summary>The file's content at a revision, or null when the blob does not exist there.</summary>
+    public string? GetFileTextAtRevision(string fileName, ObjectId objectId)
+    {
+        ObjectId blobId = _module.GetFileBlobHash(fileName, objectId);
+        return blobId.IsZero ? null : _module.GetFileText(blobId, _module.FilesEncoding, stripAnsiEscapeCodes: true);
+    }
+
+    /// <summary>The file-availability half of the tab decision (worktree file for artificial revisions).</summary>
+    public bool FileExistsAtRevision(string fileName, GitRevision revision)
+        => revision.IsArtificial
+            ? File.Exists(Path.Combine(WorkingDir, fileName))
+            : !_module.GetFileBlobHash(fileName, revision.ObjectId).IsZero;
+
     /// <summary>
     ///  Streams the full log the way the WinForms grid does: RevisionReader.GetLog batches
     ///  revisions through an observer from a detached git-log process.
     /// </summary>
     public void StreamLog(Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
+        => StreamLogCore(DefaultRevisionFilter, pathFilter: "", onBatch, onCompleted, onError, cancellationToken);
+
+    // The WinForms grid's default branch filter (FilterInfo.GetBranchRevisionFilter): all
+    // refs, minus notes/stashes/session refs - so commits reachable only from other
+    // branches or unmerged tags (e.g. release tags) have rows to jump to.
+    private static string DefaultRevisionFilter =>
+        $"--exclude={GitRefName.RefsNotesPrefix} --exclude={GitRefName.RefsStashPrefix} --exclude={GitRefName.RefsSessionsPrefix}** --all";
+
+    private void StreamLogCore(string revisionFilter, string pathFilter, Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
     {
         // Refs are looked up per revision, the same way the WinForms grid attaches them.
         ILookup<ObjectId, IGitRef> refsByObjectId = _module.GetRefs(RefsFilter.NoFilter).ToLookup(gitRef => gitRef.ObjectId);
-
-        // The WinForms grid's default branch filter (FilterInfo.GetBranchRevisionFilter): all
-        // refs, minus notes/stashes/session refs - so commits reachable only from other
-        // branches or unmerged tags (e.g. release tags) have rows to jump to.
-        string revisionFilter =
-            $"--exclude={GitRefName.RefsNotesPrefix} --exclude={GitRefName.RefsStashPrefix} --exclude={GitRefName.RefsSessionsPrefix}** --all";
 
         RevisionReader reader = new(_module, allBodies: false);
         reader.GetLog(
@@ -503,7 +576,7 @@ public sealed class SliceSession
                 onCompleted,
                 onError),
             revisionFilter: revisionFilter,
-            pathFilter: "",
+            pathFilter: pathFilter,
             hasNotes: false,
             autostashLabel: "autostash",
             cancellationToken);
