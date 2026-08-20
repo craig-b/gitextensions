@@ -91,6 +91,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     private readonly object _cacheLock = new();
     private int _cacheTarget = -1;
     private Task _cacheTask = Task.CompletedTask;
+    private bool _resetting;
     private readonly CancellationTokenSource _shutdownCts = new();
 
     /// <summary>
@@ -122,6 +123,14 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     {
         lock (_cacheLock)
         {
+            if (_resetting)
+            {
+                // A render's kick must not restart the pump between "pump parked" and
+                // "graph cleared" in ResetAsync - the reset re-kicks nothing; the first
+                // frame after it kicks again.
+                return _cacheTask;
+            }
+
             _cacheTarget = Math.Max(_cacheTarget, lastRow);
             if (_cacheTask.IsCompleted)
             {
@@ -183,16 +192,29 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         Task pump;
         lock (_cacheLock)
         {
+            _resetting = true;
             _cacheTarget = -1;
             pump = _cacheTask;
         }
 
-        await pump;
+        try
+        {
+            await pump;
 
-        _graph.Clear();
-        _selectedIndex = -1;
-        _offset = default;
-        _textCache.Clear();
+            _graph.Clear();
+            _selectedIndex = -1;
+            _offset = default;
+            _textCache.Clear();
+        }
+        finally
+        {
+            lock (_cacheLock)
+            {
+                _resetting = false;
+                _cacheTarget = -1;
+            }
+        }
+
         NotifyRowsChanged();
     }
 

@@ -67,8 +67,13 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// <summary>
     /// The ordered row cache contains rows with segments stored in lanes.
     /// </summary>
-    /// <remarks>This cache is very expensive to build, done only for displayed rows - in a background task.</remarks>
-    private readonly List<RevisionGraphRow> _orderedRowCache = [];
+    /// <remarks>
+    /// This cache is very expensive to build, done only for displayed rows - in a background task.
+    /// The single writer only ever APPENDS to the current list; invalidation SWAPS in a fresh list
+    /// instead of clearing, because readers on other threads capture the reference and index into
+    /// it - clearing the shared list would pull the rug from under a passed bounds check.
+    /// </remarks>
+    private List<RevisionGraphRow> _orderedRowCache = [];
 
     /// <summary>
     /// <see cref="_orderedRowCache"/> is invalid if it contains scores above this value.
@@ -92,7 +97,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
         _incompleteRevisionByObjectId.Clear();
         _orderedNodesCache = [];
         _orderedNodesCacheInvalid = true;
-        _orderedRowCache.Clear();
+        _orderedRowCache = [];
         _orderedRowCacheInvalidFromScore = int.MaxValue;
         Config = new();
     }
@@ -127,8 +132,9 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// <returns>Index for the last row in the row cache with 'straightened' lanes.</returns>
     public int GetCachedCount()
     {
-        int cachedCount = _orderedRowCache.Count;
-        if (cachedCount == 0 || IsRowCacheDirty(BuildOrderedNodesCache(int.MaxValue)))
+        List<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
+        int cachedCount = localOrderedRowCache.Count;
+        if (cachedCount == 0 || IsRowCacheDirty(localOrderedRowCache, BuildOrderedNodesCache(int.MaxValue)))
         {
             return 0;
         }
@@ -233,12 +239,13 @@ public class RevisionGraph : IRevisionGraphRowProvider
     public IRevisionGraphRow? GetSegmentsForRow(int row)
     {
         ImmutableArray<RevisionGraphRevision> localOrderedNodesCache = BuildOrderedNodesCache(row);
-        if (IsRowCacheDirty(localOrderedNodesCache) || row < 0 || row >= _orderedRowCache.Count)
+        List<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
+        if (IsRowCacheDirty(localOrderedRowCache, localOrderedNodesCache) || row < 0 || row >= localOrderedRowCache.Count)
         {
             return null;
         }
 
-        return _orderedRowCache[row];
+        return localOrderedRowCache[row];
     }
 
     public void HighlightBranch(ObjectId id)
@@ -388,20 +395,26 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// <summary>
     /// Check if the row cache is dirty by comparing to the ordered node cache.
     /// </summary>
+    /// <param name="orderedRowCache">The caller's local reference to the row cache. Must be a local:
+    /// this method is called from reader threads, and the field can be swapped concurrently.</param>
     /// <param name="orderedNodesCache">The ordered nodes cache.</param>
     /// <returns><see langword="true"/> if the row cache is dirty; otherwise <see langword="false"/>.</returns>
-    private bool IsRowCacheDirty(ImmutableArray<RevisionGraphRevision> orderedNodesCache)
+    /// <remarks>Pure - resetting the invalidation score on an empty cache is the writer's job
+    /// (<see cref="BuildOrderedRowCache"/>), not something a render-thread read may do.</remarks>
+    private bool IsRowCacheDirty(List<RevisionGraphRow> orderedRowCache, ImmutableArray<RevisionGraphRevision> orderedNodesCache)
     {
-        if (_orderedRowCache.Count == 0)
+        // Snapshot the count: the single writer only appends to this list instance, so any index
+        // below the snapshot stays valid even while the writer keeps adding.
+        int count = orderedRowCache.Count;
+        if (count == 0)
         {
-            _orderedRowCacheInvalidFromScore = int.MaxValue;
             return false;
         }
 
         // We need bounds checking on orderedNodesCache. It should be always larger then the orderedRowCache,
         // but another thread could clear the orderedNodesCache while another is building orderedRowCache.
         // This is not a problem, since all methods use local instances of those caches. We do need to invalidate.
-        if (_orderedRowCacheInvalidFromScore <= _orderedRowCache[^1].Revision.Score || _orderedRowCache.Count > orderedNodesCache.Length)
+        if (_orderedRowCacheInvalidFromScore <= orderedRowCache[count - 1].Revision.Score || count > orderedNodesCache.Length)
         {
             return true;
         }
@@ -410,9 +423,9 @@ public class RevisionGraph : IRevisionGraphRowProvider
         // is not in the same index in the orderedNodesCache, the order has been changed. Only then rebuilding is
         // required. If the order is changed after this revision, we do not care since it wasn't processed yet.
         // But when filtering revisions, this can mismatch. So check the first revision in addition.
-        int indexToCompare = _orderedRowCache.Count - 1;
-        return _orderedRowCache[indexToCompare].Revision != orderedNodesCache[indexToCompare]
-            || _orderedRowCache[0].Revision != orderedNodesCache[0];
+        int indexToCompare = count - 1;
+        return orderedRowCache[indexToCompare].Revision != orderedNodesCache[indexToCompare]
+            || orderedRowCache[0].Revision != orderedNodesCache[0];
     }
 
     private void BuildOrderedRowCache(ImmutableArray<RevisionGraphRevision> orderedNodesCache, int lastToCacheRowIndex, CancellationToken cancellationToken)
@@ -422,12 +435,22 @@ public class RevisionGraph : IRevisionGraphRowProvider
         int orderedNodesCount = orderedNodesCache.Length;
         int lastOrderedNodeIndex = orderedNodesCount - 1;
         bool loadingCompleted = _loadingCompleted;
-        _orderedRowCache.Capacity = orderedNodesCount;
-        if (IsRowCacheDirty(orderedNodesCache))
+
+        // Invalidation swaps in a fresh list rather than clearing the shared one - readers hold
+        // local references (see the field remarks). This method is the single writer.
+        List<RevisionGraphRow> orderedRowCache = _orderedRowCache;
+        if (orderedRowCache.Count == 0)
         {
             _orderedRowCacheInvalidFromScore = int.MaxValue;
-            _orderedRowCache.Clear();
         }
+        else if (IsRowCacheDirty(orderedRowCache, orderedNodesCache))
+        {
+            _orderedRowCacheInvalidFromScore = int.MaxValue;
+            orderedRowCache = new List<RevisionGraphRow>(orderedNodesCount);
+            _orderedRowCache = orderedRowCache;
+        }
+
+        orderedRowCache.Capacity = Math.Max(orderedRowCache.Capacity, orderedNodesCount);
 
         int maxLastToCacheRowIndex = lastOrderedNodeIndex - (loadingCompleted || !orderSegments ? 0 : _orderSegmentsLookAhead);
         if (lastToCacheRowIndex > maxLastToCacheRowIndex)
@@ -436,7 +459,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
             loadingCompleted = false;
         }
 
-        int startIndex = _orderedRowCache.Count;
+        int startIndex = orderedRowCache.Count;
         if (startIndex > lastToCacheRowIndex)
         {
             return;
@@ -472,7 +495,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
             else
             {
                 // Copy lanes from last row
-                RevisionGraphRow previousRevisionGraphRow = _orderedRowCache[nextIndex - 1];
+                RevisionGraphRow previousRevisionGraphRow = orderedRowCache[nextIndex - 1];
 
                 // Create segments list with the correct capacity
                 segments = new List<RevisionGraphSegment>(previousRevisionGraphRow.Segments.Count + revisionStartSegments.Length);
@@ -558,7 +581,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
                 }
             }
 
-            _orderedRowCache.Add(new RevisionGraphRow(revision, segments, Config.MergeGraphLanesHavingCommonParent));
+            orderedRowCache.Add(new RevisionGraphRow(revision, segments, Config.MergeGraphLanesHavingCommonParent));
         }
 
         // Straightening does not apply to the first and the last row. The single node there shall not be moved.
@@ -567,14 +590,14 @@ public class RevisionGraph : IRevisionGraphRowProvider
         loadingCompleted = loadingCompleted && lastToCacheRowIndex == lastOrderedNodeIndex;
         int straightenLanesStartIndex = Math.Max(1, startIndex - _straightenLanesLookAhead);
         int straightenLanesLastIndex = loadingCompleted ? lastToCacheRowIndex - 1 : lastToCacheRowIndex - _straightenLanesLookAhead;
-        StraightenLanes(straightenLanesStartIndex, straightenLanesLastIndex, lastLookAheadIndex: lastToCacheRowIndex, _orderedRowCache, Config.StraightenGraphSegmentsLimit);
+        StraightenLanes(straightenLanesStartIndex, straightenLanesLastIndex, lastLookAheadIndex: lastToCacheRowIndex, orderedRowCache, Config.StraightenGraphSegmentsLimit);
 
         int straightenDiagonalsLookAhead = _straightenDiagonalsLookAhead;
         if (straightenDiagonalsLookAhead > 0)
         {
             int straightenDiagonalsStartIndex = Math.Max(1, startIndex - _straightenLanesLookAhead - straightenDiagonalsLookAhead);
             int straightenDiagonalsLastIndex = loadingCompleted ? lastToCacheRowIndex - 1 : lastToCacheRowIndex - _straightenLanesLookAhead - straightenDiagonalsLookAhead;
-            StraightenDiagonals(straightenDiagonalsStartIndex, straightenDiagonalsLastIndex, lastLookAheadIndex: lastToCacheRowIndex, straightenDiagonalsLookAhead, _orderedRowCache, Config.StraightenGraphSegmentsLimit);
+            StraightenDiagonals(straightenDiagonalsStartIndex, straightenDiagonalsLastIndex, lastLookAheadIndex: lastToCacheRowIndex, straightenDiagonalsLookAhead, orderedRowCache, Config.StraightenGraphSegmentsLimit);
         }
 
         return;
