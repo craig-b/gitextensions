@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using GitCommands;
+using GitCommands.Settings.Pages;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Settings;
@@ -15,6 +16,8 @@ public partial class GeneralSettingsPage : SettingsPageWithHeader
     private readonly TranslationString _fetch = new("Fetch");
     private readonly TranslationString _fetchAll = new("Fetch all");
     private readonly TranslationString _fetchAndPruneAll = new("Fetch and prune all");
+
+    private readonly GeneralPageModel _model = new();
 
     public GeneralSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
@@ -35,19 +38,25 @@ public partial class GeneralSettingsPage : SettingsPageWithHeader
                                                   .Distinct(StringComparer.CurrentCultureIgnoreCase)];
         cbDefaultCloneDestination.Items.AddRange(historicPaths);
 
-        var pullActions = new[]
-        {
-            new { Key = _openPullDialog, Value = GitPullAction.None },
-            new { Key = _pullMerge, Value = GitPullAction.Merge },
-            new { Key = _pullRebase, Value = GitPullAction.Rebase },
-            new { Key = _fetch, Value = GitPullAction.Fetch },
-            new { Key = _fetchAll, Value = GitPullAction.FetchAll },
-            new { Key = _fetchAndPruneAll, Value = GitPullAction.FetchPruneAll },
-        };
+        // the model owns the choice order; this view supplies the translated captions
+        var pullActions = GeneralPageModel.PullActionValues
+            .Select(value => new { Key = CaptionFor(value), Value = value })
+            .ToArray();
         cboDefaultPullAction.DisplayMember = "Key";
         cboDefaultPullAction.ValueMember = "Value";
         cboDefaultPullAction.DataSource = pullActions;
         cboDefaultPullAction.SelectedIndex = 0;
+
+        TranslationString CaptionFor(GitPullAction value)
+            => value switch
+            {
+                GitPullAction.Merge => _pullMerge,
+                GitPullAction.Rebase => _pullRebase,
+                GitPullAction.Fetch => _fetch,
+                GitPullAction.FetchAll => _fetchAll,
+                GitPullAction.FetchPruneAll => _fetchAndPruneAll,
+                _ => _openPullDialog,
+            };
     }
 
     public static SettingsPageReference GetPageReference()
@@ -70,60 +79,60 @@ public partial class GeneralSettingsPage : SettingsPageWithHeader
         chkShowSubmoduleStatusInBrowse.Checked = chkShowSubmoduleStatusInBrowse.Enabled && chkShowSubmoduleStatusInBrowse.Checked;
     }
 
+    private IEnumerable<(BoolSettingsEntry Entry, CheckBox Control)> BoolEntryControls =>
+    [
+        (_model.ShowGitStatusInToolbar, chkShowGitStatusInToolbar),
+        (_model.ShowGitStatusForArtificialCommits, chkShowGitStatusForArtificialCommits),
+        (_model.ShowSubmoduleStatus, chkShowSubmoduleStatusInBrowse),
+        (_model.ShowStashCount, chkShowStashCountInBrowseWindow),
+        (_model.ShowAheadBehindData, chkShowAheadBehindDataInBrowseWindow),
+        (_model.CheckForUncommittedChanges, chkCheckForUncommittedChangesInCheckoutBranch),
+        (_model.CloseProcessDialog, chkCloseProcessDialog),
+        (_model.ShowGitCommandLine, chkShowGitCommandLine),
+        (_model.UseHistogramDiffAlgorithm, chkUseHistogramDiffAlgorithm),
+        (_model.IncludeUntrackedFilesInAutoStash, chkStashUntrackedFiles),
+        (_model.FollowRenamesInFileHistory, chkFollowRenamesInFileHistory),
+        (_model.FollowRenamesExactOnly, chkFollowRenamesInFileHistoryExact),
+        (_model.StartWithRecentWorkingDir, chkStartWithRecentWorkingDir),
+        (_model.Telemetry, chkTelemetry),
+    ];
+
     protected override void SettingsToPage()
     {
-        chkCheckForUncommittedChangesInCheckoutBranch.Checked = AppSettings.CheckForUncommittedChangesInCheckoutBranch;
-        chkStartWithRecentWorkingDir.Checked = AppSettings.StartWithRecentWorkingDir;
-        chkUseHistogramDiffAlgorithm.Checked = AppSettings.UseHistogramDiffAlgorithm;
-        RevisionGridQuickSearchTimeout.Value = AppSettings.RevisionGridQuickSearchTimeout;
-        chkFollowRenamesInFileHistory.Checked = AppSettings.FollowRenamesInFileHistory;
-        chkStashUntrackedFiles.Checked = AppSettings.IncludeUntrackedFilesInAutoStash;
-        chkUpdateModules.CheckState = ToCheckboxState(AppSettings.UpdateSubmodulesOnCheckout);
-        chkShowStashCountInBrowseWindow.Checked = AppSettings.ShowStashCount;
-        chkShowAheadBehindDataInBrowseWindow.Checked = AppSettings.ShowAheadBehindData;
-        chkShowGitStatusInToolbar.Checked = AppSettings.ShowGitStatusInBrowseToolbar;
-        chkShowGitStatusForArtificialCommits.Checked = AppSettings.ShowGitStatusForArtificialCommits;
-        chkShowSubmoduleStatusInBrowse.Checked = AppSettings.ShowSubmoduleStatus;
-        lblCommitsLimit.Checked = AppSettings.MaxRevisionGraphCommits != 0;
-        _NO_TRANSLATE_MaxCommits.Value = AppSettings.MaxRevisionGraphCommits;
-        _NO_TRANSLATE_MaxCommits.Enabled = AppSettings.MaxRevisionGraphCommits != 0;
-        chkCloseProcessDialog.Checked = AppSettings.CloseProcessDialog;
-        chkShowGitCommandLine.Checked = AppSettings.ShowGitCommandLine;
-        cbDefaultCloneDestination.Text = AppSettings.DefaultCloneDestinationPath;
-        cboDefaultPullAction.SelectedValue
-            = AppSettings.DefaultPullAction != GitPullAction.Default ?
-              AppSettings.DefaultPullAction : GitPullAction.None;
-        chkFollowRenamesInFileHistoryExact.Checked = AppSettings.FollowRenamesInFileHistoryExactOnly;
-        SetSubmoduleStatus();
+        _model.Load();
 
-        chkTelemetry.Checked = AppSettings.TelemetryEnabled ?? false;
+        foreach ((BoolSettingsEntry entry, CheckBox control) in BoolEntryControls)
+        {
+            control.Checked = entry.Value;
+        }
+
+        chkUpdateModules.CheckState = ToCheckboxState(_model.UpdateSubmodulesOnCheckout.Value);
+        lblCommitsLimit.Checked = _model.CommitsLimit.Enabled;
+        _NO_TRANSLATE_MaxCommits.Value = _model.CommitsLimit.Number;
+        _NO_TRANSLATE_MaxCommits.Enabled = _model.CommitsLimit.Enabled;
+        RevisionGridQuickSearchTimeout.Value = _model.QuickSearchTimeout.Value;
+        cbDefaultCloneDestination.Text = _model.DefaultCloneDestination.Value;
+        cboDefaultPullAction.SelectedIndex = _model.DefaultPullAction.SelectedIndex;
+        SetSubmoduleStatus();
 
         base.SettingsToPage();
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.CheckForUncommittedChangesInCheckoutBranch = chkCheckForUncommittedChangesInCheckoutBranch.Checked;
-        AppSettings.StartWithRecentWorkingDir = chkStartWithRecentWorkingDir.Checked;
-        AppSettings.UseHistogramDiffAlgorithm = chkUseHistogramDiffAlgorithm.Checked;
-        AppSettings.IncludeUntrackedFilesInAutoStash = chkStashUntrackedFiles.Checked;
-        AppSettings.UpdateSubmodulesOnCheckout = ToBoolean(chkUpdateModules.CheckState);
-        AppSettings.FollowRenamesInFileHistory = chkFollowRenamesInFileHistory.Checked;
-        AppSettings.ShowGitStatusInBrowseToolbar = chkShowGitStatusInToolbar.Checked;
-        AppSettings.ShowGitStatusForArtificialCommits = chkShowGitStatusForArtificialCommits.Checked;
-        AppSettings.CloseProcessDialog = chkCloseProcessDialog.Checked;
-        AppSettings.ShowGitCommandLine = chkShowGitCommandLine.Checked;
-        AppSettings.MaxRevisionGraphCommits = lblCommitsLimit.Checked ? (int)_NO_TRANSLATE_MaxCommits.Value : 0;
-        AppSettings.RevisionGridQuickSearchTimeout = (int)RevisionGridQuickSearchTimeout.Value;
-        AppSettings.ShowStashCount = chkShowStashCountInBrowseWindow.Checked;
-        AppSettings.ShowAheadBehindData = chkShowAheadBehindDataInBrowseWindow.Checked;
-        AppSettings.ShowSubmoduleStatus = chkShowSubmoduleStatusInBrowse.Checked;
+        foreach ((BoolSettingsEntry entry, CheckBox control) in BoolEntryControls)
+        {
+            entry.Value = control.Checked;
+        }
 
-        AppSettings.DefaultCloneDestinationPath = cbDefaultCloneDestination.Text;
-        AppSettings.DefaultPullAction = (GitPullAction)cboDefaultPullAction.SelectedValue!;
-        AppSettings.FollowRenamesInFileHistoryExactOnly = chkFollowRenamesInFileHistoryExact.Checked;
+        _model.UpdateSubmodulesOnCheckout.Value = ToBoolean(chkUpdateModules.CheckState);
+        _model.CommitsLimit.Enabled = lblCommitsLimit.Checked;
+        _model.CommitsLimit.Number = (int)_NO_TRANSLATE_MaxCommits.Value;
+        _model.QuickSearchTimeout.Value = (int)RevisionGridQuickSearchTimeout.Value;
+        _model.DefaultCloneDestination.Value = cbDefaultCloneDestination.Text;
+        _model.DefaultPullAction.SelectedIndex = cboDefaultPullAction.SelectedIndex;
 
-        AppSettings.TelemetryEnabled = chkTelemetry.Checked;
+        _model.Save();
 
         base.PageToSettings();
     }
