@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GitCommands;
 using GitCommands.Git;
 using GitCommands.UserRepositoryHistory;
+using GitCommands.Worktree;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -42,7 +43,7 @@ public partial class FormAddSubmodule : GitModuleForm
 
     private void AddClick(object sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(Directory.Text) || string.IsNullOrEmpty(LocalPath.Text))
+        if (!SubmoduleAddModel.IsValid(Directory.Text, LocalPath.Text))
         {
             MessageBoxes.Show(this, _remoteAndLocalPathRequired.Text, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
@@ -92,14 +93,7 @@ public partial class FormAddSubmodule : GitModuleForm
 
         GitArgumentBuilder gitArguments = new("ls-remote") { "--heads", url.ToPosixPath().Quote() };
         string heads = gitExecutable.GetOutput(gitArguments);
-        return heads.LazySplit('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(head =>
-                    {
-                        int branchIndex = head.IndexOf(GitRefName.RefsHeadsPrefix);
-                        return branchIndex == -1 ? null : head[(branchIndex + GitRefName.RefsHeadsPrefix.Length)..];
-                    })
-                    .WhereNotNull()
-                    .ToImmutableList();
+        return SubmoduleAddModel.ParseLsRemoteHeads(heads);
     }
 
     internal readonly struct TestAccessor

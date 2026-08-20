@@ -108,6 +108,29 @@ public sealed class SliceSession
     public IReadOnlyList<WorktreeTreeNode> GetWorktreePanel()
         => WorktreeTreeBuilder.Build(_module.GetWorktrees(), _module.WorkingDir);
 
+    /// <summary>Creates a worktree with the model's command (worktree.useRelativePaths seeded when unset).</summary>
+    public Task<(bool Success, string Output)> CreateWorktreeAsync(string directory, string newBranchOption)
+        => Task.Run(() =>
+        {
+            string relativePath = Path.GetRelativePath(_module.WorkingDir, directory).ToPosixPath().Quote();
+            return RunGitOperation(GitCommands.Worktree.WorktreeCreateModel.CreateCommand(
+                key => _module.GetEffectiveSetting(key), relativePath, newBranchOption));
+        });
+
+    public Task<(bool Success, string Output)> RemoveWorktreeAsync(string worktreePath, bool force)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("worktree") { "remove", { force, "--force" }, worktreePath.Quote() }));
+
+    public Task<(bool Success, string Output)> PruneWorktreesAsync()
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("worktree") { "prune" }));
+
+    /// <summary>Adds a submodule (portable Commands.AddSubmodule).</summary>
+    public Task<(bool Success, string Output)> AddSubmoduleAsync(string remotePath, string localPath, string branch, bool force)
+        => Task.Run(() => RunGitOperation(Commands.AddSubmodule(remotePath, localPath, branch, force)));
+
+    /// <summary>Updates all submodules recursively.</summary>
+    public Task<(bool Success, string Output)> UpdateSubmodulesAsync()
+        => Task.Run(() => RunGitOperation(Commands.SubmoduleUpdate(name: null)));
+
     private (bool Success, string Output) RunGitOperation(ArgumentString arguments)
     {
         ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);
@@ -328,6 +351,8 @@ public sealed class SliceSession
     }
 
     public IReadOnlyList<string> GetRemoteNames() => [.. _module.GetRemoteNames()];
+
+    public IReadOnlyList<string> GetLocalBranchNames() => [.. _module.GetRefs(RefsFilter.Heads).Select(gitRef => gitRef.Name)];
 
     /// <summary>The portable remotes manager (the same one FormRemotes uses).</summary>
     public GitCommands.Remotes.IConfigFileRemoteSettingsManager CreateRemotesManager()

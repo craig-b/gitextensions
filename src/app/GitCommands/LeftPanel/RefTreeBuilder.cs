@@ -14,6 +14,9 @@ public enum RefTreeNodeKind
 
     /// <summary>The group holding disabled remotes; views supply its localized caption.</summary>
     InactiveGroup,
+
+    /// <summary>A worktree row in the sidebar (FullPath = the worktree directory).</summary>
+    Worktree,
 }
 
 /// <summary>A node of the left panel's ref hierarchy: a folder, or a ref leaf carrying its ObjectId.</summary>

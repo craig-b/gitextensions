@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using GitCommands;
+using GitCommands.Worktree;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitExtUtils.GitUI;
@@ -64,7 +65,7 @@ public partial class FormManageWorktree : GitExtensionsDialog
             }
         }
 
-        buttonPruneWorktrees.Enabled = _worktrees.Skip(1).Any(w => w.IsDeleted);
+        buttonPruneWorktrees.Enabled = WorktreeManagePolicy.CanPrune(_worktrees);
     }
 
     private void buttonPruneWorktrees_Click(object sender, EventArgs e) => PruneWorktrees();
@@ -126,29 +127,22 @@ public partial class FormManageWorktree : GitExtensionsDialog
     }
 
     private bool CanDeleteSelectedWorkspace()
-        => CanActOnSelectedWorkspace(out _) && Worktrees.SelectedRows[0].Index != 0;
+        => _worktrees is not null && Worktrees.SelectedRows.Count > 0
+            && WorktreeManagePolicy.CanDelete(_worktrees, Worktrees.SelectedRows[0].Index, UICommands.Module.WorkingDir);
 
     private bool CanActOnSelectedWorkspace([NotNullWhen(true)] out GitWorktree? workTree)
     {
         workTree = null;
 
-        if (_worktrees is null or { Count: <= 1 } || Worktrees.SelectedRows.Count == 0)
+        if (_worktrees is null || Worktrees.SelectedRows.Count == 0
+            || !WorktreeManagePolicy.CanActOn(_worktrees, Worktrees.SelectedRows[0].Index, UICommands.Module.WorkingDir))
         {
             return false;
         }
 
         workTree = _worktrees[Worktrees.SelectedRows[0].Index];
-
-        if (workTree.IsDeleted)
-        {
-            return false;
-        }
-
-        return !IsCurrentlyOpenedWorktree(workTree);
+        return true;
     }
-
-    private bool IsCurrentlyOpenedWorktree(GitWorktree workTree)
-        => new DirectoryInfo(UICommands.Module.WorkingDir).FullName.TrimEnd('\\') == new DirectoryInfo(workTree.Path).FullName.TrimEnd('\\');
 
     private void buttonCreateNewWorktree_Click(object sender, EventArgs e)
     {

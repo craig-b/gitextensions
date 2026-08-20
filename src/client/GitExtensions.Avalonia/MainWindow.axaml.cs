@@ -83,6 +83,25 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_WORKTREETEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(2000);
+                string directory = System.IO.Path.Combine(_session.WorkingDir, "..", "harness-worktree");
+                (bool createOk, string createOut) = await _session.CreateWorktreeAsync(directory, "-b harness-wt-branch");
+                int countAfterCreate = _session.GetWorktreePanel().Count;
+                (bool removeOk, _) = await _session.RemoveWorktreeAsync(directory, force: true);
+                await _session.PruneWorktreesAsync();
+                int countAfterRemove = _session.GetWorktreePanel().Count;
+                Console.Error.WriteLine($"[worktree] create: {(createOk ? "OK" : $"FAIL {createOut}")} ({countAfterCreate} worktrees) | remove: {(removeOk ? "OK" : "FAIL")} ({countAfterRemove} left)");
+
+                (bool subOk, string subOut) = await _session.AddSubmoduleAsync("../opsremote.git", "harness-submodule", branch: "", force: false);
+                Console.Error.WriteLine($"[worktree] add-submodule: {(subOk ? "OK" : $"FAIL {subOut.Replace("\n", " / ")}")}");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_REWRITETEST") == "1")
         {
             Loaded += async (_, _) =>
@@ -249,6 +268,7 @@ public partial class MainWindow : Window
             {
                 Name = worktree.IsCurrent ? $"{worktree.DisplayPath} (current)" : worktree.DisplayPath,
                 FullPath = worktree.Worktree.Path,
+                Kind = GitCommands.LeftPanel.RefTreeNodeKind.Worktree,
             })),
         };
     }

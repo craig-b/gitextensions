@@ -461,6 +461,13 @@ public partial class MainWindow
 
     private void OnRefTreeContextRequested(object? sender, ContextRequestedEventArgs e)
     {
+        if (RefTree.SelectedItem is RefTreeNode { Kind: RefTreeNodeKind.Worktree } worktreeNode)
+        {
+            e.Handled = true;
+            OpenWorktreeMenu(worktreeNode);
+            return;
+        }
+
         RefMenuKind? kind = (RefTree.SelectedItem as RefTreeNode)?.Kind switch
         {
             RefTreeNodeKind.LocalBranch => RefMenuKind.LocalBranch,
@@ -487,6 +494,48 @@ public partial class MainWindow
         if (menu.Items.Count > 0)
         {
             menu.Open(RefTree);
+        }
+    }
+
+    /// <summary>The worktree node menu (not registry-driven yet - the worktree surface has no registry).</summary>
+    private void OpenWorktreeMenu(RefTreeNode node)
+    {
+        ContextMenu menu = new();
+        AddItem("Open in new window", () =>
+        {
+            new MainWindow(node.FullPath).Show();
+            return Task.CompletedTask;
+        });
+        AddItem("Create worktree...", async () =>
+        {
+            IReadOnlyList<string> branches = await Task.Run(_session.GetLocalBranchNames);
+            var choice = await CreateWorktreeDialog.ShowAsync(this, _session.WorkingDir.TrimEnd('/', '\\'), branches, _session.SelectedBranch);
+            if (choice is var (directory, newBranchOption) && choice is not null)
+            {
+                await RunOperationAsync("Create worktree", () => _session.CreateWorktreeAsync(directory, newBranchOption));
+                await LoadRefPanelAsync();
+            }
+        });
+        AddItem("Delete worktree...", async () =>
+        {
+            if (await ConfirmDialog.ConfirmAsync(this, "Delete worktree", $"Remove the worktree at {node.FullPath}?\nThis cannot be undone."))
+            {
+                await RunOperationAsync("Delete worktree", () => _session.RemoveWorktreeAsync(node.FullPath, force: true));
+                await LoadRefPanelAsync();
+            }
+        });
+        AddItem("Prune worktrees", async () =>
+        {
+            await RunOperationAsync("Prune worktrees", _session.PruneWorktreesAsync);
+            await LoadRefPanelAsync();
+        });
+        menu.Open(RefTree);
+
+        void AddItem(string caption, Func<Task> execute)
+        {
+            MenuItem item = new() { Header = caption };
+            item.Click += (_, _) => _ = execute();
+            menu.Items.Add(item);
         }
     }
 
@@ -586,6 +635,24 @@ public partial class MainWindow
                 }
             }
         }
+
+        entries.Add(("Add submodule...", async () =>
+        {
+            string? url = await ConfirmDialog.InputAsync(this, "Add submodule", "Remote path or URL:");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return;
+            }
+
+            string? localPath = await ConfirmDialog.InputAsync(this, "Add submodule", "Local path:", initialText: GitCommands.PathUtil.GetRepositoryName(url));
+            if (!GitCommands.Worktree.SubmoduleAddModel.IsValid(url, localPath))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Add submodule {localPath}", () => _session.AddSubmoduleAsync(url, localPath!, branch: "", force: false));
+        }));
+        entries.Add(("Update all submodules", () => RunOperationAsync("Update submodules", _session.UpdateSubmodulesAsync)));
 
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))

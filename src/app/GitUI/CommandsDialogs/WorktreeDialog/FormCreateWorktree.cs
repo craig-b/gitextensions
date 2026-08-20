@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Worktree;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -9,7 +10,6 @@ namespace GitUI.CommandsDialogs.WorktreeDialog;
 public sealed partial class FormCreateWorktree : GitExtensionsDialog
 {
     private readonly AsyncLoader _branchesLoader = new();
-    private readonly char[] _invalidCharsInPath = Path.GetInvalidFileNameChars();
 
     private readonly string? _initialDirectoryPath;
 
@@ -100,84 +100,21 @@ public sealed partial class FormCreateWorktree : GitExtensionsDialog
     private void CreateWorktree()
     {
         string relativePath = Path.GetRelativePath(Module.WorkingDir, WorktreeDirectory).ToPosixPath().Quote();
-        string? newBranchOption =
-            rbCreateNewBranch.Checked
-            ? $"-b {txtNewBranchName.Text}"
-            : (cbxBranches.SelectedItem as GitRef)?.Name;
-        DialogResult = UICommands.Execute(new UICmd.GitCommandProcess(CreateWorktreeCommand(Module, relativePath, newBranchOption!)), this) ? DialogResult.OK : DialogResult.None;
-    }
-
-    private GitArgumentBuilder CreateWorktreeCommand(IGitModule module, string relativePath, string newBranchOption)
-    {
-        // https://git-scm.com/docs/git-worktree
-
-        // Get the default value, set if unset in config.
-        // Similar in DiffHighlightService.
-        const string command = "worktree";
-        GitCommandConfiguration commandConfiguration = new();
-        IReadOnlyList<GitConfigItem> items = GitCommandConfiguration.Default.Get(command);
-        foreach (GitConfigItem cfg in items)
-        {
-            commandConfiguration.Add(cfg, command);
-        }
-
-        SetIfUnsetInGit("worktree.useRelativePaths", "true");
-        GitArgumentBuilder args = new(command, commandConfiguration)
-        {
-            "add",
-            relativePath,
-            newBranchOption,
-        };
-
-        return args;
-
-        void SetIfUnsetInGit(string key, string value)
-        {
-            if (string.IsNullOrEmpty(module.GetEffectiveSetting(key)))
-            {
-                commandConfiguration.Add(new GitConfigItem(key, value), command);
-            }
-        }
+        string? newBranchOption = WorktreeCreateModel.NewBranchOption(
+            rbCreateNewBranch.Checked, txtNewBranchName.Text, (cbxBranches.SelectedItem as GitRef)?.Name);
+        DialogResult = UICommands.Execute(new UICmd.GitCommandProcess(WorktreeCreateModel.CreateCommand(key => Module.GetEffectiveSetting(key), relativePath, newBranchOption!)), this) ? DialogResult.OK : DialogResult.None;
     }
 
     private void ValidateWorktreeOptions()
     {
         cbxBranches.Enabled = rbCheckoutExistingBranch.Checked;
         txtNewBranchName.Enabled = rbCreateNewBranch.Checked;
-        if (rbCheckoutExistingBranch.Checked)
-        {
-            btnCreateWorktree.Enabled = cbxBranches.SelectedItem is not null;
-        }
-        else
-        {
-            btnCreateWorktree.Enabled = !(string.IsNullOrWhiteSpace(txtNewBranchName.Text)
-                                             || ExistingBranches!.Any(b => b.Name == txtNewBranchName.Text));
-        }
-
-        if (btnCreateWorktree.Enabled)
-        {
-            btnCreateWorktree.Enabled = IsTargetFolderValid();
-        }
-
-        return;
-
-        bool IsTargetFolderValid()
-        {
-            if (string.IsNullOrWhiteSpace(txtWorktreeDirectory.Text))
-            {
-                return false;
-            }
-
-            try
-            {
-                DirectoryInfo directoryInfo = new(txtWorktreeDirectory.Text);
-                return !directoryInfo.Exists || (!directoryInfo.EnumerateFiles().Any() && !directoryInfo.EnumerateDirectories().Any());
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        btnCreateWorktree.Enabled = WorktreeCreateModel.IsBranchChoiceValid(
+                rbCheckoutExistingBranch.Checked,
+                cbxBranches.SelectedItem is not null,
+                txtNewBranchName.Text,
+                ExistingBranches!.Select(b => b.Name))
+            && WorktreeCreateModel.IsTargetFolderValid(txtWorktreeDirectory.Text);
     }
 
     private void txtWorktreeDirectory_TextChanged(object sender, EventArgs e)
@@ -198,12 +135,11 @@ public sealed partial class FormCreateWorktree : GitExtensionsDialog
 
         void UpdateWorktreePath()
         {
-            string branchNameNormalized = NormalizeBranchName(rbCheckoutExistingBranch.Checked
-                ? ((IGitRef?)cbxBranches.SelectedItem)?.Name ?? string.Empty
-                : txtNewBranchName.Text);
-            txtWorktreeDirectory.Text = $"{_initialDirectoryPath}_{branchNameNormalized}";
+            txtWorktreeDirectory.Text = WorktreeCreateModel.SuggestDirectory(
+                _initialDirectoryPath,
+                rbCheckoutExistingBranch.Checked
+                    ? ((IGitRef?)cbxBranches.SelectedItem)?.Name ?? string.Empty
+                    : txtNewBranchName.Text);
         }
-
-        string NormalizeBranchName(string branchName) => string.Join("_", branchName.Split(_invalidCharsInPath, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
     }
 }
