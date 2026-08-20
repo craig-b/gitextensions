@@ -54,6 +54,56 @@ public partial class SettingsWindow : Window
         _visiblePages = _pages;
         PageList.ItemsSource = _pages.Select(page => page.Label).ToList();
         PageList.SelectedIndex = 0;
+
+        ImportButton.IsEnabled = System.IO.File.Exists(LegacyXmlSettingsFilePath);
+    }
+
+    /// <summary>
+    ///  The XML settings file this app used before the INI store (and, on installs where the
+    ///  directories coincide, the WinForms app's file) - the import source.
+    /// </summary>
+    private static string LegacyXmlSettingsFilePath
+        => System.IO.Path.Join(AppSettings.ApplicationDataPath.Value, AppSettings.ApplicationId + ".settings");
+
+    /// <summary>
+    ///  One-shot key-for-key copy of the legacy XML settings into this client's store
+    ///  (both stores share the same setting keys and string encodings).
+    /// </summary>
+    private void OnImportClick(object? sender, RoutedEventArgs e)
+    {
+        if (!System.IO.File.Exists(LegacyXmlSettingsFilePath))
+        {
+            ImportButton.IsEnabled = false;
+            return;
+        }
+
+        IReadOnlyList<KeyValuePair<string, string>> pairs;
+        using (GitCommands.Settings.GitExtSettingsCache xmlCache = new(LegacyXmlSettingsFilePath, autoSave: false))
+        {
+            pairs = xmlCache.GetAllValues();
+        }
+
+        foreach ((string key, string value) in pairs)
+        {
+            AppSettings.SettingsContainer.SettingsCache.SetValue(key, value);
+        }
+
+        AppSettings.SaveSettings();
+
+        // rebuild every shown page so the dialog reflects the imported values
+        SettingsPageModel? current = PageList.SelectedIndex >= 0 && PageList.SelectedIndex < _visiblePages.Count
+            ? _visiblePages[PageList.SelectedIndex].Page
+            : null;
+        _builtPages.Clear();
+        _pullValueActions.Clear();
+        _editors.Clear();
+        if (current is not null)
+        {
+            ShowPage(current);
+        }
+
+        ImportButton.Content = $"Imported {pairs.Count} settings";
+        ImportButton.IsEnabled = false;
     }
 
     private List<(string Label, SettingsPageModel Page, Action? AfterSave)> _visiblePages;
@@ -306,6 +356,9 @@ public partial class SettingsWindow : Window
 
         GitConfigPageModel gitConfig = (GitConfigPageModel)_pages.Single(entry => entry.Page is GitConfigPageModel).Page;
         Console.Error.WriteLine($"[settings] git config global user.name loads as: '{gitConfig.UserName.Value}'");
+
+        Console.Error.WriteLine($"[settings] store: {AppSettings.SettingsFilePath} (exists: {System.IO.File.Exists(AppSettings.SettingsFilePath)})");
+        Console.Error.WriteLine($"[settings] import button enabled: {ImportButton.IsEnabled}");
 
         FindBox.Text = "stash";
         await Task.Delay(300);

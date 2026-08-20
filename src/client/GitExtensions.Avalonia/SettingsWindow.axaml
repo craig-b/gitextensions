@@ -17,10 +17,13 @@
             <StackPanel x:Name="PagePanel" Margin="16,12" Spacing="6" />
         </ScrollViewer>
 
-        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="12,8">
-            <Button x:Name="OkButton" Content="OK" MinWidth="80" Click="OnOkClick" />
-            <Button x:Name="CancelButton" Content="Cancel" MinWidth="80" Click="OnCancelClick" />
-            <Button x:Name="ApplyButton" Content="Apply" MinWidth="80" Click="OnApplyClick" />
-        </StackPanel>
+        <DockPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="12,8">
+            <Button x:Name="ImportButton" DockPanel.Dock="Left" Content="Import previous settings..." Click="OnImportClick" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button x:Name="OkButton" Content="OK" MinWidth="80" Click="OnOkClick" />
+                <Button x:Name="CancelButton" Content="Cancel" MinWidth="80" Click="OnCancelClick" />
+                <Button x:Name="ApplyButton" Content="Apply" MinWidth="80" Click="OnApplyClick" />
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>

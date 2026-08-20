@@ -24,7 +24,10 @@ public static partial class AppSettings
     public static string ProductVersion => AppPaths.ProductVersion;
     public static readonly string ApplicationName = "Git Extensions";
     public static readonly string ApplicationId = ApplicationName.Replace(" ", "");
-    public static readonly string SettingsFileName = ApplicationId + ".settings";
+
+    // The INI store (an opt-in host decision, see HostSettingsStore) uses its own file
+    // name so the two stores never contend for one file.
+    public static readonly string SettingsFileName = HostSettingsStore.UseIniStore ? "settings.ini" : ApplicationId + ".settings";
     public static readonly string UserPluginsDirectoryName = "UserPlugins";
     private static string _applicationExecutablePath = AppPaths.ApplicationExecutablePath;
     private static string? _documentationBaseUrl;
@@ -116,7 +119,10 @@ public static partial class AppSettings
                 return false;
             }
 
-            File.WriteAllText(SettingsFilePath, "<?xml version=\"1.0\" encoding=\"utf-8\"?><dictionary />", Encoding.UTF8);
+            File.WriteAllText(
+                SettingsFilePath,
+                HostSettingsStore.UseIniStore ? "# Git Extensions settings\n" : "<?xml version=\"1.0\" encoding=\"utf-8\"?><dictionary />",
+                Encoding.UTF8);
             return true;
         }
     }
