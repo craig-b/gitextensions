@@ -66,7 +66,7 @@ internal static class ConfirmDialog
         => ShowAsync(owner, caption, text, "OK");
 
     /// <returns>The entered text, or null when cancelled.</returns>
-    public static async Task<string?> InputAsync(Window owner, string caption, string prompt, string watermark = "")
+    public static async Task<string?> InputAsync(Window owner, string caption, string prompt, string watermark = "", string? initialText = null, bool multiline = false)
     {
         string? result = null;
 
@@ -78,7 +78,14 @@ internal static class ConfirmDialog
             CanResize = false,
         };
 
-        TextBox input = new() { Watermark = watermark, MinWidth = 320 };
+        TextBox input = new()
+        {
+            Watermark = watermark,
+            MinWidth = 320,
+            Text = initialText ?? "",
+            AcceptsReturn = multiline,
+            MinHeight = multiline ? 120 : double.NaN,
+        };
 
         Button okButton = new() { Content = "OK", MinWidth = 80, IsDefault = true };
         okButton.Click += (_, _) =>

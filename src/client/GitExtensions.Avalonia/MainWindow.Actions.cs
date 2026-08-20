@@ -10,7 +10,9 @@ using GitCommands.Git;
 using GitCommands.LeftPanel;
 using GitCommands.Rebase;
 using GitCommands.Reset;
+using GitCommands.Rewrite;
 using GitExtensions.Extensibility.Git;
+using GitUI.CommandsDialogs;
 using GitUIPluginInterfaces;
 
 namespace GitExtensions.Avalonia;
@@ -108,6 +110,42 @@ public partial class MainWindow
                 ($"{(candidate.Name == defaultName ? "★ " : "")}Reset {candidate.Name} to {revision.ObjectId.ToShortString()}",
                  (Func<Task>)(() => RunOperationAsync($"Reset {candidate.Name}", () => _session.UpdateRefAsync(candidate.CompleteName, revision.ObjectId)))))];
             await CommandPalette.ShowAsync(this, entries);
+        },
+        ["rewrite.fixup"] = revision => StartPrefixedCommitAsync(GitUI.CommandsDialogs.CommitKind.Fixup, revision),
+        ["rewrite.squash"] = revision => StartPrefixedCommitAsync(GitUI.CommandsDialogs.CommitKind.Squash, revision),
+        ["rewrite.amend"] = revision => StartPrefixedCommitAsync(GitUI.CommandsDialogs.CommitKind.Amend, revision),
+        ["rewrite.reword"] = async revision =>
+        {
+            string? message = await ConfirmDialog.InputAsync(
+                this, "Reword commit", $"New message for {revision.ObjectId.ToShortString()}:",
+                initialText: string.IsNullOrEmpty(revision.Body) ? revision.Subject : revision.Body,
+                multiline: true);
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Reword {revision.ObjectId.ToShortString()}",
+                () => _session.RewriteCommitAsync(revision, RewriteTodoAction.Reword, message));
+            UpdateRebaseBar();
+        },
+        ["rewrite.edit"] = async revision =>
+        {
+            if (!await ConfirmDialog.ConfirmAsync(this, "Edit commit",
+                $"The rebase will stop at {revision.ObjectId.ToShortString()} for amending.\nCommit your changes, then use \"Rebase: continue\" in the toolbar."))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Edit {revision.ObjectId.ToShortString()}",
+                async () =>
+                {
+                    (bool _, string output) = await _session.RewriteCommitAsync(revision, RewriteTodoAction.Edit, rewordMessage: null);
+
+                    // A stop for editing is the intended outcome, not a failure.
+                    return (true, output);
+                });
+            UpdateRebaseBar();
         },
         ["compare.toCurrentBranch"] = revision =>
         {
@@ -259,7 +297,26 @@ public partial class MainWindow
         },
     };
 
-    /// <summary>Merge via the options dialog (MergeBranchOptions, §20a batch 2).</summary>
+    /// <summary>Fixup/squash/amend: a prefixed commit from staged changes, then the optional autosquash fold.</summary>
+    private async Task StartPrefixedCommitAsync(GitUI.CommandsDialogs.CommitKind kind, GitRevision targetRevision)
+    {
+        CommitWindow commitWindow = new(_session, GitCommands.Rewrite.HistoryRewrite.PrefixedSubject(kind, targetRevision.Subject));
+        await commitWindow.ShowDialog(this);
+        if (!commitWindow.Committed)
+        {
+            return;
+        }
+
+        await ReloadLogAsync();
+        if (await ConfirmDialog.ConfirmAsync(this, "Autosquash",
+            $"Fold the {kind.GetPrefix()} commit into {targetRevision.ObjectId.ToShortString()} now (autosquash rebase)?"))
+        {
+            await RunOperationAsync("Autosquash fold", () => _session.AutosquashFoldAsync(targetRevision));
+            UpdateRebaseBar();
+        }
+    }
+
+    /// <summary>Merge via the options dialog (MergeBranchOptions).</summary>
     private async Task MergeWithDialogAsync(string displayName, string mergeRef)
     {
         GitCommands.Merge.MergeBranchOptions? options = await MergeDialog.ShowAsync(this, mergeRef, _session.SelectedBranch);

@@ -131,6 +131,76 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> RebaseAsync(string onto)
         => Task.Run(() => RunGitOperation(Commands.Rebase(new Commands.RebaseOptions { BranchName = onto })));
 
+    /// <summary>Runs git with extra environment variables (the sequence-editor flows need them).</summary>
+    public Task<(bool Success, string Output)> RunGitWithEnvAsync(GitExtensions.Extensibility.ArgumentString arguments, IReadOnlyDictionary<string, string> environment)
+        => Task.Run(() =>
+        {
+            System.Diagnostics.ProcessStartInfo startInfo = new()
+            {
+                FileName = _module.GitExecutable.Command,
+                Arguments = $"{_module.GitExecutable.PrefixArguments}{arguments}",
+                WorkingDirectory = _module.WorkingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            foreach ((string name, string value) in environment)
+            {
+                startInfo.Environment[name] = value;
+            }
+
+            using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)!;
+            string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return (process.ExitCode == 0, output);
+        });
+
+    /// <summary>Edit/reword via interactive rebase; reword injects the new message through GIT_EDITOR.</summary>
+    public async Task<(bool Success, string Output)> RewriteCommitAsync(GitRevision revision, GitCommands.Rewrite.RewriteTodoAction action, string? rewordMessage)
+    {
+        Dictionary<string, string> environment = new()
+        {
+            [GitCommands.Rewrite.HistoryRewrite.SequenceEditorVariable] = GitCommands.Rewrite.HistoryRewrite.ReplaceFirstPickEditor(action),
+        };
+
+        string? messageFile = null;
+        if (action is GitCommands.Rewrite.RewriteTodoAction.Reword && rewordMessage is not null)
+        {
+            messageFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ge-reword-{Guid.NewGuid():N}.txt");
+            await System.IO.File.WriteAllTextAsync(messageFile, rewordMessage);
+            environment[GitCommands.Rewrite.HistoryRewrite.EditorVariable] = $"cp '{messageFile}'";
+        }
+
+        try
+        {
+            return await RunGitWithEnvAsync(
+                GitCommands.Rewrite.HistoryRewrite.InteractiveRebaseOntoParent(revision.FirstParentId, _module.GitVersion.SupportRebaseMerges),
+                environment);
+        }
+        finally
+        {
+            if (messageFile is not null && System.IO.File.Exists(messageFile))
+            {
+                System.IO.File.Delete(messageFile);
+            }
+        }
+    }
+
+    /// <summary>Folds fixup!/squash!/amend! commits into their targets (autosquash, todo accepted verbatim).</summary>
+    public Task<(bool Success, string Output)> AutosquashFoldAsync(GitRevision targetRevision)
+        => RunGitWithEnvAsync(
+            GitCommands.Rewrite.HistoryRewrite.InteractiveRebaseOntoParent(targetRevision.FirstParentId, _module.GitVersion.SupportRebaseMerges, autoSquash: true),
+            new Dictionary<string, string>
+            {
+                [GitCommands.Rewrite.HistoryRewrite.SequenceEditorVariable] = GitCommands.Rewrite.HistoryRewrite.AcceptTodoEditor,
+            });
+
+    public Task<(bool Success, string Output)> ContinueRebaseAsync()
+        => Task.Run(() => RunGitOperation(Commands.ContinueRebase()));
+
+    public Task<(bool Success, string Output)> AbortRebaseAsync()
+        => Task.Run(() => RunGitOperation(Commands.AbortRebase()));
+
     /// <summary>Resets the current branch to the given commit with the chosen mode.</summary>
     public Task<(bool Success, string Output)> ResetAsync(ResetMode mode, ObjectId commitId)
         => Task.Run(() => RunGitOperation(Commands.Reset(mode, commitId.ToString())));

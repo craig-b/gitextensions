@@ -33,7 +33,7 @@ public partial class CommitWindow : Window
         _messageFormatter = null!;
     }
 
-    public CommitWindow(SliceSession session)
+    public CommitWindow(SliceSession session, string? initialMessage = null)
     {
         InitializeComponent();
 
@@ -44,6 +44,11 @@ public partial class CommitWindow : Window
         Loaded += async (_, _) =>
         {
             ShowBranchInfo();
+            if (initialMessage is not null)
+            {
+                MessageBox.Text = initialMessage;
+            }
+
             await ReloadStatusAsync();
         };
     }

@@ -9,6 +9,7 @@ using GitCommands;
 using GitCommands.Config;
 using GitCommands.FileHistory;
 using GitCommands.Git;
+using GitCommands.Rewrite;
 using GitCommands.Utils;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -3414,34 +3415,29 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
     private void editCommitToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        LaunchRebase("e");
+        LaunchRebase(RewriteTodoAction.Edit);
     }
 
     private void rewordCommitToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        LaunchRebase("r");
+        LaunchRebase(RewriteTodoAction.Reword);
     }
 
-    private void LaunchRebase(string command)
+    private void LaunchRebase(RewriteTodoAction action)
     {
         if (LatestSelectedRevision is null)
         {
             return;
         }
 
-        string rebaseCmd = Commands.Rebase(new Commands.RebaseOptions()
-        {
-            BranchName = GetActualRevision(LatestSelectedRevision)?.FirstParentId is { IsZero: false } fid ? fid.ToString() : null,
-            Interactive = true,
-            AutoStash = true,
-            SupportRebaseMerges = Module.GitVersion.SupportRebaseMerges
-        });
+        string rebaseCmd = HistoryRewrite.InteractiveRebaseOntoParent(
+            GetActualRevision(LatestSelectedRevision)?.FirstParentId,
+            Module.GitVersion.SupportRebaseMerges);
 
         using FormProcess formProcess = new(UICommands, arguments: rebaseCmd, Module.WorkingDir, input: null, useDialogSettings: true);
 
-        const string envVarNameGitSequenceEditor = "GIT_SEQUENCE_EDITOR";
-        formProcess.ProcessEnvVariables.Add(envVarNameGitSequenceEditor, string.Format("sed -i -re '0,/pick/s//{0}/'", command));
-        formProcess.ProcessEnvVariables.ForwardEnvironmentVariableToWsl(Module.WorkingDir, envVarNameGitSequenceEditor);
+        formProcess.ProcessEnvVariables.Add(HistoryRewrite.SequenceEditorVariable, HistoryRewrite.ReplaceFirstPickEditor(action));
+        formProcess.ProcessEnvVariables.ForwardEnvironmentVariableToWsl(Module.WorkingDir, HistoryRewrite.SequenceEditorVariable);
 
         formProcess.ShowDialog(ParentForm);
         PerformRefreshRevisions();

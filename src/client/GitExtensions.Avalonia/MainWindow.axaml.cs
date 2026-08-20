@@ -79,6 +79,28 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_REWRITETEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(2500);
+                ObjectId target = _session.ResolveRef("HEAD~1")!.Value;
+                GitRevision revision = _session.GetRevision(target);
+                (bool rewordOk, string rewordOut) = await _session.RewriteCommitAsync(revision, GitCommands.Rewrite.RewriteTodoAction.Reword, "reworded subject\n\nnew body from harness");
+                GitRevision reworded = _session.GetRevision(_session.ResolveRef("HEAD~1")!.Value);
+                Console.Error.WriteLine($"[rewrite] reword: {(rewordOk ? "OK" : "FAIL")} | new subject: {reworded.Subject}");
+
+                await System.IO.File.WriteAllTextAsync(System.IO.Path.Combine(_session.WorkingDir, "fixup-file"), "fixup change");
+                await _session.RunGitWithEnvAsync("add fixup-file", new Dictionary<string, string>());
+                await _session.RunGitWithEnvAsync($"commit -m \"fixup! {reworded.Subject}\"", new Dictionary<string, string>());
+                string countBefore = (await _session.RunGitWithEnvAsync("rev-list --count HEAD", new Dictionary<string, string>())).Output.Trim();
+                (bool foldOk, string foldOut) = await _session.AutosquashFoldAsync(reworded);
+                string countAfter = (await _session.RunGitWithEnvAsync("rev-list --count HEAD", new Dictionary<string, string>())).Output.Trim();
+                Console.Error.WriteLine($"[rewrite] autosquash fold: {(foldOk ? "OK" : "FAIL")} | commits {countBefore} -> {countAfter}");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_COMPARETEST") == "1")
         {
             Loaded += async (_, _) =>
@@ -490,9 +512,24 @@ public partial class MainWindow : Window
         _logCts.Cancel();
         _logCts = new CancellationTokenSource();
         await Task.Delay(200);
+        UpdateRebaseBar();
         await LogControl.ResetAsync();
         StartLogStream();
     }
+
+    /// <summary>The continue/abort affordances appear while a rebase (e.g. an "Edit commit" stop) is in flight.</summary>
+    private void UpdateRebaseBar()
+    {
+        bool inRebase = _session.InRebase;
+        RebaseContinueButton.IsVisible = inRebase;
+        RebaseAbortButton.IsVisible = inRebase;
+    }
+
+    private async void OnRebaseContinueClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await RunOperationAsync("Rebase continue", _session.ContinueRebaseAsync);
+
+    private async void OnRebaseAbortClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await RunOperationAsync("Rebase abort", _session.AbortRebaseAsync);
 
     private void StartLogStream()
     {
