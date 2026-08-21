@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using GitCommands;
+using GitCommands.Dashboard;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -318,11 +319,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
             ListViewGroup[] groups =
             [
                 _lvgRecentRepositories,
-                .. recentRepositories.Concat(favouriteRepositories)
-                        .Select(repo => repo.Repo.Category)
-                        .Where(c => !string.IsNullOrWhiteSpace(c))
-                        .Distinct(GroupHeaderComparer)
-                        .OrderBy(c => c)
+                .. DashboardList.CategoryHeaders(recentRepositories, favouriteRepositories)
                         .Select(c => new ListViewGroup(c, c)
                         {
                             CollapsedState = ListViewGroupCollapsedState.Expanded,
@@ -549,10 +546,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
 
     private void UpdateCategoryName(string? originalName, string? newName)
     {
-        foreach (Repository repository in GetRepositories().Where(r => r.Category == originalName))
-        {
-            ThreadHelper.JoinableTaskFactory.Run(() => Controller.AssignCategoryAsync(repository, newName));
-        }
+        ThreadHelper.JoinableTaskFactory.Run(() => Controller.RenameCategoryAsync(GetRepositories(), originalName, newName));
 
         ShowRecentRepositories();
     }
@@ -887,11 +881,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
             return;
         }
 
-        foreach (Repository repository in repositories)
-        {
-            ThreadHelper.JoinableTaskFactory.Run(
-                () => RepositoryHistoryManager.Locals.RemoveRecentAsync(repository.Path));
-        }
+        ThreadHelper.JoinableTaskFactory.Run(() => Controller.ClearRecentAsync(repositories));
 
         ShowRecentRepositories();
     }

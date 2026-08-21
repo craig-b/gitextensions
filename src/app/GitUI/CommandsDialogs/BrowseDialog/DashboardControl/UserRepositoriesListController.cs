@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Dashboard;
 using GitCommands.UserRepositoryHistory;
 using ResourceManager;
 
@@ -7,6 +8,8 @@ namespace GitUI.CommandsDialogs.BrowseDialog.DashboardControl;
 public interface IUserRepositoriesListController
 {
     Task AssignCategoryAsync(Repository repository, string? category);
+    Task RenameCategoryAsync(IEnumerable<Repository> repositories, string? originalName, string? newName);
+    Task ClearRecentAsync(IEnumerable<Repository> repositories);
     string GetCurrentBranchName(string path);
     bool IsValidGitWorkingDir(string path);
     (IReadOnlyList<RecentRepoInfo> recentRepositories, IReadOnlyList<RecentRepoInfo> favouriteRepositories) PreRenderRepositories(string filter);
@@ -36,8 +39,14 @@ public sealed class UserRepositoriesListController : IUserRepositoriesListContro
     {
         ArgumentNullException.ThrowIfNull(repository);
 
-        await _localRepositoryManager.AssignCategoryAsync(repository, category);
+        await CategoryCommands.AssignAsync(_localRepositoryManager, repository, category);
     }
+
+    public Task RenameCategoryAsync(IEnumerable<Repository> repositories, string? originalName, string? newName)
+        => CategoryCommands.RenameAsync(_localRepositoryManager, repositories, originalName, newName);
+
+    public Task ClearRecentAsync(IEnumerable<Repository> repositories)
+        => CategoryCommands.ClearRecentAsync(_localRepositoryManager, repositories);
 
     /// <summary>
     /// Clears the repository cache. After this call the repository list will be loaded from disk.
@@ -68,37 +77,20 @@ public sealed class UserRepositoriesListController : IUserRepositoriesListContro
 
     public (IReadOnlyList<RecentRepoInfo> recentRepositories, IReadOnlyList<RecentRepoInfo> favouriteRepositories) PreRenderRepositories(string pattern)
     {
-        List<RecentRepoInfo> topRepos = [];
-        List<RecentRepoInfo> recentRepos = [];
+        RecentRepoSplitterOptions options = RecentRepoSplitterOptions.FromAppSettings(
+            caption => TextRenderer.MeasureText(caption, AppFonts.App).Width);
 
-        RecentRepoSplitter splitter = new(RecentRepoSplitterOptions.FromAppSettings(
-            caption => TextRenderer.MeasureText(caption, AppFonts.App).Width));
+        // The injected manager, not the RepositoryHistoryManager static - the class always took
+        // the dependency and then bypassed it here.
+        _allRecentRepositories ??= ThreadHelper.JoinableTaskFactory.Run(_localRepositoryManager.LoadRecentHistoryAsync);
+        IReadOnlyList<RecentRepoInfo> recentRepositories = DashboardList.SplitAndMerge(DashboardList.Filter(_allRecentRepositories, pattern), options);
 
-        _allRecentRepositories ??= ThreadHelper.JoinableTaskFactory.Run(RepositoryHistoryManager.Locals.LoadRecentHistoryAsync);
-        IList<Repository> repositories = Filter(_allRecentRepositories, pattern);
-        splitter.SplitRecentRepos(repositories, topRepos, recentRepos);
-        List<RecentRepoInfo> recentRepositories = [.. topRepos.Union(recentRepos)];
-
-        _allFavoriteRepositories ??= ThreadHelper.JoinableTaskFactory.Run(RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync);
-        repositories = Filter(_allFavoriteRepositories, pattern);
-        topRepos.Clear();
-        recentRepos.Clear();
-        splitter.SplitRecentRepos(repositories, topRepos, recentRepos);
-        List<RecentRepoInfo> favouriteRepositories = [.. topRepos.Union(recentRepos)];
+        _allFavoriteRepositories ??= ThreadHelper.JoinableTaskFactory.Run(_localRepositoryManager.LoadFavouriteHistoryAsync);
+        IReadOnlyList<RecentRepoInfo> favouriteRepositories = DashboardList.SplitAndMerge(DashboardList.Filter(_allFavoriteRepositories, pattern), options);
 
         return (recentRepositories, favouriteRepositories);
     }
 
     public bool RemoveInvalidRepository(string path)
        => _invalidRepositoryRemover.ShowDeleteInvalidRepositoryDialog(path);
-
-    private static IList<Repository> Filter(IList<Repository> repositories, string pattern)
-    {
-        if (pattern.Length == 0)
-        {
-            return repositories;
-        }
-
-        return [.. repositories.Where(r => r.Path.Contains(pattern, StringComparison.CurrentCultureIgnoreCase))];
-    }
 }
