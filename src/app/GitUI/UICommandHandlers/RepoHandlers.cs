@@ -50,9 +50,9 @@ internal sealed class InitializeRepositoryHandler(GitUICommands commands) : IUIC
     {
         bool Action()
         {
-            string dir = command.Directory ?? (commands.Module.IsValidGitWorkingDir() ? commands.Module.WorkingDir : string.Empty);
-
-            using FormInit frm = new(commands, dir);
+            // The directory seed rule (explicit -> current repo -> default clone destination) lives
+            // in InitRepositoryModel.SeedDirectory, applied by the form.
+            using FormInit frm = new(commands, command.Directory);
             frm.ShowDialog(owner);
             return true;
         }

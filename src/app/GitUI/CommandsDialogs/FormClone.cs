@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Clone;
 using GitCommands.Config;
 using GitCommands.Git;
 using GitCommands.UserRepositoryHistory;
@@ -62,94 +63,45 @@ public partial class FormClone : GitExtensionsDialog
         _NO_TRANSLATE_To.DataSource = historicPaths;
         _NO_TRANSLATE_To.Text = AppSettings.DefaultCloneDestinationPath;
 
-        if (PathUtil.CanBeGitURL(_url))
+        string? clipboardText = null;
+        try
         {
-            _NO_TRANSLATE_From.Text = _url;
-        }
-        else
-        {
-            if (!string.IsNullOrEmpty(_url) && Directory.Exists(_url))
+            // Try to be more helpful to the user: the clipboard text is a potential source URL.
+            if (Clipboard.ContainsText(TextDataFormat.Text))
             {
-                _NO_TRANSLATE_To.Text = _url;
-            }
-
-            // Try to be more helpful to the user.
-            // Use the clipboard text as a potential source URL.
-            try
-            {
-                if (Clipboard.ContainsText(TextDataFormat.Text))
-                {
-                    string text = Clipboard.GetText(TextDataFormat.Text) ?? string.Empty;
-
-                    // See if it's a valid URL.
-                    if (TryExtractUrl(text, out string possibleURL))
-                    {
-                        _NO_TRANSLATE_From.Text = possibleURL;
-                    }
-                }
-            }
-            catch
-            {
-                // We tried.
-            }
-
-            // if the From field is empty, then fill it with the current repository remote URL in hope
-            // that the cloned repository is hosted on the same server
-            if (string.IsNullOrWhiteSpace(_NO_TRANSLATE_From.Text) && Module.IsValidGitWorkingDir())
-            {
-                string? currentBranchRemote = Module.GetSetting(string.Format(SettingKeyString.BranchRemote, Module.GetSelectedBranch()));
-                if (string.IsNullOrEmpty(currentBranchRemote))
-                {
-                    IReadOnlyList<string> remotes = Module.GetRemoteNames();
-
-                    if (remotes.Any(s => s.Equals("origin", StringComparison.InvariantCultureIgnoreCase)))
-                    {
-                        currentBranchRemote = "origin";
-                    }
-                    else
-                    {
-                        currentBranchRemote = remotes.Count > 0 ? remotes[0] : null;
-                    }
-                }
-
-                string pushUrl = Module.GetSetting(string.Format(SettingKeyString.RemotePushUrl, currentBranchRemote));
-                if (string.IsNullOrEmpty(pushUrl))
-                {
-                    pushUrl = Module.GetSetting(string.Format(SettingKeyString.RemoteUrl, currentBranchRemote));
-                }
-
-                _NO_TRANSLATE_From.Text = pushUrl;
-
-                try
-                {
-                    // If the from directory is filled with the pushUrl from current working directory, set the destination directory to the parent
-                    if (!string.IsNullOrWhiteSpace(pushUrl) && string.IsNullOrWhiteSpace(_NO_TRANSLATE_To.Text) && !string.IsNullOrWhiteSpace(Module.WorkingDir))
-                    {
-                        _NO_TRANSLATE_To.Text = Path.GetDirectoryName(Module.WorkingDir.TrimEnd(Path.DirectorySeparatorChar));
-                    }
-                }
-                catch
-                {
-                    // Exceptions on setting the destination directory can be ignored
-                }
+                clipboardText = Clipboard.GetText(TextDataFormat.Text);
             }
         }
-
-        // if there is no destination directory, then use the parent of the current working directory
-        // this would clone the new repo at the same level as the current one by default
-        if (string.IsNullOrWhiteSpace(_NO_TRANSLATE_To.Text) && !string.IsNullOrWhiteSpace(Module.WorkingDir))
+        catch
         {
-            if (Module.IsValidGitWorkingDir())
+            // We tried.
+        }
+
+        CloneSeed seed = CloneSourceSeed.Resolve(
+            _url,
+            clipboardText,
+            AppSettings.DefaultCloneDestinationPath,
+            Module.IsValidGitWorkingDir(),
+            Module.WorkingDir,
+            currentRepositorySuggestedSourceUrl: () =>
             {
-                if (Path.GetPathRoot(Module.WorkingDir) != Module.WorkingDir)
-                {
-                    _NO_TRANSLATE_To.Text = Path.GetDirectoryName(Module.WorkingDir.TrimEnd(Path.DirectorySeparatorChar));
-                }
-            }
-            else
-            {
-                _NO_TRANSLATE_To.Text = Module.WorkingDir;
-            }
+                string? remote = CloneSourceSeed.PickSuggestedRemote(
+                    Module.GetSetting(string.Format(SettingKeyString.BranchRemote, Module.GetSelectedBranch())),
+                    Module.GetRemoteNames());
+
+                string pushUrl = Module.GetSetting(string.Format(SettingKeyString.RemotePushUrl, remote));
+                return string.IsNullOrEmpty(pushUrl) ? Module.GetSetting(string.Format(SettingKeyString.RemoteUrl, remote)) : pushUrl;
+            },
+            Directory.Exists);
+
+        if (seed.Source is not null)
+        {
+            _NO_TRANSLATE_From.Text = seed.Source;
+        }
+
+        if (seed.Destination is not null)
+        {
+            _NO_TRANSLATE_To.Text = seed.Destination;
         }
 
         FromTextUpdate(this, EventArgs.Empty);
@@ -162,57 +114,30 @@ public partial class FormClone : GitExtensionsDialog
             Cursor = Cursors.Default;
             _branchLoaderSequence.CancelCurrent();
 
-            // validate if destination path is supplied
             string destination = _NO_TRANSLATE_To.Text;
-            if (string.IsNullOrWhiteSpace(destination))
+            switch (CloneModel.Validate(destination))
             {
-                MessageBoxes.Show(this, _errorDestinationNotSupplied.Text, _errorCloneFailed.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _NO_TRANSLATE_To.Focus();
-                return;
-            }
+                case CloneValidation.DestinationMissing:
+                    MessageBoxes.Show(this, _errorDestinationNotSupplied.Text, _errorCloneFailed.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    _NO_TRANSLATE_To.Focus();
+                    return;
 
-            if (!Path.IsPathRooted(destination))
-            {
-                MessageBoxes.Show(this, _errorDestinationNotRooted.Text, _errorCloneFailed.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _NO_TRANSLATE_To.Focus();
-                return;
+                case CloneValidation.DestinationNotRooted:
+                    MessageBoxes.Show(this, _errorDestinationNotRooted.Text, _errorCloneFailed.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    _NO_TRANSLATE_To.Focus();
+                    return;
             }
-
-            string dirTo = Path.Combine(destination, _NO_TRANSLATE_NewDirectory.Text);
 
             // this will fail if the path is anyhow invalid
-            dirTo = PathUtil.Resolve(dirTo);
+            string dirTo = CloneModel.ResolveTargetDirectory(destination, _NO_TRANSLATE_NewDirectory.Text);
 
             if (!Directory.Exists(dirTo))
             {
                 Directory.CreateDirectory(dirTo);
             }
 
-            // Shallow clone params
-            int? depth = null;
-            bool? isSingleBranch = null;
-            if (!cbDownloadFullHistory.Checked)
-            {
-                depth = 1;
-
-                // Single branch considerations:
-                // If neither depth nor single-branch family params are specified, then it's like no-single-branch by default.
-                // If depth is specified, then single-branch is assumed.
-                // But with single-branch it's really nontrivial to switch to another branch in the GUI, and it's very hard in cmdline (obvious choices to fetch another branch lead to local repo corruption).
-                // So let's reset it to no-single-branch to (a) have the same branches behavior as with full clone, and (b) make it easier for users when switching branches.
-                isSingleBranch = false;
-            }
-
-            // Branch name param
-            string? branch = _NO_TRANSLATE_Branches.Text;
-            if (branch == _branchDefaultRemoteHead.Text)
-            {
-                branch = "";
-            }
-            else if (branch == _branchNone.Text)
-            {
-                branch = null;
-            }
+            (int? depth, bool? isSingleBranch) = CloneModel.ShallowOptions(cbDownloadFullHistory.Checked);
+            string? branch = CloneBranchSelection.ToBranchArgument(_NO_TRANSLATE_Branches.Text, _branchDefaultRemoteHead.Text, _branchNone.Text);
 
             ArgumentString cloneCmd = Commands.Clone(_NO_TRANSLATE_From.Text,
                 dirTo,
@@ -246,16 +171,17 @@ public partial class FormClone : GitExtensionsDialog
                 clonedGitModule.SetSetting(string.Format(SettingKeyString.RemotePuttySshKey, "origin"), _puttySshKey);
             }
 
-            if (_openedFromProtocolHandler && AskIfNewRepositoryShouldBeOpened(dirTo))
+            switch (ClonePostActionDecision.Decide(_openedFromProtocolHandler, isHostedDialog: ShowInTaskbar == false, UICommands.HasRepositoryAcquiredSubscribers))
             {
-                Hide();
-                IGitUICommands uiCommands = UICommands.WithWorkingDirectory(dirTo);
-                uiCommands.Execute(new UICmd.Browse(), null);
-            }
-            else if (ShowInTaskbar == false && UICommands.HasRepositoryAcquiredSubscribers &&
-                AskIfNewRepositoryShouldBeOpened(dirTo))
-            {
-                UICommands.RaiseRepositoryAcquired(new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), dirTo));
+                case ClonePostAction.OpenInNewInstance when AskIfNewRepositoryShouldBeOpened(dirTo):
+                    Hide();
+                    IGitUICommands uiCommands = UICommands.WithWorkingDirectory(dirTo);
+                    uiCommands.Execute(new UICmd.Browse(), null);
+                    break;
+
+                case ClonePostAction.AnnounceAcquired when AskIfNewRepositoryShouldBeOpened(dirTo):
+                    UICommands.RaiseRepositoryAcquired(new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), dirTo));
+                    break;
             }
 
             Close();
@@ -331,32 +257,32 @@ public partial class FormClone : GitExtensionsDialog
 
     private void ToTextUpdate(object sender, EventArgs e)
     {
-        bool destinationUnfilled = string.IsNullOrEmpty(_NO_TRANSLATE_To.Text) || _NO_TRANSLATE_To.Text.IndexOfAny(Delimiters.InvalidPathCharsSearchValues) >= 0;
-        bool subDirectoryUnfilled = string.IsNullOrEmpty(_NO_TRANSLATE_NewDirectory.Text) || _NO_TRANSLATE_NewDirectory.Text.IndexOfAny(Delimiters.InvalidPathCharsSearchValues) >= 0;
+        CloneDestinationPreview preview = CloneModel.EvaluateDestination(
+            _NO_TRANSLATE_To.Text,
+            _NO_TRANSLATE_NewDirectory.Text,
+            destinationLabel.Text,
+            subdirectoryLabel.Text,
+            directoryExistsNotEmpty: path => Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any());
 
-        string destinationDirectory = destinationUnfilled ? $@"[{destinationLabel.Text}]" : _NO_TRANSLATE_To.Text;
-        string destinationSubDirectory = subDirectoryUnfilled ? $@"[{subdirectoryLabel.Text}]" : _NO_TRANSLATE_NewDirectory.Text;
+        string newRepositoryLocationInfo = string.Format(_infoNewRepositoryLocation.Text, preview.Path);
 
-        string destinationPath = Path.Combine(destinationDirectory, destinationSubDirectory);
-
-        string newRepositoryLocationInfo = string.Format(_infoNewRepositoryLocation.Text, destinationPath);
-
-        if (destinationUnfilled || subDirectoryUnfilled)
+        switch (preview.State)
         {
-            Info.Text = newRepositoryLocationInfo;
-            Info.ForeColor = Color.Red.AdaptForeColor(Info.BackColor);
-            return;
-        }
+            case CloneDestinationState.Incomplete:
+                Info.Text = newRepositoryLocationInfo;
+                Info.ForeColor = Color.Red.AdaptForeColor(Info.BackColor);
+                break;
 
-        if (Directory.Exists(destinationPath) && Directory.EnumerateFileSystemEntries(destinationPath).Any())
-        {
-            Info.Text = $@"{newRepositoryLocationInfo} {_infoDirectoryExists.Text}";
-            Info.ForeColor = Color.Red.AdaptForeColor(Info.BackColor);
-            return;
-        }
+            case CloneDestinationState.ExistsNotEmpty:
+                Info.Text = $@"{newRepositoryLocationInfo} {_infoDirectoryExists.Text}";
+                Info.ForeColor = Color.Red.AdaptForeColor(Info.BackColor);
+                break;
 
-        Info.Text = $@"{newRepositoryLocationInfo} {_infoDirectoryNew.Text}";
-        Info.ForeColor = SystemColors.ControlText;
+            default:
+                Info.Text = $@"{newRepositoryLocationInfo} {_infoDirectoryNew.Text}";
+                Info.ForeColor = SystemColors.ControlText;
+                break;
+        }
     }
 
     private void NewDirectoryTextChanged(object sender, EventArgs e)
@@ -369,35 +295,39 @@ public partial class FormClone : GitExtensionsDialog
         ToTextUpdate(sender, e);
     }
 
-    private void UpdateBranches(RemoteActionResult<IReadOnlyList<IGitRef>> branchList)
+    private void UpdateBranches(RemoteProbeStatus status, IReadOnlyList<IGitRef>? refs)
     {
         Cursor = Cursors.Default;
 
-        if (branchList.HostKeyFail)
+        switch (status)
         {
-            string remoteUrl = _NO_TRANSLATE_From.Text;
+            case RemoteProbeStatus.HostKeyNotCached:
+                if (FormRemoteProcess.AskForCacheHostkey(this, _NO_TRANSLATE_From.Text))
+                {
+                    LoadBranches();
+                }
 
-            if (FormRemoteProcess.AskForCacheHostkey(this, remoteUrl))
-            {
-                LoadBranches();
-            }
-        }
-        else if (branchList.AuthenticationFail)
-        {
-            if (FormPuttyError.AskForKey(this, out _))
-            {
-                LoadBranches();
-            }
-        }
-        else
-        {
-            string text = _NO_TRANSLATE_Branches.Text;
-            List<string> names = [.. _defaultBranchItems, .. branchList.Result!.Select(o => o.LocalName!)];
-            _NO_TRANSLATE_Branches.DataSource = names;
-            if (names.Any(a => a == text))
-            {
-                _NO_TRANSLATE_Branches.Text = text;
-            }
+                break;
+
+            case RemoteProbeStatus.AuthenticationFailed:
+                // The authentication failed for want of a key; ask the user to supply one.
+                if (FormPuttyError.AskForKey(this, out _))
+                {
+                    LoadBranches();
+                }
+
+                break;
+
+            default:
+                (IReadOnlyList<string> items, string? reselect) = CloneBranchSelection.MergeBranchList(
+                    _defaultBranchItems, refs!.Select(gitRef => gitRef.LocalName!), _NO_TRANSLATE_Branches.Text);
+                _NO_TRANSLATE_Branches.DataSource = items;
+                if (reselect is not null)
+                {
+                    _NO_TRANSLATE_Branches.Text = reselect;
+                }
+
+                break;
         }
     }
 
@@ -409,24 +339,10 @@ public partial class FormClone : GitExtensionsDialog
         CancellationToken cancellationToken = _branchLoaderSequence.Next();
         ThreadHelper.FileAndForget(async () =>
         {
-            RemoteActionResult<IReadOnlyList<IGitRef>> branchList;
-
             IReadOnlyList<IGitRef> refs = Module.GetRemoteServerRefs(from, false, true, out string? errorOutput, cancellationToken);
 
-            if (string.IsNullOrEmpty(errorOutput))
-            {
-                branchList = new(result: refs, authenticationFail: false, hostKeyFail: false);
-            }
-            else if (errorOutput.Contains("FATAL ERROR") && errorOutput.Contains("authentication"))
-            {
-                // If the authentication failed because of a missing key, ask the user to supply one.
-                branchList = new(result: null, authenticationFail: true, hostKeyFail: false);
-            }
-            else if (errorOutput.Contains("the server's host key is not cached in the registry", StringComparison.InvariantCultureIgnoreCase))
-            {
-                branchList = new(result: null, authenticationFail: false, hostKeyFail: true);
-            }
-            else
+            RemoteProbeStatus status = RemoteProbeOutcome.Classify(errorOutput);
+            if (status is RemoteProbeStatus.Error)
             {
                 throw new ExternalOperationException(workingDirectory: Module.WorkingDir, innerException: new Exception(errorOutput));
             }
@@ -434,7 +350,7 @@ public partial class FormClone : GitExtensionsDialog
             await this.SwitchToMainThreadAsync(cancellationToken);
             if (!cancellationToken.IsCancellationRequested)
             {
-                UpdateBranches(branchList);
+                UpdateBranches(status, refs);
             }
         });
     }
@@ -460,41 +376,6 @@ public partial class FormClone : GitExtensionsDialog
         base.Dispose(disposing);
     }
 
-    /// <summary>
-    /// Check whether the given string contains one or more valid git URLs and extracts
-    /// the first URL that exists, if any.
-    /// </summary>
-    /// <remarks>
-    /// PathUtil.CanBeGitURL is used as a standard way to detect a git URL.
-    /// The first URL extracted from <paramref name="contents"/> is assigned to
-    /// <paramref name="url"/>. If <paramref name="contents"/> contains more than one URL,
-    /// subsequent URLs are not extracted.
-    /// </remarks>
-    /// <param name="contents">A string to attempt to extract URLs from.</param>
-    /// <param name="url">A <see cref="string"/> that contains the URL, if any, extracted from <paramref name="contents"/>.</param>
-    /// <returns><see langword="true"/> if a URL was extracted; otherwise <see langword="false"/>.</returns>
-    private static bool TryExtractUrl(string contents, out string url)
-    {
-        url = "";
-
-        if (string.IsNullOrEmpty(contents))
-        {
-            return false;
-        }
-
-        string[] parts = contents.Split(' ');
-        foreach (string s in parts)
-        {
-            if (PathUtil.CanBeGitURL(s))
-            {
-                url = s;
-                break;
-            }
-        }
-
-        return !string.IsNullOrEmpty(url);
-    }
-
     internal TestAccessor GetTestAccessor() => new(this);
 
     internal readonly struct TestAccessor
@@ -506,6 +387,6 @@ public partial class FormClone : GitExtensionsDialog
             _form = form;
         }
 
-        public bool TryExtractUrl(string text, out string url) => FormClone.TryExtractUrl(text, out url);
+        public bool TryExtractUrl(string text, out string url) => CloneUrlExtractor.TryExtractUrl(text, out url);
     }
 }

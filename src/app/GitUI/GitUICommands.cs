@@ -517,19 +517,9 @@ public sealed partial class GitUICommands : IGitUICommands, IServiceProvider
             case "uninstall":
                 return UninstallEditor();
             default:
-                if (args[1].StartsWith("git://") || args[1].StartsWith("http://") || args[1].StartsWith("https://"))
+                if (GitCommands.Clone.ProtocolHandlerUrl.TryParseCloneUrl(args[1]) is string protocolCloneUrl)
                 {
-                    return Execute(new UICmd.Clone(args[1], OpenedFromProtocolHandler: true), owner: null);
-                }
-
-                if (args[1].StartsWith("github-windows://openRepo/"))
-                {
-                    return Execute(new UICmd.Clone(args[1].Replace("github-windows://openRepo/", ""), OpenedFromProtocolHandler: true), owner: null);
-                }
-
-                if (args[1].StartsWith("github-mac://openRepo/"))
-                {
-                    return Execute(new UICmd.Clone(args[1].Replace("github-mac://openRepo/", ""), OpenedFromProtocolHandler: true), owner: null);
+                    return Execute(new UICmd.Clone(protocolCloneUrl, OpenedFromProtocolHandler: true), owner: null);
                 }
 
                 // User supplied a path. Open the repository if its a valid path
