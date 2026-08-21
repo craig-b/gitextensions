@@ -75,5 +75,22 @@
                 </ScrollViewer>
             </Grid>
         </Grid>
+
+        <!-- The start page: shown instead of the repository view when no valid repository is open. -->
+        <Border x:Name="StartPanel" Grid.Row="1" Grid.ColumnSpan="5" IsVisible="False"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+            <StackPanel MaxWidth="640" Margin="0,40,0,0" Spacing="12" HorizontalAlignment="Center">
+                <TextBlock x:Name="StartTitle" Text="Open a repository" FontSize="24" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="StartOpenButton" Content="Open..." Click="OnOpenRepositoryClick" />
+                    <Button x:Name="StartCloneButton" Content="Clone..." />
+                    <Button x:Name="StartInitButton" Content="Create new..." />
+                </StackPanel>
+                <TextBox x:Name="StartSearchBox" Watermark="Search repositories..." />
+                <ScrollViewer MaxHeight="560">
+                    <StackPanel x:Name="StartGroupsPanel" Spacing="8" />
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

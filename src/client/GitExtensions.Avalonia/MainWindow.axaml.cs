@@ -53,6 +53,16 @@ public partial class MainWindow : Window
             HandleActionHotkey(keyArgs);
         };
 
+        StartCloneButton.Click += async (_, _) => await CloneRepositoryAsync();
+        StartInitButton.Click += async (_, _) => await InitRepositoryAsync();
+        StartSearchBox.TextChanged += async (_, _) =>
+        {
+            if (StartPanel.IsVisible)
+            {
+                await RefreshStartViewAsync();
+            }
+        };
+
         Loaded += (_, _) => StartLogStream();
         Closed += (_, _) => _logCts.Cancel();
 
@@ -108,6 +118,31 @@ public partial class MainWindow : Window
                 }
 
                 Environment.Exit(cloneOk && cloneValid && initOk && initValid && switched ? 0 : 1);
+            };
+        }
+
+        // Verification hook: started on an invalid directory, the start page must appear with the
+        // grouped repositories; opening the first recent entry must switch into it.
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_STARTTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(1000);
+                bool startVisible = StartPanel.IsVisible;
+                int rows = StartGroupsPanel.Children.Count;
+
+                var history = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+                string? firstValid = history.Select(r => r.Path).FirstOrDefault(GitCommands.GitModule.IsValidGitWorkingDir);
+                bool switched = false;
+                if (firstValid is not null)
+                {
+                    await OpenRecentAsync(firstValid);
+                    await Task.Delay(2000);
+                    switched = _session.IsValidRepository && !StartPanel.IsVisible && LogControl.Count > 0;
+                }
+
+                Console.Error.WriteLine($"[start] visible:{startVisible} rows:{rows} switched:{switched} commits:{LogControl.Count}");
+                Environment.Exit(startVisible && rows > 0 && switched ? 0 : 1);
             };
         }
 
@@ -891,6 +926,68 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>The start page: the dashboard's repository groups over DashboardList, shown when no repository is open.</summary>
+    private async Task ShowStartViewAsync()
+    {
+        Title = "Git Extensions";
+        StartPanel.IsVisible = true;
+        await RefreshStartViewAsync();
+    }
+
+    private async Task RefreshStartViewAsync()
+    {
+        string pattern = StartSearchBox.Text ?? "";
+        var recentHistory = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
+        var favouriteHistory = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync();
+
+        GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions options =
+            GitCommands.UserRepositoryHistory.RecentRepoSplitterOptions.FromAppSettings();
+        var recent = GitCommands.Dashboard.DashboardList.SplitAndMerge(
+            GitCommands.Dashboard.DashboardList.Filter(recentHistory, pattern), options);
+        var favourites = GitCommands.Dashboard.DashboardList.SplitAndMerge(
+            GitCommands.Dashboard.DashboardList.Filter(favouriteHistory, pattern), options);
+
+        StartGroupsPanel.Children.Clear();
+        foreach (GitCommands.Dashboard.DashboardRepositoryGroup group in GitCommands.Dashboard.DashboardList.Groups(recent, favourites))
+        {
+            if (group.Items.Count == 0)
+            {
+                continue;
+            }
+
+            StartGroupsPanel.Children.Add(new TextBlock
+            {
+                Text = group.IsRecent ? Loc.T("Recent repositories") : group.Category,
+                FontSize = 14,
+                FontWeight = global::Avalonia.Media.FontWeight.SemiBold,
+                Margin = new global::Avalonia.Thickness(0, 8, 0, 2),
+            });
+
+            foreach (GitCommands.Dashboard.DashboardRepositoryItem item in group.Items)
+            {
+                Button repoButton = new()
+                {
+                    Content = (item.IsFavourite ? "⭐ " : "") + item.Caption,
+                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                    Background = global::Avalonia.Media.Brushes.Transparent,
+                    BorderThickness = new global::Avalonia.Thickness(0),
+                };
+                ToolTip.SetTip(repoButton, item.Repo.Path);
+                string path = item.Repo.Path;
+                repoButton.Click += async (_, _) =>
+                {
+                    await OpenRecentAsync(path);
+                    if (StartPanel.IsVisible)
+                    {
+                        await RefreshStartViewAsync();
+                    }
+                };
+                StartGroupsPanel.Children.Add(repoButton);
+            }
+        }
+    }
+
     private void TriggerRecentBranchNameUpdate(
         bool onlyIfEmpty,
         System.Collections.Generic.IList<GitCommands.UserRepositoryHistory.Repository> recent,
@@ -990,9 +1087,11 @@ public partial class MainWindow : Window
         if (!_session.IsValidRepository)
         {
             CommitBody.Text = $"Not a git repository: {_session.WorkingDir}";
+            _ = ShowStartViewAsync();
             return;
         }
 
+        StartPanel.IsVisible = false;
         ShowBranchInfo();
 
         Stopwatch loadStopwatch = Stopwatch.StartNew();
