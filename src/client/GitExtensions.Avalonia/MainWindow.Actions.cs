@@ -785,6 +785,9 @@ public partial class MainWindow
             entries.Add(($"Open recent: {recentEntry.Caption}", () => OpenRecentAsync(repoPath)));
         }
 
+        entries.Add(("Clone repository...", CloneRepositoryAsync));
+        entries.Add(("Create new repository...", InitRepositoryAsync));
+
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))
         {

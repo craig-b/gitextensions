@@ -153,6 +153,53 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> UpdateSubmodulesAsync()
         => Task.Run(() => RunGitOperation(Commands.SubmoduleUpdate(name: null)));
 
+    /// <summary>Clones a repository (portable Commands.Clone; the target directory must exist).</summary>
+    public Task<(bool Success, string Output)> CloneAsync(string from, string to, bool bare, bool initSubmodules, string? branch, int? depth, bool? isSingleBranch)
+        => Task.Run(() => RunGitOperation(Commands.Clone(from, to, _module.GetPathForGitExecution, bare, initSubmodules, branch, depth, isSingleBranch)));
+
+    /// <summary>Initializes a repository at <paramref name="directory"/>, creating the directory when missing.</summary>
+    public Task<(bool Success, string Output)> InitAsync(string directory, bool bare, bool shared)
+        => Task.Run(() =>
+        {
+            try
+            {
+                GitModule module = new(new GitExecutorProvider(new GitDirectoryResolver()), directory);
+                if (!System.IO.Directory.Exists(module.WorkingDir))
+                {
+                    System.IO.Directory.CreateDirectory(module.WorkingDir);
+                }
+
+                return (true, module.Init(bare, shared));
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        });
+
+    /// <summary>The clone dialog's remote-branches probe, classified via RemoteProbeOutcome.</summary>
+    public Task<(GitCommands.Clone.RemoteProbeStatus Status, IReadOnlyList<string> BranchNames, string? ErrorOutput)> ProbeRemoteBranchesAsync(string url)
+        => Task.Run(() =>
+        {
+            IReadOnlyList<IGitRef> refs = _module.GetRemoteServerRefs(url, tags: false, branches: true, out string? errorOutput, System.Threading.CancellationToken.None);
+            GitCommands.Clone.RemoteProbeStatus status = GitCommands.Clone.RemoteProbeOutcome.Classify(errorOutput);
+            IReadOnlyList<string> names = status is GitCommands.Clone.RemoteProbeStatus.Success
+                ? [.. refs.Select(gitRef => gitRef.LocalName!)]
+                : [];
+            return (status, names, errorOutput);
+        });
+
+    /// <summary>The clone dialog's "same server" source suggestion from the current repository's remotes.</summary>
+    public string? GetSuggestedCloneSource()
+    {
+        string? remote = GitCommands.Clone.CloneSourceSeed.PickSuggestedRemote(
+            _module.GetSetting(string.Format(GitCommands.Config.SettingKeyString.BranchRemote, _module.GetSelectedBranch())),
+            _module.GetRemoteNames());
+
+        string pushUrl = _module.GetSetting(string.Format(GitCommands.Config.SettingKeyString.RemotePushUrl, remote));
+        return string.IsNullOrEmpty(pushUrl) ? _module.GetSetting(string.Format(GitCommands.Config.SettingKeyString.RemoteUrl, remote)) : pushUrl;
+    }
+
     private (bool Success, string Output) RunGitOperation(ArgumentString arguments)
     {
         ExecutionResult result = _module.GitExecutable.Execute(arguments, throwOnErrorExit: false);

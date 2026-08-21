@@ -76,6 +76,41 @@ public partial class MainWindow : Window
             };
         }
 
+        // Verification hook: clone the given source repo into a fresh directory through the
+        // session's clone path, then init a fresh repo, and report both.
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_CLONETEST") is { Length: > 0 } cloneSource)
+        {
+            Loaded += async (_, _) =>
+            {
+                string baseDir = Environment.GetEnvironmentVariable("GE_SPIKE_CLONETEST_DEST") ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ge-clonetest");
+                string cloneTarget = System.IO.Path.Combine(baseDir, "cloned");
+                string initTarget = System.IO.Path.Combine(baseDir, "inited");
+
+                System.IO.Directory.CreateDirectory(cloneTarget);
+                (bool cloneOk, string cloneOut) = await _session.CloneAsync(cloneSource, cloneTarget, bare: false, initSubmodules: false, branch: "", depth: null, isSingleBranch: null);
+                bool cloneValid = GitCommands.GitModule.IsValidGitWorkingDir(cloneTarget);
+
+                (bool initOk, string initOut) = await _session.InitAsync(initTarget, bare: false, shared: false);
+                bool initValid = GitCommands.GitModule.IsValidGitWorkingDir(initTarget);
+
+                bool switched = false;
+                if (cloneValid)
+                {
+                    await SwitchRepositoryAsync(cloneTarget);
+                    await Task.Delay(1500);
+                    switched = _session.WorkingDir.TrimEnd('/', '\\') == System.IO.Path.GetFullPath(cloneTarget).TrimEnd('/', '\\') && LogControl.Count > 0;
+                }
+
+                Console.Error.WriteLine($"[clone] clone:{cloneOk}/{cloneValid} init:{initOk}/{initValid} switched:{switched} commits:{LogControl.Count}");
+                if (!cloneOk)
+                {
+                    Console.Error.WriteLine($"[clone] clone output: {cloneOut.Replace("\n", " / ")}");
+                }
+
+                Environment.Exit(cloneOk && cloneValid && initOk && initValid && switched ? 0 : 1);
+            };
+        }
+
         // Verification hook: build the recents menu model from the real history store and report
         // its shape (pinned/recent/favourite-group counts and the first caption).
         if (Environment.GetEnvironmentVariable("GE_SPIKE_RECENTTEST") == "1")
@@ -754,6 +789,14 @@ public partial class MainWindow : Window
         openItem.Click += OnOpenRepositoryClick;
         flyout.Items.Add(openItem);
 
+        MenuItem cloneItem = new() { Header = Loc.T("Clone repository...") };
+        cloneItem.Click += async (_, _) => await CloneRepositoryAsync();
+        flyout.Items.Add(cloneItem);
+
+        MenuItem initItem = new() { Header = Loc.T("Create new repository...") };
+        initItem.Click += async (_, _) => await InitRepositoryAsync();
+        flyout.Items.Add(initItem);
+
         flyout.ShowAt((Control)sender!);
 
         MenuItem MakeItem(GitCommands.UserRepositoryHistory.RepoMenuEntry entry)
@@ -800,6 +843,51 @@ public partial class MainWindow : Window
         {
             await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveInvalidRepositoriesAsync(
                 repoPath => GitCommands.GitModule.IsValidGitWorkingDir(repoPath));
+        }
+    }
+
+    /// <summary>The clone flow: dialog over the portable models, run the clone, offer to open the result.</summary>
+    internal async Task CloneRepositoryAsync()
+    {
+        CloneRequest? request = await CloneDialog.ShowAsync(this, _session);
+        if (request is null)
+        {
+            return;
+        }
+
+        await RunOperationAsync($"Clone {request.From}", () => _session.CloneAsync(
+            request.From, request.TargetDirectory, request.Bare, request.InitSubmodules, request.Branch, request.Depth, request.IsSingleBranch));
+
+        await OfferToOpenAsync(request.TargetDirectory);
+    }
+
+    /// <summary>The init flow: dialog, git init (bare+shared when central), offer to open the result.</summary>
+    internal async Task InitRepositoryAsync()
+    {
+        (string Directory, bool Central)? request = await InitDialog.ShowAsync(this, _session);
+        if (request is null)
+        {
+            return;
+        }
+
+        (bool bare, bool shared) = GitCommands.Init.InitRepositoryModel.Options(request.Value.Central);
+        (bool success, string output) = await _session.InitAsync(request.Value.Directory, bare, shared);
+        if (!success)
+        {
+            await ConfirmDialog.ErrorAsync(this, Loc.T("Create new repository"), output);
+            return;
+        }
+
+        OperationStatus.Text = output.Trim();
+        await OfferToOpenAsync(request.Value.Directory);
+    }
+
+    private async Task OfferToOpenAsync(string directory)
+    {
+        if (GitCommands.Open.OpenRepositoryModel.TryGetOpenablePath(directory, System.IO.Directory.Exists, GitCommands.GitModule.IsValidGitWorkingDir) is string openablePath
+            && await ConfirmDialog.ConfirmAsync(this, Loc.T("Open repository"), string.Format(Loc.T("Open the repository at '{0}' now?"), directory)))
+        {
+            await SwitchRepositoryAsync(openablePath);
         }
     }
 
