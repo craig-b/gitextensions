@@ -58,6 +58,7 @@
                 <local:MessageEditor x:Name="MessageBox" Grid.Row="0" Watermark="Commit message" />
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
                     <Button x:Name="CommitButton" Content="Commit" FontWeight="Bold" Click="OnCommitClick" />
+                    <ComboBox x:Name="ConventionalPrefixCombo" PlaceholderText="type:" SelectionChanged="OnConventionalPrefixSelected" ToolTip.Tip="Conventional Commits prefix" />
                     <CheckBox x:Name="AmendCheckBox" Content="Amend last commit" />
                     <CheckBox x:Name="ResetAuthorCheckBox" Content="Reset author" IsEnabled="{Binding IsChecked, ElementName=AmendCheckBox}" />
                     <TextBlock x:Name="BranchInfo" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />

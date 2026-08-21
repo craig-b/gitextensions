@@ -40,6 +40,7 @@ public partial class CommitWindow : Window
         _session = session;
         _messageFormatter = new CommitMessageFormatter(new TextBoxCommitMessageDocument(MessageBox));
         MessageBox.TextChanged += OnMessageTextChanged;
+        ConventionalPrefixCombo.ItemsSource = GitCommands.Commit.ConventionalCommitMessage.HeaderCommitTypes;
 
         Loaded += async (_, _) =>
         {
@@ -71,6 +72,27 @@ public partial class CommitWindow : Window
         {
             _formattingMessage = false;
         }
+    }
+
+    /// <summary>Applies (or replaces) the Conventional Commits type prefix on the message's first line.</summary>
+    private void OnConventionalPrefixSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (ConventionalPrefixCombo.SelectedItem is not string keyword)
+        {
+            return;
+        }
+
+        string text = MessageBox.Text ?? "";
+        int newline = text.IndexOf('\n');
+        string firstLine = (newline < 0 ? text : text[..newline]).TrimEnd('\r');
+
+        (string newFirstLine, int caret) = GitCommands.Commit.ConventionalCommitMessage.PrefixOrReplaceKeyword(
+            keyword, text, firstLine, MessageBox.CaretIndex, insertScopeParentheses: false);
+
+        MessageBox.Text = newline < 0 ? newFirstLine : newFirstLine + text[newline..];
+        MessageBox.CaretIndex = Math.Min(caret, MessageBox.Text?.Length ?? 0);
+        ConventionalPrefixCombo.SelectedIndex = -1;
+        MessageBox.Focus();
     }
 
     private void ShowBranchInfo()

@@ -250,6 +250,48 @@ public partial class MainWindow
                 await RunOperationAsync("Drop stash", () => _session.StashDropAsync(revision.ReflogSelector!));
             }
         },
+        ["commit.checkoutBranch"] = async revision =>
+        {
+            // Checkout a local branch pointing at this commit; several -> pick, none -> explain.
+            List<string> branchesHere = [.. (revision.Refs ?? []).Where(gitRef => !gitRef.IsRemote && !gitRef.IsTag).Select(gitRef => gitRef.LocalName)];
+            switch (branchesHere.Count)
+            {
+                case 0:
+                    await ConfirmDialog.ErrorAsync(this, "Checkout branch", "No local branch points at this commit.");
+                    return;
+
+                case 1:
+                    await CheckoutBranchInteractiveAsync(branchesHere[0]);
+                    return;
+
+                default:
+                    await CommandPalette.ShowAsync(this,
+                        [.. branchesHere.Select(branch => ((string Label, Func<Task> Execute))($"Checkout: {branch}", () => CheckoutBranchInteractiveAsync(branch)))]);
+                    return;
+            }
+        },
+        ["commit.checkoutDetached"] = async revision =>
+        {
+            if (await ConfirmDialog.ConfirmAsync(this, "Checkout commit",
+                    $"Checkout {revision.ObjectId.ToShortString()} detached? HEAD will not be on any branch."))
+            {
+                await RunOperationAsync($"Checkout {revision.ObjectId.ToShortString()}", () => _session.CheckoutRevisionAsync(revision.ObjectId));
+            }
+        },
+        ["commit.openDifftool"] = revision =>
+        {
+            // The difftool blocks until its window closes - run detached, report only failures.
+            _ = Task.Run(async () =>
+            {
+                (bool success, string output) = await _session.OpenDifftoolAsync(revision.ObjectId);
+                if (!success)
+                {
+                    await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ConfirmDialog.ErrorAsync(this, "Difftool", output));
+                }
+            });
+            return Task.CompletedTask;
+        },
+        ["artificial.resetChanges"] = _ => ResetChangesFlowAsync(),
     };
 
     private Dictionary<string, Func<RefTreeNode, Task>> RefActionHandlers => new()
@@ -290,6 +332,35 @@ public partial class MainWindow
             }
         },
         ["ref.copyName"] = node => CopyToClipboardAsync(node.FullPath),
+        ["ref.push"] = node => RunOperationAsync($"Push {node.FullPath}", () => _session.PushBranchAsync(node.FullPath)),
+        ["ref.pull"] = node =>
+        {
+            // A remote-branch node's FullPath is "remote/branch".
+            int slash = node.FullPath.IndexOf('/');
+            if (slash <= 0)
+            {
+                return ConfirmDialog.ErrorAsync(this, "Pull", $"Cannot determine the remote of {node.FullPath}.");
+            }
+
+            string remote = node.FullPath[..slash];
+            string branch = node.FullPath[(slash + 1)..];
+            return RunOperationAsync($"Pull {node.FullPath}", () => _session.PullBranchAsync(remote, branch));
+        },
+        ["ref.compareToCurrent"] = async node =>
+        {
+            if ((node.ObjectId ?? _session.ResolveRef(node.FullPath)) is not ObjectId target)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Compare", $"Cannot resolve {node.FullPath}.");
+                return;
+            }
+
+            new CompareWindow(_session, _session.CurrentCheckout, "HEAD", target, node.FullPath).Show(this);
+        },
+        ["ref.selectInLeftPanel"] = node =>
+        {
+            SelectRefInSidebar(node.FullPath);
+            return Task.CompletedTask;
+        },
         ["ref.rename"] = async node =>
         {
             string? newName = await ConfirmDialog.InputAsync(this, "Rename branch", $"New name for {node.FullPath}:", node.FullPath);
@@ -633,6 +704,27 @@ public partial class MainWindow
             item.Click += (_, _) => _ = execute();
             menu.Items.Add(item);
         }
+    }
+
+    /// <summary>Selects the sidebar node whose FullPath matches, if it is present in the current panel.</summary>
+    private void SelectRefInSidebar(string fullPath)
+    {
+        if (RefTree.ItemsSource is not System.Collections.Generic.IEnumerable<RefTreeNode> sections)
+        {
+            return;
+        }
+
+        foreach (RefTreeNode section in sections)
+        {
+            if (Find(section) is RefTreeNode match)
+            {
+                RefTree.SelectedItem = match;
+                return;
+            }
+        }
+
+        RefTreeNode? Find(RefTreeNode node)
+            => node.FullPath == fullPath ? node : node.Children.Select(Find).FirstOrDefault(found => found is not null);
     }
 
     private static ContextMenu BuildMenu(

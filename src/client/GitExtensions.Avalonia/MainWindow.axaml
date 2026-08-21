@@ -5,26 +5,26 @@
         x:Class="GitExtensions.Avalonia.MainWindow"
         Title="Git Extensions"
         Width="1500" Height="950">
-    <Grid ColumnDefinitions="210,4,*,4,520" RowDefinitions="Auto,*">
+    <Grid ColumnDefinitions="210,4,*,4,520" RowDefinitions="Auto,Auto,*">
 
-        <StackPanel Grid.Row="0" Grid.ColumnSpan="5" Orientation="Horizontal" Spacing="8" Margin="8,6">
-            <Button x:Name="OpenRepositoryButton" Content="Open..." Click="OnOpenRepositoryClick" />
-            <Button x:Name="RecentReposButton" Content="Recent" Click="OnRecentReposClick" />
+        <!-- The complete menu bar: EVERY piece of functionality lives here, implemented entries
+             wired and missing ones visibly disabled - see client-parity-audit.md. Populated in
+             code (MainWindow.Menu.cs). -->
+        <Menu x:Name="MainMenuBar" Grid.Row="0" Grid.ColumnSpan="5" />
+
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="5" Orientation="Horizontal" Spacing="8" Margin="8,6">
             <Button x:Name="CommitToolButton" Content="Commit..." Click="OnOpenCommitClick" />
             <Button x:Name="FetchButton" Content="Fetch" Click="OnFetchClick" />
             <Button x:Name="PullButton" Content="Pull" Click="OnPullClick" />
             <Button x:Name="PushButton" Content="Push" Click="OnPushClick" />
-            <Button x:Name="NewBranchButton" Content="New branch..." Click="OnNewBranchClick" />
-            <Button x:Name="RemotesButton" Content="Remotes..." Click="OnRemotesClick" />
             <Button x:Name="ResolveConflictsButton" Content="Resolve conflicts..." IsVisible="False" Click="OnResolveConflictsClick" />
             <Button x:Name="RebaseContinueButton" Content="Rebase: continue" IsVisible="False" Click="OnRebaseContinueClick" />
             <Button x:Name="RebaseAbortButton" Content="Rebase: abort" IsVisible="False" Click="OnRebaseAbortClick" />
-            <Button x:Name="SettingsButton" Content="Settings..." Click="OnSettingsClick" />
             <TextBlock x:Name="BranchInfo" VerticalAlignment="Center" FontSize="12" Foreground="Gray" Margin="8,0,0,0" />
             <TextBlock x:Name="OperationStatus" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />
         </StackPanel>
 
-        <TreeView x:Name="RefTree" Grid.Column="0" Grid.Row="1" SelectionChanged="OnRefTreeSelectionChanged" DoubleTapped="OnRefTreeDoubleTapped">
+        <TreeView x:Name="RefTree" Grid.Column="0" Grid.Row="2" SelectionChanged="OnRefTreeSelectionChanged" DoubleTapped="OnRefTreeDoubleTapped">
             <TreeView.ItemTemplate>
                 <TreeDataTemplate x:DataType="lp:RefTreeNode" ItemsSource="{Binding Children}">
                     <TextBlock Text="{Binding Name}" FontSize="12" />
@@ -32,15 +32,15 @@
             </TreeView.ItemTemplate>
         </TreeView>
 
-        <GridSplitter Grid.Column="1" Grid.Row="1" Background="#40808080" ResizeDirection="Columns" />
+        <GridSplitter Grid.Column="1" Grid.Row="2" Background="#40808080" ResizeDirection="Columns" />
 
-        <ScrollViewer Grid.Column="2" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer Grid.Column="2" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
             <local:RevisionLogControl x:Name="LogControl" />
         </ScrollViewer>
 
-        <GridSplitter Grid.Column="3" Grid.Row="1" Background="#40808080" ResizeDirection="Columns" />
+        <GridSplitter Grid.Column="3" Grid.Row="2" Background="#40808080" ResizeDirection="Columns" />
 
-        <Grid Grid.Column="4" Grid.Row="1" RowDefinitions="Auto,4,*" Margin="8,4,4,4">
+        <Grid Grid.Column="4" Grid.Row="2" RowDefinitions="Auto,4,*" Margin="8,4,4,4">
 
             <ScrollViewer Grid.Row="0" MaxHeight="340" HorizontalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
@@ -77,7 +77,7 @@
         </Grid>
 
         <!-- The start page: shown instead of the repository view when no valid repository is open. -->
-        <Border x:Name="StartPanel" Grid.Row="1" Grid.ColumnSpan="5" IsVisible="False"
+        <Border x:Name="StartPanel" Grid.Row="2" Grid.ColumnSpan="5" IsVisible="False"
                 Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
             <StackPanel MaxWidth="640" Margin="0,40,0,0" Spacing="12" HorizontalAlignment="Center">
                 <TextBlock x:Name="StartTitle" Text="Open a repository" FontSize="24" FontWeight="SemiBold" />

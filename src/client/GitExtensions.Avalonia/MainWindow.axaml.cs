@@ -29,6 +29,7 @@ public partial class MainWindow : Window
         Loc.Reload();
         ApplyThemeVariant();
         ApplyToolbarTranslations();
+        BuildMainMenu();
         Title = $"Git Extensions - {_session.WorkingDir}";
 
         LogControl.RevisionSelected += (_, revision) =>
@@ -143,6 +144,25 @@ public partial class MainWindow : Window
 
                 Console.Error.WriteLine($"[start] visible:{startVisible} rows:{rows} switched:{switched} commits:{LogControl.Count}");
                 Environment.Exit(startVisible && rows > 0 && switched ? 0 : 1);
+            };
+        }
+
+        // Verification hook: the stash lifecycle through the session - save with message/options,
+        // list, apply, drop (run against a scratch repo with a dirty file).
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_STASHTEST") == "1")
+        {
+            Loaded += async (_, _) =>
+            {
+                (bool saveOk, string saveOut) = await _session.StashSaveAsync("harness stash", keepIndex: false, includeUntracked: true);
+                int countAfterSave = _session.GetStashPanel().Count;
+                string? selector = _session.GetStashPanel().FirstOrDefault()?.ReflogSelector;
+                (bool showOk, string showOut) = selector is null ? (false, "") : await _session.StashShowAsync(selector);
+                (bool applyOk, _) = selector is null ? (false, "") : await _session.StashApplyAsync(selector);
+                (bool dropOk, _) = selector is null ? (false, "") : await _session.StashDropAsync(selector);
+                int countAfterDrop = _session.GetStashPanel().Count;
+
+                Console.Error.WriteLine($"[stash] save:{saveOk} count:{countAfterSave} show:{showOk}({showOut.Trim().Replace("\n", ";")}) apply:{applyOk} drop:{dropOk} countAfterDrop:{countAfterDrop}");
+                Environment.Exit(saveOk && countAfterSave > 0 && showOk && applyOk && dropOk && countAfterDrop == countAfterSave - 1 ? 0 : 1);
             };
         }
 
@@ -467,6 +487,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        await CheckoutBranchInteractiveAsync(branch.FullPath);
+    }
+
+    /// <summary>Checkout with the dialog's local-changes choice (stash&reapply/merge/discard/leave), shared by the sidebar and the menu bar.</summary>
+    internal async Task CheckoutBranchInteractiveAsync(string branchName)
+    {
         // the checkout dialog's local-changes choice, backed by the portable policy
         GitCommands.LocalChangesAction localChanges = GitCommands.LocalChangesAction.DontChange;
         bool stashThenReapply = false;
@@ -475,7 +501,7 @@ public partial class MainWindow : Window
             int choice = await ConfirmDialog.ShowAsync(
                 this,
                 "Checkout branch",
-                $"You have uncommitted changes. How should they be handled when checking out {branch.FullPath}?",
+                $"You have uncommitted changes. How should they be handled when checking out {branchName}?",
                 "Stash & reapply", "Merge", "Discard (reset)", "Leave as-is", "Cancel");
 
             switch (choice)
@@ -500,7 +526,7 @@ public partial class MainWindow : Window
 
         if (stashThenReapply)
         {
-            await RunOperationAsync($"Checkout {branch.FullPath}", async () =>
+            await RunOperationAsync($"Checkout {branchName}", async () =>
             {
                 (bool stashed, string stashOutput) = await _session.StashSaveAsync();
                 if (!stashed)
@@ -508,7 +534,7 @@ public partial class MainWindow : Window
                     return (false, stashOutput);
                 }
 
-                (bool success, string output) = await _session.CheckoutBranchAsync(branch.FullPath);
+                (bool success, string output) = await _session.CheckoutBranchAsync(branchName);
                 if (!success)
                 {
                     return (false, output);
@@ -519,13 +545,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync($"Checkout {branch.FullPath}", () => _session.CheckoutBranchAsync(branch.FullPath, localChanges));
+        await RunOperationAsync($"Checkout {branchName}", () => _session.CheckoutBranchAsync(branchName, localChanges));
     }
 
     private async void OnFetchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         => await RunOperationAsync("Fetch", _session.FetchAsync);
 
     private async void OnPullClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await PullFlowAsync();
+
+    internal async Task PullFlowAsync()
     {
         // honor the "Default pull action" setting; ask when it is unset
         GitCommands.Pull.PullActionKind? action = GitCommands.AppSettings.DefaultPullAction switch
@@ -583,6 +612,9 @@ public partial class MainWindow : Window
     }
 
     private async void OnPushClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        => await PushFlowAsync();
+
+    internal async Task PushFlowAsync()
     {
         System.Collections.Generic.IReadOnlyList<string> remotes = await Task.Run(_session.GetRemoteNames);
         if (remotes.Count == 0)
@@ -623,7 +655,7 @@ public partial class MainWindow : Window
         await ConfirmDialog.ErrorAsync(this, "Push failed", string.IsNullOrWhiteSpace(output) ? "The push failed." : output);
     }
 
-    private async void OnNewBranchClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    internal async Task CreateBranchFlowAsync()
     {
         string? name = await ConfirmDialog.InputAsync(this, "Create branch", "Branch name (created at the current checkout):", "feature/my-branch");
         if (name is null)
@@ -673,7 +705,6 @@ public partial class MainWindow : Window
         FetchButton.IsEnabled = enabled;
         PullButton.IsEnabled = enabled;
         PushButton.IsEnabled = enabled;
-        NewBranchButton.IsEnabled = enabled;
     }
 
     private void ShowBranchInfo()
@@ -700,7 +731,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnSettingsClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    internal async Task OpenSettingsAsync()
     {
         SettingsWindow settingsWindow = new(_session);
         await settingsWindow.ShowDialog(this);
@@ -931,6 +962,7 @@ public partial class MainWindow : Window
     {
         Title = "Git Extensions";
         StartPanel.IsVisible = true;
+        SetRepositoryMenusEnabled(false);
         await RefreshStartViewAsync();
     }
 
@@ -947,6 +979,8 @@ public partial class MainWindow : Window
         var favourites = GitCommands.Dashboard.DashboardList.SplitAndMerge(
             GitCommands.Dashboard.DashboardList.Filter(favouriteHistory, pattern), options);
 
+        System.Collections.Generic.IReadOnlyList<string> categories = GitCommands.Dashboard.DashboardList.CategoryHeaders(recent, favourites);
+
         StartGroupsPanel.Children.Clear();
         foreach (GitCommands.Dashboard.DashboardRepositoryGroup group in GitCommands.Dashboard.DashboardList.Groups(recent, favourites))
         {
@@ -955,13 +989,15 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            StartGroupsPanel.Children.Add(new TextBlock
+            TextBlock header = new()
             {
                 Text = group.IsRecent ? Loc.T("Recent repositories") : group.Category,
                 FontSize = 14,
                 FontWeight = global::Avalonia.Media.FontWeight.SemiBold,
                 Margin = new global::Avalonia.Thickness(0, 8, 0, 2),
-            });
+            };
+            AttachStartHeaderMenu(header, group);
+            StartGroupsPanel.Children.Add(header);
 
             foreach (GitCommands.Dashboard.DashboardRepositoryItem item in group.Items)
             {
@@ -983,7 +1019,160 @@ public partial class MainWindow : Window
                         await RefreshStartViewAsync();
                     }
                 };
+                AttachStartTileMenu(repoButton, item, categories);
                 StartGroupsPanel.Children.Add(repoButton);
+            }
+        }
+    }
+
+    /// <summary>The dashboard tile menu: categorize (favourite), remove from the list, show in the file manager.</summary>
+    private void AttachStartTileMenu(Button tile, GitCommands.Dashboard.DashboardRepositoryItem item, System.Collections.Generic.IReadOnlyList<string> categories)
+    {
+        tile.ContextRequested += (_, e) =>
+        {
+            e.Handled = true;
+            ContextMenu menu = new();
+
+            MenuItem categoryRoot = new() { Header = Loc.T("Category") };
+            MenuItem none = new() { Header = Loc.T("(none)"), IsEnabled = !string.IsNullOrWhiteSpace(item.Repo.Category) };
+            none.Click += async (_, _) => await AssignStartCategoryAsync(item.Repo, null);
+            categoryRoot.Items.Add(none);
+            foreach (string category in categories)
+            {
+                MenuItem categoryItem = new() { Header = category, IsEnabled = category != item.Repo.Category };
+                string captured = category;
+                categoryItem.Click += async (_, _) => await AssignStartCategoryAsync(item.Repo, captured);
+                categoryRoot.Items.Add(categoryItem);
+            }
+
+            categoryRoot.Items.Add(new Separator());
+            MenuItem addNew = new() { Header = Loc.T("Add new category...") };
+            addNew.Click += async (_, _) =>
+            {
+                if (await PromptCategoryNameAsync(categories, originalName: null) is string name)
+                {
+                    await AssignStartCategoryAsync(item.Repo, name);
+                }
+            };
+            categoryRoot.Items.Add(addNew);
+            menu.Items.Add(categoryRoot);
+
+            MenuItem remove = new() { Header = item.IsFavourite ? Loc.T("Remove from favourites") : Loc.T("Remove from recent list") };
+            remove.Click += async (_, _) =>
+            {
+                if (item.IsFavourite)
+                {
+                    await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveFavouriteAsync(item.Repo.Path);
+                }
+                else
+                {
+                    await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.RemoveRecentAsync(item.Repo.Path);
+                }
+
+                await RefreshStartViewAsync();
+            };
+            menu.Items.Add(remove);
+
+            MenuItem showInFolder = new() { Header = Loc.T("Show in file manager") };
+            showInFolder.Click += (_, _) => GitCommands.OsShellUtil.OpenWithFileExplorer(item.Repo.Path);
+            menu.Items.Add(showInFolder);
+
+            menu.Open(tile);
+        };
+    }
+
+    /// <summary>The group-header menu: rename/delete a category, clear the recent list.</summary>
+    private void AttachStartHeaderMenu(TextBlock header, GitCommands.Dashboard.DashboardRepositoryGroup group)
+    {
+        header.ContextRequested += (_, e) =>
+        {
+            e.Handled = true;
+            ContextMenu menu = new();
+
+            if (group.IsRecent)
+            {
+                MenuItem clear = new() { Header = Loc.T("Clear recent repositories list...") };
+                clear.Click += async (_, _) =>
+                {
+                    if (await ConfirmDialog.ConfirmAsync(this, Loc.T("Clear recent repositories"), Loc.T("Remove all entries from the recent repositories list?")))
+                    {
+                        await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.SaveRecentHistoryAsync([]);
+                        await RefreshStartViewAsync();
+                    }
+                };
+                menu.Items.Add(clear);
+            }
+            else if (group.Category is string category)
+            {
+                MenuItem rename = new() { Header = Loc.T("Rename category...") };
+                rename.Click += async (_, _) =>
+                {
+                    var favouriteHistory = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync();
+                    System.Collections.Generic.IReadOnlyList<string> others = [.. favouriteHistory
+                        .Select(repo => repo.Category)
+                        .Where(other => !string.IsNullOrWhiteSpace(other) && other != category)
+                        .Cast<string>()
+                        .Distinct()];
+                    if (await PromptCategoryNameAsync(others, category) is string newName)
+                    {
+                        await GitCommands.Dashboard.CategoryCommands.RenameAsync(
+                            GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals, favouriteHistory, category, newName);
+                        await RefreshStartViewAsync();
+                    }
+                };
+                menu.Items.Add(rename);
+
+                MenuItem delete = new() { Header = Loc.T("Delete category...") };
+                delete.Click += async (_, _) =>
+                {
+                    if (await ConfirmDialog.ConfirmAsync(this, Loc.T("Delete category"),
+                            string.Format(Loc.T("Delete the category '{0}'? Its repositories stay in the recent list."), category)))
+                    {
+                        var favouriteHistory = await GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals.LoadFavouriteHistoryAsync();
+                        await GitCommands.Dashboard.CategoryCommands.DeleteAsync(
+                            GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals, favouriteHistory, category);
+                        await RefreshStartViewAsync();
+                    }
+                };
+                menu.Items.Add(delete);
+            }
+
+            if (menu.Items.Count > 0)
+            {
+                menu.Open(header);
+            }
+        };
+    }
+
+    private async Task AssignStartCategoryAsync(GitCommands.UserRepositoryHistory.Repository repo, string? category)
+    {
+        await GitCommands.Dashboard.CategoryCommands.AssignAsync(GitCommands.UserRepositoryHistory.RepositoryHistoryManager.Locals, repo, category);
+        await RefreshStartViewAsync();
+    }
+
+    /// <summary>Asks for a category name until it validates (the dashboard's name rules) or is cancelled.</summary>
+    private async Task<string?> PromptCategoryNameAsync(System.Collections.Generic.IEnumerable<string> existingCategories, string? originalName)
+    {
+        while (true)
+        {
+            string? name = await ConfirmDialog.InputAsync(this, Loc.T("Category name"), Loc.T("Name:"), originalName ?? "");
+            if (name is null)
+            {
+                return null;
+            }
+
+            switch (GitCommands.Dashboard.CategoryNameValidator.Validate(name, existingCategories))
+            {
+                case GitCommands.Dashboard.CategoryNameValidation.Ok:
+                    return name;
+
+                case GitCommands.Dashboard.CategoryNameValidation.Empty:
+                    await ConfirmDialog.ErrorAsync(this, Loc.T("Category name"), Loc.T("Category name is required."));
+                    break;
+
+                case GitCommands.Dashboard.CategoryNameValidation.Duplicate:
+                    await ConfirmDialog.ErrorAsync(this, Loc.T("Category name"), Loc.T("Category name already exists."));
+                    break;
             }
         }
     }
@@ -1027,9 +1216,6 @@ public partial class MainWindow : Window
         FetchButton.Content = Loc.T("Fetch");
         PullButton.Content = Loc.T("Pull");
         PushButton.Content = Loc.T("Push");
-        NewBranchButton.Content = Loc.T("New branch...");
-        RemotesButton.Content = Loc.T("Remotes...");
-        SettingsButton.Content = Loc.T("Settings...");
         ResolveConflictsButton.Content = Loc.T("Resolve conflicts...");
     }
 
@@ -1092,6 +1278,7 @@ public partial class MainWindow : Window
         }
 
         StartPanel.IsVisible = false;
+        SetRepositoryMenusEnabled(true);
         ShowBranchInfo();
 
         Stopwatch loadStopwatch = Stopwatch.StartNew();
@@ -1380,7 +1567,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnRemotesClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+    internal async Task OpenRemotesAsync()
     {
         RemotesWindow remotesWindow = new(_session);
         await remotesWindow.ShowDialog(this);

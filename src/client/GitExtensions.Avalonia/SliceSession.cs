@@ -153,6 +153,52 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> UpdateSubmodulesAsync()
         => Task.Run(() => RunGitOperation(Commands.SubmoduleUpdate(name: null)));
 
+    /// <summary>Saves a stash with the manage-window options (message normalized by StashSaveMessage).</summary>
+    public Task<(bool Success, string Output)> StashSaveAsync(string? message, bool keepIndex, bool includeUntracked)
+        => Task.Run(() => RunGitOperation(Commands.StashSave(includeUntracked, keepIndex, GitCommands.Stash.StashSaveMessage.Normalize(message), selectedFiles: null)));
+
+    /// <summary>Stashes only the staged changes (git stash push --staged).</summary>
+    public Task<(bool Success, string Output)> StashStagedAsync()
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "push", "--staged" }));
+
+    /// <summary>The changed files of a stash (git stash show --name-status).</summary>
+    public Task<(bool Success, string Output)> StashShowAsync(string reflogSelector)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "show", "--name-status", reflogSelector.QuoteNE() }));
+
+    /// <summary>Synchronizes all submodule remote URLs (git submodule sync).</summary>
+    public Task<(bool Success, string Output)> SyncSubmodulesAsync()
+        => Task.Run(() => RunGitOperation(Commands.SubmoduleSync(name: null)));
+
+    /// <summary>Detached checkout of a revision.</summary>
+    public Task<(bool Success, string Output)> CheckoutRevisionAsync(ObjectId commitId)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("checkout") { commitId.ToString() }));
+
+    /// <summary>Pulls one remote branch (fetch + merge of remote/branch).</summary>
+    public Task<(bool Success, string Output)> PullBranchAsync(string remote, string branch)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("pull") { remote.Quote(), branch.Quote() }));
+
+    /// <summary>Pushes a local branch to its configured remote (falling back to origin/first), branch:branch.</summary>
+    public Task<(bool Success, string Output)> PushBranchAsync(string branchName)
+        => Task.Run(() =>
+        {
+            string remote = _module.GetSetting(string.Format(GitCommands.Config.SettingKeyString.BranchRemote, branchName));
+            if (string.IsNullOrEmpty(remote))
+            {
+                IReadOnlyList<string> remotes = _module.GetRemoteNames();
+                remote = remotes.FirstOrDefault(name => name == "origin") ?? remotes.FirstOrDefault() ?? "origin";
+            }
+
+            return RunGitOperation(Commands.Push(remote, branchName, branchName, ForcePushOptions.DoNotForce, track: false, recursiveSubmodules: 0));
+        });
+
+    /// <summary>Resets all working-tree changes; optionally also deletes untracked files.</summary>
+    public Task<bool> ResetAllChangesAsync(bool clean)
+        => Task.Run(() => _module.ResetAllChanges(clean, onlyWorkTree: false));
+
+    /// <summary>Launches the configured external difftool for a commit vs its first parent (dir diff, no prompt).</summary>
+    public Task<(bool Success, string Output)> OpenDifftoolAsync(ObjectId commitId)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("difftool") { "--dir-diff", "--no-prompt", $"{commitId}^..{commitId}" }));
+
     /// <summary>Clones a repository (portable Commands.Clone; the target directory must exist).</summary>
     public Task<(bool Success, string Output)> CloneAsync(string from, string to, bool bare, bool initSubmodules, string? branch, int? depth, bool? isSingleBranch)
         => Task.Run(() => RunGitOperation(Commands.Clone(from, to, _module.GetPathForGitExecution, bare, initSubmodules, branch, depth, isSingleBranch)));
