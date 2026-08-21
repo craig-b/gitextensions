@@ -428,9 +428,17 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         // whatever is already cached and the pump invalidates when more arrives.
         RequestCacheTo(Math.Min(count - 1, lastRow + 100));
 
+        // The WinForms grid contract: NEVER read rows at or beyond GetCachedCount() while the
+        // build is in flight - the trailing straighten look-ahead window is mutated IN PLACE by
+        // the pump (lane dictionaries included), so reading those rows from the render thread is
+        // a data race, not just a stale frame. Rows beyond the boundary stay blank this frame;
+        // the pump invalidates as the boundary advances.
+        int renderableCount = _graph.GetCachedCount();
+        int lastRenderableRow = Math.Min(lastRow, renderableCount - 1);
+
         // Graph width follows the widest visible row.
         int maxLanes = 1;
-        for (int row = firstRow; row <= lastRow; row++)
+        for (int row = firstRow; row <= lastRenderableRow; row++)
         {
             maxLanes = Math.Max(maxLanes, _graph.GetSegmentsForRow(row)?.GetLaneCount() ?? 1);
         }
@@ -448,6 +456,11 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
                 context.FillRectangle(palette.Selection, new Rect(0, yTop, Bounds.Width, RowHeight));
             }
 
+            if (row > lastRenderableRow)
+            {
+                continue;
+            }
+
             IRevisionGraphRow? graphRow = _graph.GetSegmentsForRow(row);
             if (graphRow is null)
             {
@@ -455,7 +468,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
             }
 
             IRevisionGraphRow? previousRow = row > 0 ? _graph.GetSegmentsForRow(row - 1) : null;
-            IRevisionGraphRow? nextRow = row < count - 1 ? _graph.GetSegmentsForRow(row + 1) : null;
+            IRevisionGraphRow? nextRow = row < lastRenderableRow ? _graph.GetSegmentsForRow(row + 1) : null;
 
             DrawGraphRow(context, graphRow, previousRow, nextRow, yTop, yMid);
             DrawTextColumns(context, graphRow, graphWidth, yMid, palette);
@@ -470,7 +483,7 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
 
         if (Environment.GetEnvironmentVariable("GE_SPIKE_DEBUG") == "1")
         {
-            Console.Error.WriteLine($"[render] count={count} first={firstRow} last={lastRow} viewport={_viewport} bounds={Bounds} row0null={_graph.GetSegmentsForRow(firstRow) is null} ms={LastRenderMillis:0.0}");
+            Console.Error.WriteLine($"[render] count={count} renderable={renderableCount} first={firstRow} last={lastRow} viewport={_viewport} bounds={Bounds} row0null={firstRow > lastRenderableRow || _graph.GetSegmentsForRow(firstRow) is null} ms={LastRenderMillis:0.0}");
         }
     }
 

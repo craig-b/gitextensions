@@ -69,11 +69,16 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// </summary>
     /// <remarks>
     /// This cache is very expensive to build, done only for displayed rows - in a background task.
-    /// The single writer only ever APPENDS to the current list; invalidation SWAPS in a fresh list
-    /// instead of clearing, because readers on other threads capture the reference and index into
-    /// it - clearing the shared list would pull the rug from under a passed bounds check.
+    /// Concurrency rules, all three needed (each was individually violated and crashed the render
+    /// thread of a host that reads while the pump builds):
+    /// (1) the single writer only ever APPENDS to the current instance; invalidation SWAPS in a
+    ///     fresh one, because readers capture the reference and index into it;
+    /// (2) the store publishes element-before-count (<see cref="AppendOnlyList{T}"/>) so an index
+    ///     below an observed Count always reads a fully written row;
+    /// (3) rows inside the trailing straighten look-ahead window are still MUTATED in place -
+    ///     readers only get rows below <see cref="StraightenedRowCount"/>.
     /// </remarks>
-    private List<RevisionGraphRow> _orderedRowCache = [];
+    private AppendOnlyList<RevisionGraphRow> _orderedRowCache = new();
 
     /// <summary>
     /// <see cref="_orderedRowCache"/> is invalid if it contains scores above this value.
@@ -97,7 +102,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
         _incompleteRevisionByObjectId.Clear();
         _orderedNodesCache = [];
         _orderedNodesCacheInvalid = true;
-        _orderedRowCache = [];
+        _orderedRowCache = new();
         _orderedRowCacheInvalidFromScore = int.MaxValue;
         Config = new();
     }
@@ -132,18 +137,25 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// <returns>Index for the last row in the row cache with 'straightened' lanes.</returns>
     public int GetCachedCount()
     {
-        List<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
+        AppendOnlyList<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
         int cachedCount = localOrderedRowCache.Count;
         if (cachedCount == 0 || IsRowCacheDirty(localOrderedRowCache, BuildOrderedNodesCache(int.MaxValue)))
         {
             return 0;
         }
 
-        // _loadingCompleted is true when all revisions have been added to _revisionByObjectId.
-        // Return the full number of rows only if the straightening of segments has finished, too.
-        // Else do not show rows yet which might be affected by the straightening of segments.
-        return _loadingCompleted && cachedCount == Count ? cachedCount : Math.Max(0, cachedCount - _straightenLookAhead);
+        return StraightenedRowCount(cachedCount);
     }
+
+    /// <summary>
+    ///  How many cached rows are final. _loadingCompleted is true when all revisions have been
+    ///  added; return the full number of rows only if the straightening of segments has finished
+    ///  too. Rows inside the trailing look-ahead window are still being straightened IN PLACE by
+    ///  the build - a CONCURRENT reader (paint/render) must stay below this boundary, which is
+    ///  what every grid host does by sizing itself from <see cref="GetCachedCount"/>.
+    /// </summary>
+    private int StraightenedRowCount(int cachedCount)
+        => _loadingCompleted && cachedCount == Count ? cachedCount : Math.Max(0, cachedCount - _straightenLookAhead);
 
     /// <summary>
     /// Builds the revision graph cache. There are two caches that are built in this method.
@@ -236,10 +248,16 @@ public class RevisionGraph : IRevisionGraphRowProvider
         return localOrderedNodesCache[row];
     }
 
+    /// <remarks>
+    ///  CONCURRENT CALLERS (a render thread racing the cache build) must not ask for rows at or
+    ///  beyond <see cref="GetCachedCount"/>: rows inside the trailing straighten look-ahead window
+    ///  are still mutated in place (lane dictionaries included) by the build. Single-threaded
+    ///  callers may read every built row, straightened or not - tests do.
+    /// </remarks>
     public IRevisionGraphRow? GetSegmentsForRow(int row)
     {
         ImmutableArray<RevisionGraphRevision> localOrderedNodesCache = BuildOrderedNodesCache(row);
-        List<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
+        AppendOnlyList<RevisionGraphRow> localOrderedRowCache = _orderedRowCache;
         if (IsRowCacheDirty(localOrderedRowCache, localOrderedNodesCache) || row < 0 || row >= localOrderedRowCache.Count)
         {
             return null;
@@ -401,7 +419,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
     /// <returns><see langword="true"/> if the row cache is dirty; otherwise <see langword="false"/>.</returns>
     /// <remarks>Pure - resetting the invalidation score on an empty cache is the writer's job
     /// (<see cref="BuildOrderedRowCache"/>), not something a render-thread read may do.</remarks>
-    private bool IsRowCacheDirty(List<RevisionGraphRow> orderedRowCache, ImmutableArray<RevisionGraphRevision> orderedNodesCache)
+    private bool IsRowCacheDirty(AppendOnlyList<RevisionGraphRow> orderedRowCache, ImmutableArray<RevisionGraphRevision> orderedNodesCache)
     {
         // Snapshot the count: the single writer only appends to this list instance, so any index
         // below the snapshot stays valid even while the writer keeps adding.
@@ -436,9 +454,9 @@ public class RevisionGraph : IRevisionGraphRowProvider
         int lastOrderedNodeIndex = orderedNodesCount - 1;
         bool loadingCompleted = _loadingCompleted;
 
-        // Invalidation swaps in a fresh list rather than clearing the shared one - readers hold
+        // Invalidation swaps in a fresh store rather than clearing the shared one - readers hold
         // local references (see the field remarks). This method is the single writer.
-        List<RevisionGraphRow> orderedRowCache = _orderedRowCache;
+        AppendOnlyList<RevisionGraphRow> orderedRowCache = _orderedRowCache;
         if (orderedRowCache.Count == 0)
         {
             _orderedRowCacheInvalidFromScore = int.MaxValue;
@@ -446,11 +464,11 @@ public class RevisionGraph : IRevisionGraphRowProvider
         else if (IsRowCacheDirty(orderedRowCache, orderedNodesCache))
         {
             _orderedRowCacheInvalidFromScore = int.MaxValue;
-            orderedRowCache = new List<RevisionGraphRow>(orderedNodesCount);
+            orderedRowCache = new AppendOnlyList<RevisionGraphRow>(orderedNodesCount);
             _orderedRowCache = orderedRowCache;
         }
 
-        orderedRowCache.Capacity = Math.Max(orderedRowCache.Capacity, orderedNodesCount);
+        orderedRowCache.EnsureCapacity(orderedNodesCount);
 
         int maxLastToCacheRowIndex = lastOrderedNodeIndex - (loadingCompleted || !orderSegments ? 0 : _orderSegmentsLookAhead);
         if (lastToCacheRowIndex > maxLastToCacheRowIndex)
@@ -753,7 +771,7 @@ public class RevisionGraph : IRevisionGraphRowProvider
             }
         }
 
-        static void StraightenDiagonals(int startIndex, int lastStraightenIndex, int lastLookAheadIndex, int straightenDiagonalsLookAhead, IList<RevisionGraphRow> localOrderedRowCache, int straightenGraphSegmentsLimit)
+        static void StraightenDiagonals(int startIndex, int lastStraightenIndex, int lastLookAheadIndex, int straightenDiagonalsLookAhead, IReadOnlyList<RevisionGraphRow> localOrderedRowCache, int straightenGraphSegmentsLimit)
         {
             List<MoveLaneBy> moveLaneBy = new(capacity: straightenDiagonalsLookAhead);
             int goBackLimit = 1;
