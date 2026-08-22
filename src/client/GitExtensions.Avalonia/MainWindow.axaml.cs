@@ -550,10 +550,25 @@ public partial class MainWindow : Window
 
     private async Task LoadRefPanelAsync()
     {
-        var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
-        IReadOnlyList<GitCommands.LeftPanel.StashTreeNode> stashes = await Task.Run(_session.GetStashPanel);
-        IReadOnlyList<GitCommands.LeftPanel.WorktreeTreeNode> worktrees = await Task.Run(_session.GetWorktreePanel);
-        IReadOnlyList<GitCommands.LeftPanel.RefTreeNode> submodules = await Task.Run(_session.GetSubmodulePanel);
+        // Visibility + order come from the Left panel settings page.
+        IReadOnlyList<GitCommands.LeftPanel.LeftPanelSection> visibleSections =
+            GitCommands.Settings.Pages.LeftPanelPageModel.VisibleSectionsInOrder();
+
+        bool NeedsRefs(GitCommands.LeftPanel.LeftPanelSection section)
+            => visibleSections.Contains(section);
+
+        var (branches, remotes, tags) =
+            NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Branches)
+            || NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Remotes)
+            || NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Tags)
+                ? await Task.Run(_session.GetRefPanel)
+                : ((IReadOnlyList<GitCommands.LeftPanel.RefTreeNode>)[], [], []);
+        IReadOnlyList<GitCommands.LeftPanel.StashTreeNode> stashes =
+            NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Stashes) ? await Task.Run(_session.GetStashPanel) : [];
+        IReadOnlyList<GitCommands.LeftPanel.WorktreeTreeNode> worktrees =
+            NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Worktrees) ? await Task.Run(_session.GetWorktreePanel) : [];
+        IReadOnlyList<GitCommands.LeftPanel.RefTreeNode> submodules =
+            NeedsRefs(GitCommands.LeftPanel.LeftPanelSection.Submodules) ? await Task.Run(_session.GetSubmodulePanel) : [];
 
         GitCommands.LeftPanel.RefTreeNode Section(string name, GitCommands.LeftPanel.RefTreeNodeKind kind, IEnumerable<GitCommands.LeftPanel.RefTreeNode> children)
         {
@@ -575,30 +590,47 @@ public partial class MainWindow : Window
             return inactive;
         });
 
-        List<GitCommands.LeftPanel.RefTreeNode> sections =
-        [
-            Section($"Branches ({branches.Count})", GitCommands.LeftPanel.RefTreeNodeKind.BranchesSection, branches),
-            Section($"Remotes ({remotes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.RemotesSection, remoteNodes),
-            Section($"Tags ({tags.Count})", GitCommands.LeftPanel.RefTreeNodeKind.TagsSection, tags),
-            Section($"Stashes ({stashes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.StashesSection, stashes.Select(stash => new GitCommands.LeftPanel.RefTreeNode
-            {
-                Name = stash.DisplayName,
-                FullPath = stash.FullPath,
-                ObjectId = stash.ObjectId,
-                Kind = GitCommands.LeftPanel.RefTreeNodeKind.Stash,
-            })),
-            Section($"Worktrees ({worktrees.Count})", GitCommands.LeftPanel.RefTreeNodeKind.WorktreesSection, worktrees.Select(worktree => new GitCommands.LeftPanel.RefTreeNode
-            {
-                Name = worktree.IsCurrent ? $"{worktree.DisplayPath} (current)" : worktree.DisplayPath,
-                FullPath = worktree.Worktree.Path,
-                IsCurrent = worktree.IsCurrent,
-                Kind = GitCommands.LeftPanel.RefTreeNodeKind.Worktree,
-            })),
-        ];
-
-        if (submodules.Count > 0)
+        List<GitCommands.LeftPanel.RefTreeNode> sections = [];
+        foreach (GitCommands.LeftPanel.LeftPanelSection section in visibleSections)
         {
-            sections.Add(Section($"Submodules ({submodules.Count})", GitCommands.LeftPanel.RefTreeNodeKind.SubmodulesSection, submodules));
+            switch (section)
+            {
+                case GitCommands.LeftPanel.LeftPanelSection.Branches:
+                    sections.Add(Section($"Branches ({branches.Count})", GitCommands.LeftPanel.RefTreeNodeKind.BranchesSection, branches));
+                    break;
+
+                case GitCommands.LeftPanel.LeftPanelSection.Remotes:
+                    sections.Add(Section($"Remotes ({remotes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.RemotesSection, remoteNodes));
+                    break;
+
+                case GitCommands.LeftPanel.LeftPanelSection.Tags:
+                    sections.Add(Section($"Tags ({tags.Count})", GitCommands.LeftPanel.RefTreeNodeKind.TagsSection, tags));
+                    break;
+
+                case GitCommands.LeftPanel.LeftPanelSection.Stashes:
+                    sections.Add(Section($"Stashes ({stashes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.StashesSection, stashes.Select(stash => new GitCommands.LeftPanel.RefTreeNode
+                    {
+                        Name = stash.DisplayName,
+                        FullPath = stash.FullPath,
+                        ObjectId = stash.ObjectId,
+                        Kind = GitCommands.LeftPanel.RefTreeNodeKind.Stash,
+                    })));
+                    break;
+
+                case GitCommands.LeftPanel.LeftPanelSection.Worktrees:
+                    sections.Add(Section($"Worktrees ({worktrees.Count})", GitCommands.LeftPanel.RefTreeNodeKind.WorktreesSection, worktrees.Select(worktree => new GitCommands.LeftPanel.RefTreeNode
+                    {
+                        Name = worktree.IsCurrent ? $"{worktree.DisplayPath} (current)" : worktree.DisplayPath,
+                        FullPath = worktree.Worktree.Path,
+                        IsCurrent = worktree.IsCurrent,
+                        Kind = GitCommands.LeftPanel.RefTreeNodeKind.Worktree,
+                    })));
+                    break;
+
+                case GitCommands.LeftPanel.LeftPanelSection.Submodules when submodules.Count > 0:
+                    sections.Add(Section($"Submodules ({submodules.Count})", GitCommands.LeftPanel.RefTreeNodeKind.SubmodulesSection, submodules));
+                    break;
+            }
         }
 
         RefTree.ItemsSource = sections;
@@ -885,6 +917,7 @@ public partial class MainWindow : Window
         Loc.Reload();
         ApplyThemeVariant();
         ApplyToolbarTranslations();
+        await LoadRefPanelAsync();
     }
 
     private async void OnOpenRepositoryClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)

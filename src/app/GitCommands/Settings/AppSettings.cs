@@ -1044,6 +1044,13 @@ public static partial class AppSettings
         set => SetString("ClientThemeVariant", value);
     }
 
+    /// <summary>The client sidebar's section order as comma-separated section names; empty = default order.</summary>
+    public static string LeftPanelSectionOrder
+    {
+        get => GetString("LeftPanelSectionOrder", "") ?? "";
+        set => SetString("LeftPanelSectionOrder", value);
+    }
+
     /// <summary>
     /// Gets or sets the default pull action as configured in the FormPull dialog.
     /// </summary>

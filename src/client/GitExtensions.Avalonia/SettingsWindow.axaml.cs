@@ -47,6 +47,7 @@ public partial class SettingsWindow : Window
             ("Blame viewer", new BlameViewerPageModel(), null),
             ("Sorting", new SortingPageModel(), null),
             ("Browse repository window", new BrowseRepoPageModel(), null),
+            ("Left panel", new LeftPanelPageModel(), null),
             ("Menus", new MenusPageModel(), null),
             ("Hotkeys", new HotkeysPageModel(), null),
             ("Language", new LanguagePageModel(GitCommands.Localization.SourceJoinTranslation.FindLanguages(Loc.TranslationDir)), null),
