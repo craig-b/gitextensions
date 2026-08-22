@@ -44,6 +44,7 @@ public partial class CommitWindow : Window
         ConventionalPrefixCombo.ItemsSource = GitCommands.Commit.ConventionalCommitMessage.HeaderCommitTypes;
         UnstagedTree.ContextRequested += (_, e) => OnFileListContextRequested(UnstagedTree, staged: false, e);
         StagedTree.ContextRequested += (_, e) => OnFileListContextRequested(StagedTree, staged: true, e);
+        DiffPaneMenu.Attach(DiffText, () => _diffPaneText, isCommitWindow: true, addSelectionToCommitMessage: AppendToCommitMessage);
 
         Loaded += async (_, _) =>
         {
@@ -413,6 +414,7 @@ public partial class CommitWindow : Window
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                _diffPaneText = text;
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(text, spans));
                 DiffGutter.Text = LineNumberGutter.Build(text, lineNumbers);
@@ -420,8 +422,21 @@ public partial class CommitWindow : Window
         }
         catch (System.Exception ex)
         {
+            _diffPaneText = null;
             DiffText.Text = ex.ToString();
         }
+    }
+
+    /// <summary>The diff pane's current unified diff text (inlines don't retain it).</summary>
+    private string? _diffPaneText;
+
+    /// <summary>"Add selection to commit message": the stripped selection lands on its own line at the end.</summary>
+    private void AppendToCommitMessage(string text)
+    {
+        string current = MessageBox.Text ?? "";
+        MessageBox.Text = current.Length == 0 || current.EndsWith('\n')
+            ? current + text
+            : current + "\n" + text;
     }
 
     private async void OnStageClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)

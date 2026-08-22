@@ -39,6 +39,7 @@ public sealed class HotkeysPageModel : SettingsPageModel
             new SettingsGroup("Ref menu", [.. GridMenuRegistry.RefActions.Select(Entry)]),
             new SettingsGroup("File menu", [.. FileMenuRegistry.FileActions.Select(Entry)]),
             new SettingsGroup("Left panel", [.. leftPanelActions.Select(Entry)]),
+            new SettingsGroup("Diff view", [.. DiffMenuRegistry.DiffActions.Concat(DiffMenuRegistry.BlameGutterActions).Select(Entry)]),
         ];
     }
 

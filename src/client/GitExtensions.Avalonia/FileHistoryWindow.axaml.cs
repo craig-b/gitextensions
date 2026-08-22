@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -45,8 +46,69 @@ public partial class FileHistoryWindow : Window
             _ = ShowSelectionAsync(revision);
         };
 
+        DiffPaneMenu.Attach(DiffText, () => _diffTabText);
+        BlameGutter.ContextRequested += OnBlameContextRequested;
+        BlameBody.ContextRequested += OnBlameContextRequested;
+
         Loaded += (_, _) => StartStream();
         Closed += (_, _) => _logCts.Cancel();
+    }
+
+    /// <summary>The blame gutter menu: verbs on the commit of the clicked line (selected by the press).</summary>
+    private void OnBlameContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (_blame is null || _selectedBlameLine is not GitBlameLine line)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        Dictionary<string, Func<Task>> handlers = new()
+        {
+            ["blame.blameThis"] = () => BlameAtAsync(line.Commit.ObjectId, line.Commit.FileName, line.OriginLineNumber),
+            ["blame.blamePrevious"] = BlamePreviousAsync,
+            ["blame.showChanges"] = () =>
+            {
+                if (LogControl.TryJumpTo(line.Commit.ObjectId))
+                {
+                    Tabs.SelectedItem = DiffTab;
+                }
+
+                return Task.CompletedTask;
+            },
+            ["blame.copyHash"] = () => CopyToClipboardAsync(line.Commit.ObjectId.ToString()),
+        };
+
+        bool hasParent = BlamePreviousButton.IsEnabled;
+        ContextMenu menu = MainWindow.BuildMenu(
+            GitCommands.Actions.DiffMenuRegistry.BlameGutterActions,
+            action => handlers.ContainsKey(action.Id),
+            action => action.Id != "blame.blamePrevious" || hasParent,
+            action => handlers[action.Id]());
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(sender as Control);
+        }
+    }
+
+    /// <summary>Blames the file at a specific commit, through the grid jump (the pending-target pattern).</summary>
+    private async Task BlameAtAsync(ObjectId commitId, string fileName, int line)
+    {
+        _pendingBlame = (commitId, fileName, line);
+        if (!LogControl.TryJumpTo(commitId))
+        {
+            _pendingBlame = null;
+            await RenderBlameAsync(commitId, fileName, line, CancellationToken.None);
+        }
+    }
+
+    private async Task CopyToClipboardAsync(string text)
+    {
+        if (GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text);
+        }
     }
 
     private void StartStream()
@@ -145,6 +207,7 @@ public partial class FileHistoryWindow : Window
                 var (diffText, spans, lineNumbers) = await Task.Run(() => _session.GetRevisionFileDiff(firstId, revision.ObjectId, file), cancellationToken);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    _diffTabText = diffText;
                     DiffText.Inlines!.Clear();
                     DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
                     DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
@@ -183,6 +246,9 @@ public partial class FileHistoryWindow : Window
     private string? _blameFileName;
     private GitBlameLine? _selectedBlameLine;
     private (ObjectId CommitId, string FileName, int Line)? _pendingBlame;
+
+    /// <summary>The diff tab's current unified diff text (inlines don't retain it).</summary>
+    private string? _diffTabText;
 
     // ColorBrewer Greens (the same ramp BlameControl uses), light-theme leaning.
     private static readonly global::Avalonia.Media.IBrush[] AgeBucketBrushes =

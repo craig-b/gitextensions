@@ -78,8 +78,9 @@ public sealed class HotkeyResolutionTests
         int entryCount = page.Groups.Sum(group => group.Entries.Count);
         entryCount.Should().Be(
             GridMenuRegistry.CommitActions.Count + GridMenuRegistry.RangeActions.Count
-            + GridMenuRegistry.RefActions.Count + FileMenuRegistry.FileActions.Count + leftPanelCount);
+            + GridMenuRegistry.RefActions.Count + FileMenuRegistry.FileActions.Count + leftPanelCount
+            + DiffMenuRegistry.DiffActions.Count + DiffMenuRegistry.BlameGutterActions.Count);
         page.Groups.Select(group => group.Caption).Should().Equal(
-            "Commit menu", "Range menu (multi-selection)", "Ref menu", "File menu", "Left panel");
+            "Commit menu", "Range menu (multi-selection)", "Ref menu", "File menu", "Left panel", "Diff view");
     }
 }

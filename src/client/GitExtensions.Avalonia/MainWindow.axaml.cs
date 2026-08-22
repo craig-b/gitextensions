@@ -41,6 +41,7 @@ public partial class MainWindow : Window
         LogControl.ContextRequested += OnLogContextRequested;
         RefTree.ContextRequested += OnRefTreeContextRequested;
         FileTree.ContextRequested += OnFileTreeContextRequested;
+        DiffPaneMenu.Attach(DiffText, () => _browseDiffText);
         RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
@@ -1875,6 +1876,7 @@ public partial class MainWindow : Window
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                _browseDiffText = diffText;
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
                 DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
@@ -1885,7 +1887,11 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _browseDiffText = null;
             DiffText.Text = ex.ToString();
         }
     }
+
+    /// <summary>The browse diff pane's current unified diff text (inlines don't retain it).</summary>
+    private string? _browseDiffText;
 }

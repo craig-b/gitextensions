@@ -50,6 +50,7 @@ public sealed class CompareWindow : Window
         _compareToMergeBase.Content = $"Compare to merge base ({_mergeBase?.ToShortString() ?? "n/a"})";
         _compareToMergeBase.IsEnabled = _mergeBase is not null;
         _compareToMergeBase.IsCheckedChanged += (_, _) => _ = PopulateAsync();
+        DiffPaneMenu.Attach(_diffText, () => _diffPaneText);
 
         Button swap = new() { Content = "Swap", FontSize = 12 };
         swap.Click += (_, _) =>
@@ -157,6 +158,7 @@ public sealed class CompareWindow : Window
             var (diffText, spans, lineNumbers) = await Task.Run(() => _session.GetRevisionFileDiff(baseId, _secondId, file));
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                _diffPaneText = diffText;
                 _diffText.Inlines!.Clear();
                 _diffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
                 _diffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
@@ -164,9 +166,13 @@ public sealed class CompareWindow : Window
         }
         catch (Exception ex)
         {
+            _diffPaneText = null;
             _diffText.Text = ex.Message;
         }
     }
+
+    /// <summary>The diff pane's current unified diff text (inlines don't retain it).</summary>
+    private string? _diffPaneText;
 
     /// <summary>Verification harness: report the file count and first diff size.</summary>
     internal async Task<(int Files, int DiffInlines)> ProbeAsync()

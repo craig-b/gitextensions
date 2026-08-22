@@ -1208,6 +1208,22 @@ public partial class MainWindow
             action => GridMenuRegistry.IsApplicable(action, panelRemoteBranch));
         Console.Error.WriteLine($"[menu] ref menu (remote branch, left panel): {string.Join(" | ", panelRefGroups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
 
+        foreach ((string label, DiffMenuContext diffContext) in new (string, DiffMenuContext)[]
+        {
+            ("worktree diff", new DiffMenuContext(HasSelection: true, IsPatchView: true, SupportsLinePatching: true, Target: DiffLineTarget.WorkTree, IsCommitWindow: true)),
+            ("committed diff", new DiffMenuContext(HasSelection: true, IsPatchView: true, SupportsLinePatching: true, Target: DiffLineTarget.Committed)),
+            ("no selection", new DiffMenuContext(IsPatchView: true)),
+        })
+        {
+            var diffGroups = MenuProjector.Project(
+                DiffMenuRegistry.DiffMenuFor(diffContext),
+                _menuProfile,
+                action => DiffMenuRegistry.IsApplicable(action, diffContext));
+            Console.Error.WriteLine($"[menu] diff pane ({label}): {string.Join(" | ", diffGroups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
+        }
+
+        Console.Error.WriteLine($"[menu] blame gutter: {string.Join(", ", DiffMenuRegistry.BlameGutterActions.Select(action => action.Caption))}");
+
         Dictionary<string, Func<RefTreeNode, Task>> panelHandlers = LeftPanelActionHandlers;
         foreach ((string label, IReadOnlyList<ActionDescriptor> actions) in new (string, IReadOnlyList<ActionDescriptor>)[]
         {
@@ -1345,6 +1361,13 @@ public partial class MainWindow
 
         entries.Add(("Operate on refs...", () => OpenRefOperationsAsync(
             [.. Flatten(branches)], checkAll: false)));
+
+        if (!string.IsNullOrEmpty(_browseDiffText))
+        {
+            // The pane menu's Copy patch is selection-only (reviewed); the whole-document
+            // copy is pane-global, so it lives here per the pointer rule.
+            entries.Add(("Copy whole patch", () => CopyToClipboardAsync(_browseDiffText!)));
+        }
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))
         {
             if (leaf.ObjectId is ObjectId objectId)
