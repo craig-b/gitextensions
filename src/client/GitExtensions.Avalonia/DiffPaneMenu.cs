@@ -30,7 +30,9 @@ internal static class DiffPaneMenu
         SelectableTextBlock pane,
         Func<string?> getDiffText,
         bool isCommitWindow = false,
-        Action<string>? addSelectionToCommitMessage = null)
+        Action<string>? addSelectionToCommitMessage = null,
+        Func<DiffLineTarget>? getPatchTarget = null,
+        Func<string, int, int, Task>? runPatchVerb = null)
     {
         pane.ContextRequested += (_, e) =>
         {
@@ -41,9 +43,12 @@ internal static class DiffPaneMenu
             }
 
             (int start, string selected) = Selection(pane, text);
+            DiffLineTarget target = getPatchTarget?.Invoke() ?? DiffLineTarget.None;
             DiffMenuContext context = new(
                 HasSelection: selected.Length > 0,
                 IsPatchView: true,
+                SupportsLinePatching: runPatchVerb is not null && target is not DiffLineTarget.None && text.Contains("\n@@", StringComparison.Ordinal),
+                Target: target,
                 IsCommitWindow: isCommitWindow);
 
             Dictionary<string, Func<Task>> handlers = new()
@@ -67,10 +72,22 @@ internal static class DiffPaneMenu
                 };
             }
 
+            if (runPatchVerb is not null)
+            {
+                foreach (string id in new[] { "diff.stageLines", "diff.unstageLines", "diff.resetLines", "diff.applyLines", "diff.revertLines" })
+                {
+                    string actionId = id;
+                    handlers[actionId] = () => runPatchVerb(actionId, start, selected.Length);
+                }
+            }
+
             ContextMenu menu = MainWindow.BuildMenu(
                 DiffMenuRegistry.DiffMenuFor(context),
                 action => handlers.ContainsKey(action.Id),
-                action => DiffMenuRegistry.IsApplicable(action, context),
+                action => DiffMenuRegistry.IsApplicable(action, context)
+                    // The client panes have no caret, so WinForms' caret-line fallback
+                    // doesn't exist: patch verbs need a real selection here.
+                    && (action.Group != "patch" || selected.Length > 0),
                 action => handlers[action.Id]());
 
             if (menu.Items.Count > 0)

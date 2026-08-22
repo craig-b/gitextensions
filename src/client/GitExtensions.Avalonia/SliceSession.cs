@@ -416,6 +416,19 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> RunBatchRefCommandAsync(GitExtensions.Extensibility.ArgumentString arguments)
         => Task.Run(() => RunGitOperation(arguments));
 
+    public System.Text.Encoding FilesEncoding => _module.FilesEncoding;
+
+    /// <summary>Runs a planned line patch: the patch bytes on stdin, the plan's exact git-apply flags.</summary>
+    public Task<(bool Success, string Output)> ApplyLinePatchAsync(GitCommands.Patches.LinePatchPlan plan)
+        => Task.Run(() =>
+        {
+            ExecutionResult result = _module.GitExecutable.Execute(
+                plan.ApplyArguments,
+                inputWriter => inputWriter.BaseStream.Write(plan.Patch, 0, plan.Patch.Length),
+                throwOnErrorExit: false);
+            return (result.ExitedSuccessfully, result.AllOutput.Trim());
+        });
+
     public Task<(bool Success, string Output)> CreateBranchAtAsync(string branchName, ObjectId commitId, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, commitId, checkout)));
 

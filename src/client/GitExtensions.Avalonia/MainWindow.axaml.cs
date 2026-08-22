@@ -41,7 +41,11 @@ public partial class MainWindow : Window
         LogControl.ContextRequested += OnLogContextRequested;
         RefTree.ContextRequested += OnRefTreeContextRequested;
         FileTree.ContextRequested += OnFileTreeContextRequested;
-        DiffPaneMenu.Attach(DiffText, () => _browseDiffText);
+        DiffPaneMenu.Attach(
+            DiffText,
+            () => _browseDiffText,
+            getPatchTarget: () => _browseDiffFile is { IsNew: false } ? GitCommands.Actions.DiffLineTarget.Committed : GitCommands.Actions.DiffLineTarget.None,
+            runPatchVerb: RunCommittedLinePatchAsync);
         RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
@@ -201,6 +205,86 @@ public partial class MainWindow : Window
                 await Report("checkout", _session.CheckoutBranchAsync("main"));
                 await Report("fetch", _session.FetchAsync());
                 await Report("pull", _session.PullAsync(rebase: false));
+                Environment.Exit(0);
+            };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_LINEPATCHTEST") == "1")
+        {
+            // Exercises the line-patch engine end-to-end: stage/unstage/reset selected lines
+            // on a two-hunk worktree diff, then revert lines from a committed diff.
+            // MUTATES the repo - scratch repos only.
+            Loaded += async (_, _) =>
+            {
+                void Report(string name, bool ok, string detail = "")
+                    => Console.Error.WriteLine($"[linepatch] {name}: {(ok ? "OK" : "FAIL")}{(detail.Length > 0 ? $" | {detail}" : "")}");
+
+                async Task<(bool, string)> Git(GitExtUtils.GitArgumentBuilder args) => await _session.RunBatchRefCommandAsync(args);
+
+                await Task.Delay(2500);
+                string path = System.IO.Path.Combine(_session.WorkingDir, "lp.txt");
+                string[] numbers = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+                    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+                System.IO.File.WriteAllText(path, string.Join("\n", numbers) + "\n");
+                await Git(new GitExtUtils.GitArgumentBuilder("add") { "lp.txt" });
+                await Git(new GitExtUtils.GitArgumentBuilder("commit") { "-m", "lp-base".Quote() });
+
+                string[] modified = [.. numbers];
+                modified[1] = "two-changed";
+                modified[17] = "eighteen-changed";
+                System.IO.File.WriteAllText(path, string.Join("\n", modified) + "\n");
+
+                (IReadOnlyList<GitItemStatus> unstaged, _) = _session.GetWorkTreeStatus(CancellationToken.None);
+                GitItemStatus file = unstaged.First(status => status.Name == "lp.txt");
+
+                async Task<bool> RunVerb(GitCommands.Patches.LinePatchVerb verb, string diffText, string firstMarker, string lastMarker)
+                {
+                    int start = diffText.IndexOf(firstMarker, StringComparison.Ordinal);
+                    int end = diffText.IndexOf(lastMarker, StringComparison.Ordinal) + lastMarker.Length;
+                    GitCommands.Patches.LinePatchPlan? plan = GitCommands.Patches.LinePatchPlanner.Plan(
+                        verb, diffText, start, end - start, _session.FilesEncoding);
+                    if (plan is null)
+                    {
+                        return false;
+                    }
+
+                    (bool ok, string output) = await _session.ApplyLinePatchAsync(plan);
+                    if (!ok)
+                    {
+                        Console.Error.WriteLine($"[linepatch] {verb} apply output: {output}");
+                    }
+
+                    return ok;
+                }
+
+                // Stage only the first hunk's lines.
+                (string wtDiff, _, _) = _session.GetWorkTreeFileDiff(file, staged: false);
+                bool staged1 = await RunVerb(GitCommands.Patches.LinePatchVerb.Stage, wtDiff, "-two\n", "+two-changed\n");
+                (_, string cached) = await Git(new GitExtUtils.GitArgumentBuilder("diff") { "--cached", "--", "lp.txt" });
+                Report("stage-lines", staged1 && cached.Contains("two-changed") && !cached.Contains("eighteen-changed"));
+
+                // Unstage them again from the index diff.
+                (string indexDiff, _, _) = _session.GetWorkTreeFileDiff(file, staged: true);
+                bool unstaged1 = await RunVerb(GitCommands.Patches.LinePatchVerb.Unstage, indexDiff, "-two\n", "+two-changed\n");
+                (_, string cachedAfter) = await Git(new GitExtUtils.GitArgumentBuilder("diff") { "--cached", "--", "lp.txt" });
+                Report("unstage-lines", unstaged1 && !cachedAfter.Contains("two-changed"));
+
+                // Reset the first hunk's lines in the worktree; the second change must survive.
+                (string wtDiff2, _, _) = _session.GetWorkTreeFileDiff(file, staged: false);
+                bool reset1 = await RunVerb(GitCommands.Patches.LinePatchVerb.ResetWorkTree, wtDiff2, "-two\n", "+two-changed\n");
+                string afterReset = System.IO.File.ReadAllText(path);
+                Report("reset-lines", reset1 && afterReset.Contains("\ntwo\n") && afterReset.Contains("eighteen-changed"));
+
+                // Commit the remaining change, then revert its lines from the committed diff.
+                await Git(new GitExtUtils.GitArgumentBuilder("add") { "lp.txt" });
+                await Git(new GitExtUtils.GitArgumentBuilder("commit") { "-m", "lp-second".Quote() });
+                ObjectId head = _session.ResolveRef("HEAD")!.Value;
+                ObjectId parent = _session.ResolveRef("HEAD~1")!.Value;
+                (string committedDiff, _, _) = _session.GetRevisionFileDiff(parent, head, new GitItemStatus("lp.txt") { IsTracked = true });
+                bool reverted = await RunVerb(GitCommands.Patches.LinePatchVerb.Revert, committedDiff, "-eighteen\n", "+eighteen-changed\n");
+                string afterRevert = System.IO.File.ReadAllText(path);
+                Report("revert-committed-lines", reverted && afterRevert.Contains("\neighteen\n") && !afterRevert.Contains("eighteen-changed"));
+
                 Environment.Exit(0);
             };
         }
@@ -1877,6 +1961,7 @@ public partial class MainWindow : Window
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 _browseDiffText = diffText;
+                _browseDiffFile = file;
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
                 DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
@@ -1888,10 +1973,35 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             _browseDiffText = null;
+            _browseDiffFile = null;
             DiffText.Text = ex.ToString();
         }
     }
 
-    /// <summary>The browse diff pane's current unified diff text (inlines don't retain it).</summary>
+    /// <summary>The browse diff pane's current unified diff text (inlines don't retain it) and its file.</summary>
     private string? _browseDiffText;
+    private GitItemStatus? _browseDiffFile;
+
+    /// <summary>Apply/revert the selected lines of a committed diff to the working tree (line-level cherry-pick).</summary>
+    internal async Task RunCommittedLinePatchAsync(string actionId, int selectionStart, int selectionLength)
+    {
+        if (_browseDiffText is not string text)
+        {
+            return;
+        }
+
+        GitCommands.Patches.LinePatchVerb verb = actionId == "diff.revertLines"
+            ? GitCommands.Patches.LinePatchVerb.Revert
+            : GitCommands.Patches.LinePatchVerb.Apply;
+        GitCommands.Patches.LinePatchPlan? plan = GitCommands.Patches.LinePatchPlanner.Plan(
+            verb, text, selectionStart, selectionLength, _session.FilesEncoding,
+            _browseDiffFile?.IsNew is true, _browseDiffFile?.IsRenamed is true);
+        if (plan is null)
+        {
+            return;
+        }
+
+        string title = verb is GitCommands.Patches.LinePatchVerb.Revert ? "Revert selected lines" : "Apply selected lines";
+        await RunOperationAsync(title, () => _session.ApplyLinePatchAsync(plan));
+    }
 }

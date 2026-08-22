@@ -44,7 +44,15 @@ public partial class CommitWindow : Window
         ConventionalPrefixCombo.ItemsSource = GitCommands.Commit.ConventionalCommitMessage.HeaderCommitTypes;
         UnstagedTree.ContextRequested += (_, e) => OnFileListContextRequested(UnstagedTree, staged: false, e);
         StagedTree.ContextRequested += (_, e) => OnFileListContextRequested(StagedTree, staged: true, e);
-        DiffPaneMenu.Attach(DiffText, () => _diffPaneText, isCommitWindow: true, addSelectionToCommitMessage: AppendToCommitMessage);
+        DiffPaneMenu.Attach(
+            DiffText,
+            () => _diffPaneText,
+            isCommitWindow: true,
+            addSelectionToCommitMessage: AppendToCommitMessage,
+            getPatchTarget: () => _diffPaneFile is { IsNew: false }
+                ? (_diffPaneStaged ? GitCommands.Actions.DiffLineTarget.Index : GitCommands.Actions.DiffLineTarget.WorkTree)
+                : GitCommands.Actions.DiffLineTarget.None,
+            runPatchVerb: RunLinePatchVerbAsync);
 
         Loaded += async (_, _) =>
         {
@@ -415,6 +423,8 @@ public partial class CommitWindow : Window
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 _diffPaneText = text;
+                _diffPaneFile = file;
+                _diffPaneStaged = staged;
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(text, spans));
                 DiffGutter.Text = LineNumberGutter.Build(text, lineNumbers);
@@ -423,12 +433,52 @@ public partial class CommitWindow : Window
         catch (System.Exception ex)
         {
             _diffPaneText = null;
+            _diffPaneFile = null;
             DiffText.Text = ex.ToString();
         }
     }
 
-    /// <summary>The diff pane's current unified diff text (inlines don't retain it).</summary>
+    /// <summary>The diff pane's current unified diff text (inlines don't retain it) and its file.</summary>
     private string? _diffPaneText;
+    private GitItemStatus? _diffPaneFile;
+    private bool _diffPaneStaged;
+
+    /// <summary>Stage/unstage/reset the selected lines through the portable planner.</summary>
+    private async Task RunLinePatchVerbAsync(string actionId, int selectionStart, int selectionLength)
+    {
+        if (_diffPaneText is not string text || _diffPaneFile is not GitItemStatus file)
+        {
+            return;
+        }
+
+        if (actionId == "diff.resetLines"
+            && !await ConfirmDialog.ConfirmAsync(this, Loc.T("Reset selected lines"), Loc.T("Discard the selected lines? The changes will be lost.")))
+        {
+            return;
+        }
+
+        GitCommands.Patches.LinePatchVerb verb = actionId switch
+        {
+            "diff.stageLines" => GitCommands.Patches.LinePatchVerb.Stage,
+            "diff.unstageLines" => GitCommands.Patches.LinePatchVerb.Unstage,
+            _ => _diffPaneStaged ? GitCommands.Patches.LinePatchVerb.ResetIndex : GitCommands.Patches.LinePatchVerb.ResetWorkTree,
+        };
+
+        GitCommands.Patches.LinePatchPlan? plan = GitCommands.Patches.LinePatchPlanner.Plan(
+            verb, text, selectionStart, selectionLength, _session.FilesEncoding, file.IsNew, file.IsRenamed);
+        if (plan is null)
+        {
+            return;
+        }
+
+        (bool success, string output) = await _session.ApplyLinePatchAsync(plan);
+        if (!success)
+        {
+            await ConfirmDialog.ErrorAsync(this, Loc.T("Line patch failed"), output);
+        }
+
+        await ReloadStatusAsync();
+    }
 
     /// <summary>"Add selection to commit message": the stripped selection lands on its own line at the end.</summary>
     private void AppendToCommitMessage(string text)

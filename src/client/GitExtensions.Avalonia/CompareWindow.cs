@@ -50,7 +50,11 @@ public sealed class CompareWindow : Window
         _compareToMergeBase.Content = $"Compare to merge base ({_mergeBase?.ToShortString() ?? "n/a"})";
         _compareToMergeBase.IsEnabled = _mergeBase is not null;
         _compareToMergeBase.IsCheckedChanged += (_, _) => _ = PopulateAsync();
-        DiffPaneMenu.Attach(_diffText, () => _diffPaneText);
+        DiffPaneMenu.Attach(
+            _diffText,
+            () => _diffPaneText,
+            getPatchTarget: () => GitCommands.Actions.DiffLineTarget.Committed,
+            runPatchVerb: RunCommittedLinePatchAsync);
 
         Button swap = new() { Content = "Swap", FontSize = 12 };
         swap.Click += (_, _) =>
@@ -173,6 +177,31 @@ public sealed class CompareWindow : Window
 
     /// <summary>The diff pane's current unified diff text (inlines don't retain it).</summary>
     private string? _diffPaneText;
+
+    /// <summary>Apply/revert the selected lines of the compared diff to the working tree.</summary>
+    private async Task RunCommittedLinePatchAsync(string actionId, int selectionStart, int selectionLength)
+    {
+        if (_diffPaneText is not string text)
+        {
+            return;
+        }
+
+        GitCommands.Patches.LinePatchVerb verb = actionId == "diff.revertLines"
+            ? GitCommands.Patches.LinePatchVerb.Revert
+            : GitCommands.Patches.LinePatchVerb.Apply;
+        GitCommands.Patches.LinePatchPlan? plan = GitCommands.Patches.LinePatchPlanner.Plan(
+            verb, text, selectionStart, selectionLength, _session.FilesEncoding);
+        if (plan is null)
+        {
+            return;
+        }
+
+        (bool success, string output) = await _session.ApplyLinePatchAsync(plan);
+        if (!success)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Line patch failed", output);
+        }
+    }
 
     /// <summary>Verification harness: report the file count and first diff size.</summary>
     internal async Task<(int Files, int DiffInlines)> ProbeAsync()

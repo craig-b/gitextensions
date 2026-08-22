@@ -46,7 +46,11 @@ public partial class FileHistoryWindow : Window
             _ = ShowSelectionAsync(revision);
         };
 
-        DiffPaneMenu.Attach(DiffText, () => _diffTabText);
+        DiffPaneMenu.Attach(
+            DiffText,
+            () => _diffTabText,
+            getPatchTarget: () => GitCommands.Actions.DiffLineTarget.Committed,
+            runPatchVerb: RunCommittedLinePatchAsync);
         BlameGutter.ContextRequested += OnBlameContextRequested;
         BlameBody.ContextRequested += OnBlameContextRequested;
 
@@ -108,6 +112,31 @@ public partial class FileHistoryWindow : Window
         if (GetTopLevel(this)?.Clipboard is { } clipboard)
         {
             await clipboard.SetTextAsync(text);
+        }
+    }
+
+    /// <summary>Apply/revert the selected lines of the viewed commit's diff to the working tree.</summary>
+    private async Task RunCommittedLinePatchAsync(string actionId, int selectionStart, int selectionLength)
+    {
+        if (_diffTabText is not string text)
+        {
+            return;
+        }
+
+        GitCommands.Patches.LinePatchVerb verb = actionId == "diff.revertLines"
+            ? GitCommands.Patches.LinePatchVerb.Revert
+            : GitCommands.Patches.LinePatchVerb.Apply;
+        GitCommands.Patches.LinePatchPlan? plan = GitCommands.Patches.LinePatchPlanner.Plan(
+            verb, text, selectionStart, selectionLength, _session.FilesEncoding);
+        if (plan is null)
+        {
+            return;
+        }
+
+        (bool success, string output) = await _session.ApplyLinePatchAsync(plan);
+        if (!success)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Line patch failed", output);
         }
     }
 
