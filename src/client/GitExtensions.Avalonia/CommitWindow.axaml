@@ -47,7 +47,7 @@
         <Grid Grid.Column="2" Grid.Row="0" RowDefinitions="*,4,220" Margin="4">
             <DockPanel Grid.Row="0">
                 <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" />
-                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="DiffScroll" HorizontalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Horizontal">
                         <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
                         <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />

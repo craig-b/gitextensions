@@ -24,7 +24,7 @@
             <TabItem x:Name="DiffTab" Header="Diff">
                 <DockPanel>
                     <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" Margin="8,0,0,0" />
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="DiffScroll" HorizontalScrollBarVisibility="Auto">
                         <StackPanel Orientation="Horizontal" Margin="8,4">
                             <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
                             <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />

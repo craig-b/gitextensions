@@ -48,10 +48,19 @@ public partial class MainWindow : Window
             runPatchVerb: RunCommittedLinePatchAsync);
         DiffViewBar browseViewBar = new(_session);
         browseViewBar.OptionsChanged += (_, _) => RefreshBrowseDiff();
+        browseViewBar.AttachFind(DiffText, DiffScroll, () => _browseDiffText);
         DiffViewBarHost.Content = browseViewBar;
         RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
+            if (keyArgs.Key == global::Avalonia.Input.Key.F
+                && keyArgs.KeyModifiers == global::Avalonia.Input.KeyModifiers.Control)
+            {
+                keyArgs.Handled = true;
+                browseViewBar.FocusFind();
+                return;
+            }
+
             if (keyArgs.Key == global::Avalonia.Input.Key.P
                 && keyArgs.KeyModifiers == (global::Avalonia.Input.KeyModifiers.Control | global::Avalonia.Input.KeyModifiers.Shift))
             {

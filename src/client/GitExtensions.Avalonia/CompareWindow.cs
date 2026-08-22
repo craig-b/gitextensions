@@ -179,17 +179,28 @@ public sealed class CompareWindow : Window
     {
         DiffViewBar viewBar = new(_session);
         viewBar.OptionsChanged += (_, _) => _ = ShowSelectedFileAsync();
+        ScrollViewer scroller = new()
+        {
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { _diffGutter, _diffText } },
+        };
+        viewBar.AttachFind(_diffText, scroller, () => _diffPaneText);
+        KeyDown += (_, keyArgs) =>
+        {
+            if (keyArgs.Key == global::Avalonia.Input.Key.F
+                && keyArgs.KeyModifiers == global::Avalonia.Input.KeyModifiers.Control)
+            {
+                keyArgs.Handled = true;
+                viewBar.FocusFind();
+            }
+        };
         DockPanel.SetDock(viewBar, global::Avalonia.Controls.Dock.Top);
         return new DockPanel
         {
             Children =
             {
                 viewBar,
-                new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                    Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { _diffGutter, _diffText } },
-                },
+                scroller,
             },
         };
     }

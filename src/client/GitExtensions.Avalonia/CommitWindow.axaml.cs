@@ -63,7 +63,17 @@ public partial class CommitWindow : Window
                 _ = ShowFileDiffAsync(file, _diffPaneStaged, _diffCts.Token);
             }
         };
+        viewBar.AttachFind(DiffText, DiffScroll, () => _diffPaneText);
         DiffViewBarHost.Content = viewBar;
+        KeyDown += (_, keyArgs) =>
+        {
+            if (keyArgs.Key == global::Avalonia.Input.Key.F
+                && keyArgs.KeyModifiers == global::Avalonia.Input.KeyModifiers.Control)
+            {
+                keyArgs.Handled = true;
+                viewBar.FocusFind();
+            }
+        };
 
         Loaded += async (_, _) =>
         {

@@ -59,7 +59,18 @@ public partial class FileHistoryWindow : Window
                 _ = ShowSelectionAsync(revision);
             }
         };
+        viewBar.AttachFind(DiffText, DiffScroll, () => _diffTabText);
         DiffViewBarHost.Content = viewBar;
+        KeyDown += (_, keyArgs) =>
+        {
+            if (keyArgs.Key == global::Avalonia.Input.Key.F
+                && keyArgs.KeyModifiers == global::Avalonia.Input.KeyModifiers.Control
+                && Tabs.SelectedItem == DiffTab)
+            {
+                keyArgs.Handled = true;
+                viewBar.FocusFind();
+            }
+        };
         BlameGutter.ContextRequested += OnBlameContextRequested;
         BlameBody.ContextRequested += OnBlameContextRequested;
 
