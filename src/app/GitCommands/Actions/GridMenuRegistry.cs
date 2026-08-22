@@ -105,14 +105,6 @@ public static class GridMenuRegistry
         new("open.pullRequest", "View pull request in a browser", "integrations", ActionTier.Common),
     ];
 
-    /// <summary>The file-status surface (the browse file tree).</summary>
-    public static IReadOnlyList<ActionDescriptor> FileActions { get; } =
-    [
-        new("file.history", "File history", "history", ActionTier.Core),
-        new("file.blame", "Blame", "history", ActionTier.Core),
-        new("file.copyPath", "Copy path", "copy", ActionTier.Core),
-    ];
-
     public static IReadOnlyList<ActionDescriptor> RefActions { get; } =
     [
         new("ref.checkout", "Checkout", "primary", ActionTier.Core),

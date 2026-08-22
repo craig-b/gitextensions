@@ -787,7 +787,7 @@ public partial class MainWindow
             => node.FullPath == fullPath ? node : node.Children.Select(Find).FirstOrDefault(found => found is not null);
     }
 
-    private static ContextMenu BuildMenu(
+    internal static ContextMenu BuildMenu(
         IReadOnlyList<ActionDescriptor> actions,
         Func<ActionDescriptor, bool> isImplemented,
         Func<ActionDescriptor, bool> isApplicable,
@@ -876,6 +876,25 @@ public partial class MainWindow
             _menuProfile,
             action => GridMenuRegistry.IsApplicable(action, refContext));
         Console.Error.WriteLine($"[menu] ref menu (local, not current): {string.Join(" | ", refGroups.Select(group => string.Join(", ", group.Select(item => item.Action.Caption))))}");
+
+        // The file tree fills asynchronously after the row selection; wait for the first leaf.
+        GitItemStatus? firstFile = null;
+        for (int i = 0; i < 20 && firstFile is null; i++)
+        {
+            await Task.Delay(200);
+            firstFile = (FileTree.ItemsSource?.OfType<StatusNode>() ?? []).SelectMany(node => node.DescendantStatuses()).FirstOrDefault();
+        }
+
+        if (firstFile is not null && _selectedRevision is GitRevision fileRevision)
+        {
+            FileMenuContext fileContext = FileMenuContextFor(firstFile, fileRevision);
+            Dictionary<string, Func<GitItemStatus, Task>> fileHandlers = FileMenuHandlers(firstFile, fileRevision);
+            var fileGroups = MenuProjector.Project(
+                [.. FileMenuRegistry.FileMenuFor(fileContext).Where(action => fileHandlers.ContainsKey(action.Id))],
+                _menuProfile,
+                action => FileMenuRegistry.IsApplicable(action, fileContext));
+            Console.Error.WriteLine($"[menu] file menu ({firstFile.Name}): {string.Join(" | ", fileGroups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
+        }
 
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         Console.Error.WriteLine($"[menu] palette would list commands + {branches.Count + remotes.Count + tags.Count}+ ref sections for jumps");

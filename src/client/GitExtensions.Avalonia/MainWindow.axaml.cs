@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using GitExtensions.Avalonia.Rendering;
 using GitExtensions.Extensibility.Git;
@@ -1534,13 +1535,45 @@ public partial class MainWindow : Window
     private void OnFileTreeContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         GitItemStatus? file = FileTree.SelectedItems!.OfType<StatusNode>().FirstOrDefault()?.Status;
-        if (file is null)
+        if (file is null || _selectedRevision is not GitRevision revision)
         {
             return;
         }
 
         e.Handled = true;
-        Dictionary<string, Func<GitItemStatus, Task>> handlers = new()
+        GitCommands.Actions.FileMenuContext context = FileMenuContextFor(file, revision);
+        Dictionary<string, Func<GitItemStatus, Task>> handlers = FileMenuHandlers(file, revision);
+
+        ContextMenu menu = MainWindow.BuildMenu(
+            GitCommands.Actions.FileMenuRegistry.FileMenuFor(context),
+            action => handlers.ContainsKey(action.Id),
+            action => GitCommands.Actions.FileMenuRegistry.IsApplicable(action, context),
+            action => handlers[action.Id](file),
+            GitCommands.Actions.FileMenuRegistry.FileSubmenuGroups);
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(FileTree);
+        }
+    }
+
+    internal GitCommands.Actions.FileMenuContext FileMenuContextFor(GitItemStatus file, GitRevision revision)
+        => new(
+            SelectedCount: 1,
+            AnyWorkTree: file.Staged is StagedStatus.WorkTree,
+            AnyIndex: file.Staged is StagedStatus.Index,
+            AnyTracked: file.IsTracked,
+            AnySubmodule: file.IsSubmodule,
+            AnyConflicted: file.IsUnmerged,
+            IsArtificialRevision: revision.IsArtificial,
+            IsBareRepository: _session.IsBareRepository,
+            SelectionOnDisk: System.IO.File.Exists(System.IO.Path.Combine(_session.WorkingDir, file.Name)),
+            IsDiffGridSurface: true);
+
+    internal Dictionary<string, Func<GitItemStatus, Task>> FileMenuHandlers(GitItemStatus file, GitRevision revision)
+    {
+        string absolutePath = System.IO.Path.Combine(_session.WorkingDir, file.Name);
+        return new()
         {
             ["file.history"] = status =>
             {
@@ -1552,19 +1585,64 @@ public partial class MainWindow : Window
                 new FileHistoryWindow(_session, status.Name, showBlame: true).Show(this);
                 return Task.CompletedTask;
             },
-            ["file.copyPath"] = status => CopyToClipboardAsync(status.Name),
+            ["file.copyPath"] = status => CopyToClipboardAsync(System.IO.Path.Combine(_session.WorkingDir, status.Name)),
+            ["file.copyRelativePath"] = status => CopyToClipboardAsync(status.Name),
+            ["file.open"] = _ =>
+            {
+                GitCommands.OsShellUtil.Open(absolutePath);
+                return Task.CompletedTask;
+            },
+            ["file.showInFolder"] = _ =>
+            {
+                // OsShellUtil.SelectPathInFileExplorer is explorer.exe-shaped; xdg-open on the
+                // directory is the portable equivalent.
+                GitCommands.OsShellUtil.Open(System.IO.Path.GetDirectoryName(absolutePath)!);
+                return Task.CompletedTask;
+            },
+            ["file.saveAs"] = status => SaveFileAtRevisionAsAsync(status, revision),
+            ["file.openTemp"] = status => OpenFileAtRevisionTempAsync(status, revision),
         };
+    }
 
-        ContextMenu menu = BuildMenu(
-            GitCommands.Actions.GridMenuRegistry.FileActions,
-            action => handlers.ContainsKey(action.Id),
-            _ => true,
-            action => handlers[action.Id](file));
-
-        if (menu.Items.Count > 0)
+    private async Task SaveFileAtRevisionAsAsync(GitItemStatus file, GitRevision revision)
+    {
+        if (GetTopLevel(this)?.StorageProvider is not { } storage)
         {
-            menu.Open(FileTree);
+            return;
         }
+
+        byte[]? bytes = await _session.GetFileBytesAtRevisionAsync(file.Name, revision.ObjectId);
+        if (bytes is null)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Save as", $"{file.Name} does not exist at {revision.ObjectId.ToShortString()}.");
+            return;
+        }
+
+        var picked = await storage.SaveFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = "Save file as",
+            SuggestedFileName = System.IO.Path.GetFileName(file.Name),
+        });
+        if (picked?.TryGetLocalPath() is string path)
+        {
+            await System.IO.File.WriteAllBytesAsync(path, bytes);
+        }
+    }
+
+    private async Task OpenFileAtRevisionTempAsync(GitItemStatus file, GitRevision revision)
+    {
+        byte[]? bytes = await _session.GetFileBytesAtRevisionAsync(file.Name, revision.ObjectId);
+        if (bytes is null)
+        {
+            await ConfirmDialog.ErrorAsync(this, "Open revision", $"{file.Name} does not exist at {revision.ObjectId.ToShortString()}.");
+            return;
+        }
+
+        string tempPath = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            $"{revision.ObjectId.ToShortString()}_{System.IO.Path.GetFileName(file.Name)}");
+        await System.IO.File.WriteAllBytesAsync(tempPath, bytes);
+        GitCommands.OsShellUtil.Open(tempPath);
     }
 
     internal async Task OpenRemotesAsync()

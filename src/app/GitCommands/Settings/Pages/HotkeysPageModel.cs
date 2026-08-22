@@ -17,6 +17,7 @@ public sealed class HotkeysPageModel : SettingsPageModel
             new SettingsGroup("Commit menu", [.. GridMenuRegistry.CommitActions.Select(Entry)]),
             new SettingsGroup("Range menu (multi-selection)", [.. GridMenuRegistry.RangeActions.Select(Entry)]),
             new SettingsGroup("Ref menu", [.. GridMenuRegistry.RefActions.Select(Entry)]),
+            new SettingsGroup("File menu", [.. FileMenuRegistry.FileActions.Select(Entry)]),
         ];
     }
 

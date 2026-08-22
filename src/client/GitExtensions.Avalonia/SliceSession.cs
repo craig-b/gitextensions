@@ -802,6 +802,19 @@ public sealed class SliceSession
         return blobId.IsZero ? null : _module.GetFileText(blobId, _module.FilesEncoding, stripAnsiEscapeCodes: true);
     }
 
+    /// <summary>The file's raw bytes at a revision (binary-safe, unlike the text read), or null.</summary>
+    public async Task<byte[]?> GetFileBytesAtRevisionAsync(string fileName, ObjectId objectId)
+    {
+        ObjectId blobId = _module.GetFileBlobHash(fileName, objectId);
+        if (blobId.IsZero)
+        {
+            return null;
+        }
+
+        using MemoryStream? stream = await _module.GetFileStreamAsync(blobId.ToString(), CancellationToken.None);
+        return stream?.ToArray();
+    }
+
     /// <summary>The file-availability half of the tab decision (worktree file for artificial revisions).</summary>
     public bool FileExistsAtRevision(string fileName, GitRevision revision)
         => revision.IsArtificial

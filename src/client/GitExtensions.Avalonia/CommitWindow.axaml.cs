@@ -41,6 +41,8 @@ public partial class CommitWindow : Window
         _messageFormatter = new CommitMessageFormatter(new TextBoxCommitMessageDocument(MessageBox));
         MessageBox.TextChanged += OnMessageTextChanged;
         ConventionalPrefixCombo.ItemsSource = GitCommands.Commit.ConventionalCommitMessage.HeaderCommitTypes;
+        UnstagedTree.ContextRequested += (_, e) => OnFileListContextRequested(UnstagedTree, staged: false, e);
+        StagedTree.ContextRequested += (_, e) => OnFileListContextRequested(StagedTree, staged: true, e);
 
         Loaded += async (_, _) =>
         {
@@ -120,6 +122,119 @@ public partial class CommitWindow : Window
 
     private static IReadOnlyList<GitItemStatus> SelectedStatuses(TreeView tree)
         => [.. tree.SelectedItems!.OfType<StatusNode>().SelectMany(node => node.DescendantStatuses()).Distinct()];
+
+    /// <summary>
+    ///  Both status lists' menus project from the registry's file-status surface — the commit
+    ///  window's first context menus. Conflicted selections prepend the resolve group.
+    /// </summary>
+    private void OnFileListContextRequested(TreeView tree, bool staged, ContextRequestedEventArgs e)
+    {
+        IReadOnlyList<GitItemStatus> selected = SelectedStatuses(tree);
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        string workingDir = _session.WorkingDir;
+        GitCommands.Actions.FileMenuContext context = new(
+            SelectedCount: selected.Count,
+            AnyWorkTree: !staged,
+            AnyIndex: staged,
+            AnyTracked: selected.Any(status => status.IsTracked),
+            AnySubmodule: selected.Any(status => status.IsSubmodule),
+            AnyConflicted: selected.Any(status => status.IsUnmerged),
+            IsArtificialRevision: true,
+            SelectionOnDisk: selected.All(status => System.IO.File.Exists(AbsolutePath(status))));
+
+        Dictionary<string, Func<Task>> handlers = new()
+        {
+            ["file.stage"] = () => StageAsync(selected),
+            ["file.unstage"] = () => UnstageAsync(selected),
+            ["file.history"] = () => ShowHistory(showBlame: false),
+            ["file.blame"] = () => ShowHistory(showBlame: true),
+            ["file.copyPath"] = () => CopyToClipboardAsync(string.Join("\n", selected.Select(AbsolutePath))),
+            ["file.copyRelativePath"] = () => CopyToClipboardAsync(string.Join("\n", selected.Select(status => status.Name))),
+            ["file.open"] = () =>
+            {
+                OsShellUtil.Open(AbsolutePath(selected[0]));
+                return Task.CompletedTask;
+            },
+            ["file.showInFolder"] = () =>
+            {
+                OsShellUtil.Open(System.IO.Path.GetDirectoryName(AbsolutePath(selected[0]))!);
+                return Task.CompletedTask;
+            },
+            ["conflict.ours"] = () => ResolveConflictsAsync(selected, GitCommands.Conflicts.ConflictSide.Local),
+            ["conflict.theirs"] = () => ResolveConflictsAsync(selected, GitCommands.Conflicts.ConflictSide.Remote),
+            ["conflict.openWindow"] = async () =>
+            {
+                await new ConflictsWindow(_session).ShowDialog(this);
+                await ReloadStatusAsync();
+            },
+            ["conflict.markResolved"] = async () =>
+            {
+                foreach (GitItemStatus status in selected.Where(status => status.IsUnmerged))
+                {
+                    await _session.StageConflictedFileAsync(status.Name);
+                }
+
+                await ReloadStatusAsync();
+            },
+            ["conflict.delete"] = async () =>
+            {
+                List<GitItemStatus> conflicted = [.. selected.Where(status => status.IsUnmerged)];
+                if (await ConfirmDialog.ConfirmAsync(this, "Delete", $"Delete {conflicted.Count} conflicted file(s) from the working tree?"))
+                {
+                    foreach (GitItemStatus status in conflicted)
+                    {
+                        await _session.RemoveConflictedFileAsync(status.Name);
+                    }
+
+                    await ReloadStatusAsync();
+                }
+            },
+        };
+
+        ContextMenu menu = MainWindow.BuildMenu(
+            GitCommands.Actions.FileMenuRegistry.FileMenuFor(context),
+            action => handlers.ContainsKey(action.Id),
+            action => GitCommands.Actions.FileMenuRegistry.IsApplicable(action, context),
+            action => handlers[action.Id](),
+            GitCommands.Actions.FileMenuRegistry.FileSubmenuGroups);
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(tree);
+        }
+
+        string AbsolutePath(GitItemStatus status) => System.IO.Path.Combine(workingDir, status.Name);
+
+        Task ShowHistory(bool showBlame)
+        {
+            new FileHistoryWindow(_session, selected[0].Name, showBlame).Show(this);
+            return Task.CompletedTask;
+        }
+    }
+
+    private async Task ResolveConflictsAsync(IReadOnlyList<GitItemStatus> selected, GitCommands.Conflicts.ConflictSide side)
+    {
+        // ResolveConflictSideAsync already stages the resolution (checkout-index + add).
+        foreach (GitItemStatus status in selected.Where(status => status.IsUnmerged))
+        {
+            await _session.ResolveConflictSideAsync(status.Name, side);
+        }
+
+        await ReloadStatusAsync();
+    }
+
+    private async Task CopyToClipboardAsync(string text)
+    {
+        if (GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text);
+        }
+    }
 
     private static IReadOnlyList<GitItemStatus> AllStatuses(TreeView tree)
         => [.. (tree.ItemsSource?.OfType<StatusNode>() ?? []).SelectMany(node => node.DescendantStatuses())];
