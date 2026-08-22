@@ -2,6 +2,7 @@
 using GitCommands;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
+using ResourceManager;
 
 namespace GitUI.UserControls.RevisionGrid;
 
@@ -198,7 +199,7 @@ public record FilterInfo
     /// The hash of the last revision to display (i.e. the oldest one displayed at the bottom).
     /// This hash is used to query history only until this given commit.
     /// </summary>
-    public string LastRevisionToDisplayHash { get; internal set; } = null!;
+    public string LastRevisionToDisplayHash { get; set; } = null!;
 
     /// <summary>
     /// Disables all active filters.

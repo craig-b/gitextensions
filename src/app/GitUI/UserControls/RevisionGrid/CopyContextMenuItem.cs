@@ -119,7 +119,7 @@ public sealed class CopyContextMenuItem : ToolStripMenuItem
         // Add items for branches
         if (branchNames.Count != 0)
         {
-            ToolStripMenuItem caption = new() { Text = TranslatedStrings.Branches };
+            ToolStripMenuItem caption = new() { Text = ResourceManager.TranslatedStrings.Branches };
             MenuUtil.SetAsCaptionMenuItem(caption, Owner!);
             DropDownItems.Add(caption);
 

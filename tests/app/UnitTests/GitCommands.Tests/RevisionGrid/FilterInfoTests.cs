@@ -1,25 +1,67 @@
 ﻿using System.Text.RegularExpressions;
 using GitCommands;
 using GitExtensions.Extensibility.Git;
-using GitUI;
 using GitUI.UserControls.RevisionGrid;
+using ResourceManager;
 
-namespace GitUITests.UserControls;
+namespace GitCommandsTests.RevisionGrid;
 
 [SetCulture("en-US")]
 [SetUICulture("en-US")]
 [NonParallelizable]
 public class FilterInfoTests
 {
+    private bool _savedShowGitNotes;
+    private bool _savedHideMergeCommits;
+    private bool _savedShowOnlyFirstParent;
+    private bool _savedShowSimplifyByDecoration;
+    private bool _savedSimplifyMergesInFileHistory;
+    private bool _savedFullHistoryInFileHistory;
+    private int _savedMaxRevisionGraphCommits;
+    private bool _savedBranchFilterEnabled;
+    private bool _savedShowCurrentBranchOnly;
+    private bool _savedShowReflogReferences;
+    private bool _savedShowStashes;
+
     [SetUp]
     public void SetUp()
     {
+        // FilterInfo properties write straight through to AppSettings - snapshot everything
+        // this fixture can touch so other fixtures in the process see pristine settings.
+        _savedShowGitNotes = AppSettings.ShowGitNotes;
+        _savedHideMergeCommits = AppSettings.HideMergeCommits;
+        _savedShowOnlyFirstParent = AppSettings.ShowOnlyFirstParent;
+        _savedShowSimplifyByDecoration = AppSettings.ShowSimplifyByDecoration;
+        _savedSimplifyMergesInFileHistory = AppSettings.SimplifyMergesInFileHistory;
+        _savedFullHistoryInFileHistory = AppSettings.FullHistoryInFileHistory;
+        _savedMaxRevisionGraphCommits = AppSettings.MaxRevisionGraphCommits;
+        _savedBranchFilterEnabled = AppSettings.BranchFilterEnabled;
+        _savedShowCurrentBranchOnly = AppSettings.ShowCurrentBranchOnly;
+        _savedShowReflogReferences = AppSettings.ShowReflogReferences;
+        _savedShowStashes = AppSettings.ShowStashes;
+
         AppSettings.ShowGitNotes = false;
         AppSettings.HideMergeCommits = false;
         AppSettings.ShowOnlyFirstParent = false;
         AppSettings.ShowSimplifyByDecoration = false;
         AppSettings.SimplifyMergesInFileHistory = false;
         AppSettings.MaxRevisionGraphCommits = 0;
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        AppSettings.ShowGitNotes = _savedShowGitNotes;
+        AppSettings.HideMergeCommits = _savedHideMergeCommits;
+        AppSettings.ShowOnlyFirstParent = _savedShowOnlyFirstParent;
+        AppSettings.ShowSimplifyByDecoration = _savedShowSimplifyByDecoration;
+        AppSettings.SimplifyMergesInFileHistory = _savedSimplifyMergesInFileHistory;
+        AppSettings.FullHistoryInFileHistory = _savedFullHistoryInFileHistory;
+        AppSettings.MaxRevisionGraphCommits = _savedMaxRevisionGraphCommits;
+        AppSettings.BranchFilterEnabled.Value = _savedBranchFilterEnabled;
+        AppSettings.ShowCurrentBranchOnly.Value = _savedShowCurrentBranchOnly;
+        AppSettings.ShowReflogReferences.Value = _savedShowReflogReferences;
+        AppSettings.ShowStashes = _savedShowStashes;
     }
 
     [Test]
@@ -937,7 +979,10 @@ public class FilterInfoTests
             BranchFilter = branchFilter
         };
 
-        filterInfo.GetSummary().Should().Be(expectedSummary);
+        // AppendLine is environment-newline and ICU (Linux) formats times with a narrow
+        // no-break space before AM/PM; the expected strings are authored on Windows.
+        filterInfo.GetSummary().Replace("\r\n", "\n").Replace(' ', ' ')
+            .Should().Be(expectedSummary.Replace("\r\n", "\n"));
         filterInfo.GetRevisionFilter(new Lazy<ObjectId>(() => ObjectId.Random())).ToString().Should().Be(expectedArgs);
     }
 

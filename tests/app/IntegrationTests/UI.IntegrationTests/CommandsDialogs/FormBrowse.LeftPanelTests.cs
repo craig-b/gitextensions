@@ -119,7 +119,7 @@ public class FormBrowse_LeftPanelTests
 
                 ContextMenuStrip contextMenu = ta.ContextMenu;
 
-                ta.SelectNode<LocalBranchNode>([TranslatedStrings.Branches, branchName]);
+                ta.SelectNode<LocalBranchNode>([ResourceManager.TranslatedStrings.Branches, branchName]);
                 ta.OpenContextMenu();
                 testDriver(contextMenu);
 

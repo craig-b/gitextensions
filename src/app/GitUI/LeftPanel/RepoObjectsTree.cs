@@ -386,9 +386,9 @@ public sealed partial class RepoObjectsTree : GitModuleControl
 
     private void CreateBranches()
     {
-        TreeNode rootNode = new(TranslatedStrings.Branches)
+        TreeNode rootNode = new(ResourceManager.TranslatedStrings.Branches)
         {
-            Name = TranslatedStrings.Branches,
+            Name = ResourceManager.TranslatedStrings.Branches,
             ImageKey = nameof(Images.BranchLocalRoot),
             SelectedImageKey = nameof(Images.BranchLocalRoot)
         };

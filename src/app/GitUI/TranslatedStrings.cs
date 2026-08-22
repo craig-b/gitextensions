@@ -29,7 +29,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _viewPullRequest = new("View pull requests");
     private readonly TranslationString _createPullRequest = new("Create pull request");
     private readonly TranslationString _forkCloneRepo = new("Fork or clone a repository");
-    private readonly TranslationString _branchesText = new("Branches");
     private readonly TranslationString _remotesText = new("Remotes");
     private readonly TranslationString _tagsText = new("Tags");
     private readonly TranslationString _stashesText = new("Stashes");
@@ -101,19 +100,11 @@ internal sealed class TranslatedStrings : Translate
 
     private readonly TranslationString _settingsTypeToFind = new("Type to find");
 
-    // FormRevisionFilter
-    private readonly TranslationString _since = new("Since");
-    private readonly TranslationString _until = new("Until");
+    // FormRevisionFilter (the summary captions moved to the portable TranslatedStrings with FilterInfo)
     private readonly TranslationString _author = new("Author");
     private readonly TranslationString _committer = new("Committer");
     private readonly TranslationString _message = new("Message");
-    private readonly TranslationString _diffContent = new("Diff contains");
-    private readonly TranslationString _pathFilter = new("Path filter");
-    private readonly TranslationString _showOnlyFirstParent = new("Show only first parent");
-    private readonly TranslationString _showReflog = new("Show reflog");
     private readonly TranslationString _showReflogTooltip = new("Show all reflog references");
-    private readonly TranslationString _showCurrentBranchOnly = new("Show current branch only");
-    private readonly TranslationString _simplifyByDecoration = new("Simplify by decoration");
 
     private readonly TranslationString _stashDropConfirmTitle = new("Drop Stash Confirmation");
     private readonly TranslationString _cannotBeUndone = new("This action cannot be undone.");
@@ -212,7 +203,6 @@ Copy error details to clipboard?");
     public static string ViewPullRequest => _instance.Value._viewPullRequest.Text;
     public static string AddUpstreamRemote => _instance.Value._addUpstreamRemote.Text;
 
-    public static string Branches => _instance.Value._branchesText.Text;
     public static string Remotes => _instance.Value._remotesText.Text;
     public static string Tags => _instance.Value._tagsText.Text;
     public static string Stashes => _instance.Value._stashesText.Text;
@@ -291,18 +281,10 @@ Copy error details to clipboard?");
 
     public static string SettingsTypeToFind => _instance.Value._settingsTypeToFind.Text;
 
-    public static string Since = _instance.Value._since.Text;
-    public static string Until = _instance.Value._until.Text;
     public static string Author = _instance.Value._author.Text;
     public static string Committer = _instance.Value._committer.Text;
     public static string Message = _instance.Value._message.Text;
-    public static string DiffContent = _instance.Value._diffContent.Text;
-    public static string PathFilter = _instance.Value._pathFilter.Text;
-    public static string ShowOnlyFirstParent = _instance.Value._showOnlyFirstParent.Text;
-    public static string ShowReflog = _instance.Value._showReflog.Text;
     public static string ShowReflogTooltip = _instance.Value._showReflogTooltip.Text;
-    public static string ShowCurrentBranchOnly = _instance.Value._showCurrentBranchOnly.Text;
-    public static string SimplifyByDecoration = _instance.Value._simplifyByDecoration.Text;
 
     #region Scripts
 

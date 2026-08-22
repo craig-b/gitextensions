@@ -81,7 +81,7 @@ public class CopyContextMenuItemTests
         _copyContextMenuItem.ShowDropDown();
 
         _copyContextMenuItem.DropDownItems.Count.Should().Be(8);
-        _copyContextMenuItem.DropDownItems[0].Text.Should().Be(TranslatedStrings.Branches);
+        _copyContextMenuItem.DropDownItems[0].Text.Should().Be(ResourceManager.TranslatedStrings.Branches);
         _copyContextMenuItem.DropDownItems[1].Text.Should().EndWith("branch1");
         _copyContextMenuItem.DropDownItems[2].Text.Should().EndWith("branch2");
         _copyContextMenuItem.DropDownItems[3].Should().BeOfType<ToolStripSeparator>();
@@ -135,7 +135,7 @@ public class CopyContextMenuItemTests
         _copyContextMenuItem.ShowDropDown();
 
         _copyContextMenuItem.DropDownItems.Count.Should().Be(12);
-        _copyContextMenuItem.DropDownItems[0].Text.Should().Be(TranslatedStrings.Branches);
+        _copyContextMenuItem.DropDownItems[0].Text.Should().Be(ResourceManager.TranslatedStrings.Branches);
         _copyContextMenuItem.DropDownItems[1].Text.Should().EndWith("branch1");
         _copyContextMenuItem.DropDownItems[2].Text.Should().EndWith("branch2");
         _copyContextMenuItem.DropDownItems[3].Should().BeOfType<ToolStripSeparator>();
