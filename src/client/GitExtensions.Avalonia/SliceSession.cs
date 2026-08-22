@@ -834,21 +834,17 @@ public sealed class SliceSession
 
     /// <summary>Streams the file-filtered log (FilterInfo's --parents/--full-history/--simplify-merges rules).</summary>
     public void StreamFileLog(string pathFilter, Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
-        => StreamLogCore($"{DefaultRevisionFilter} {BuildFileHistoryRevisionFilter()}", pathFilter, onBatch, onCompleted, onError, cancellationToken);
-
-    private static string BuildFileHistoryRevisionFilter()
     {
-        string filter = "--parents";
-        if (AppSettings.FullHistoryInFileHistory)
-        {
-            filter += " --full-history";
-            if (AppSettings.SimplifyMergesInFileHistory)
-            {
-                filter += " --simplify-merges";
-            }
-        }
-
-        return filter;
+        // A dedicated FilterInfo, like FormFileHistory's own grid: the path filter engages
+        // the --parents/--full-history/--simplify-merges block, everything else stays default.
+        GitUI.UserControls.RevisionGrid.FilterInfo fileFilter = new() { ByPathFilter = true, PathFilter = pathFilter };
+        StreamLogCore(
+            fileFilter.GetRevisionFilter(new Lazy<ObjectId>(() => CurrentCheckout)).ToString(),
+            pathFilter,
+            onBatch,
+            onCompleted,
+            onError,
+            cancellationToken);
     }
 
     /// <summary>The blame of a file at a revision (portable GitBlame; the model builds the gutter).</summary>
@@ -966,13 +962,22 @@ public sealed class SliceSession
     ///  revisions through an observer from a detached git-log process.
     /// </summary>
     public void StreamLog(Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
-        => StreamLogCore(DefaultRevisionFilter, pathFilter: "", onBatch, onCompleted, onError, cancellationToken);
+        => StreamLogCore(
+            Filter.GetRevisionFilter(new Lazy<ObjectId>(() => CurrentCheckout)).ToString(),
+            string.IsNullOrWhiteSpace(Filter.PathFilter)
+                ? ""
+                : GitCommands.FileHistory.FileHistoryPathFilter.NormalizeArgument(Filter.PathFilter).Path,
+            onBatch,
+            onCompleted,
+            onError,
+            cancellationToken);
 
-    // The WinForms grid's default branch filter (FilterInfo.GetBranchRevisionFilter): all
-    // refs, minus notes/stashes/session refs - so commits reachable only from other
-    // branches or unmerged tags (e.g. release tags) have rows to jump to.
-    private static string DefaultRevisionFilter =>
-        $"--exclude={GitRefName.RefsNotesPrefix} --exclude={GitRefName.RefsStashPrefix} --exclude={GitRefName.RefsSessionsPrefix}** --all";
+    /// <summary>
+    ///  The browse log's filter: the same portable FilterInfo the WinForms grid owns, so the
+    ///  unfiltered default is its branch group (all refs minus notes/stashes/session refs)
+    ///  and every filter dimension builds the exact WinForms git-log arguments.
+    /// </summary>
+    public GitUI.UserControls.RevisionGrid.FilterInfo Filter { get; } = new();
 
     private void StreamLogCore(string revisionFilter, string pathFilter, Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
     {

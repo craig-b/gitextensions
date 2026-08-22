@@ -244,10 +244,26 @@ public partial class MainWindow
 
     private MenuItem BuildViewMenu()
         => Sub("_View",
-            Todo("Show all branches"),
-            Todo("Show current branch only"),
-            Todo("Show filtered branches"),
-            Todo("Show reflog references"),
+            Item("Show all branches", () =>
+            {
+                _filterBar.ShowAllBranches();
+                return Task.CompletedTask;
+            }),
+            Item("Show current branch only", () =>
+            {
+                _filterBar.ShowCurrentBranchOnly();
+                return Task.CompletedTask;
+            }),
+            Item("Show reflog references", () =>
+            {
+                _filterBar.ToggleReflog();
+                return Task.CompletedTask;
+            }),
+            Item("Reset all filters", () =>
+            {
+                _filterBar.ClearAll();
+                return Task.CompletedTask;
+            }),
             Sep(),
             Todo("Show artificial commits"),
             Todo("Show stashes"),

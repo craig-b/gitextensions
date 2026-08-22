@@ -426,6 +426,11 @@ public partial class MainWindow
             SelectRefInSidebar(node.FullPath);
             return Task.CompletedTask;
         },
+        ["ref.filterForSelected"] = node =>
+        {
+            _filterBar.ApplyBranchFilter(node.FullPath);
+            return Task.CompletedTask;
+        },
         ["ref.rename"] = async node =>
         {
             string? newName = await ConfirmDialog.InputAsync(this, "Rename branch", $"New name for {node.FullPath}:", node.FullPath);
@@ -873,6 +878,11 @@ public partial class MainWindow
     private Dictionary<string, Func<IReadOnlyList<RefTreeNode>, Task>> RefRangeHandlers => new()
     {
         ["refs.operateOn"] = nodes => OpenRefOperationsAsync(nodes, checkAll: true),
+        ["ref.filterForSelected"] = nodes =>
+        {
+            _filterBar.ApplyBranchFilter(string.Join(" ", nodes.Select(node => node.FullPath)));
+            return Task.CompletedTask;
+        },
         ["refs.compareSelected"] = nodes =>
         {
             RefTreeNode first = nodes[0];

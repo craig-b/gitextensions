@@ -50,6 +50,10 @@ public partial class MainWindow : Window
         browseViewBar.OptionsChanged += (_, _) => RefreshBrowseDiff();
         browseViewBar.AttachFind(DiffText, DiffScroll, () => _browseDiffText);
         DiffViewBarHost.Content = browseViewBar;
+
+        _filterBar = new FilterBar(_session.Filter);
+        _filterBar.FiltersChanged += (_, _) => _ = ReloadLogAsync();
+        FilterBarHost.Content = _filterBar;
         RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
@@ -218,6 +222,48 @@ public partial class MainWindow : Window
                 await Report("fetch", _session.FetchAsync());
                 await Report("pull", _session.PullAsync(rebase: false));
                 Environment.Exit(0);
+            };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_FILTERTEST") == "1")
+        {
+            // Exercises the portable FilterInfo through the session's log stream: message,
+            // branch, and path filters must narrow the streamed revision count.
+            Loaded += async (_, _) =>
+            {
+                await Task.Delay(2500);
+
+                async Task<int> CountAsync()
+                {
+                    TaskCompletionSource<int> done = new();
+                    int count = 0;
+                    await Task.Run(() => _session.StreamLog(
+                        batch => count += batch.Count,
+                        () => done.TrySetResult(count),
+                        ex => done.TrySetException(ex),
+                        CancellationToken.None));
+                    return await done.Task;
+                }
+
+                int all = await CountAsync();
+
+                _session.Filter.Apply(new GitUI.UserControls.RevisionGrid.RevisionFilter("feat-one", byCommit: true, byCommitter: false, byAuthor: false, byDiffContent: false));
+                int byMessage = await CountAsync();
+                _session.Filter.ResetAllFilters();
+
+                _session.Filter.SetBranchFilter("feature/one");
+                int byBranch = await CountAsync();
+                _session.Filter.ResetAllFilters();
+
+                _session.Filter.ByPathFilter = true;
+                _session.Filter.PathFilter = "b.txt";
+                int byPath = await CountAsync();
+                _session.Filter.ResetAllFilters();
+
+                Console.Error.WriteLine($"[filter] all={all} message(feat-one)={byMessage} branch(feature/one)={byBranch} path(b.txt)={byPath}");
+                bool ok = byMessage == 1 && byBranch > 0 && byBranch < all && byPath >= 1 && byPath < all;
+                Console.Error.WriteLine($"[filter] {(ok ? "OK" : "FAIL")}");
+                Environment.Exit(ok ? 0 : 1);
             };
         }
 
@@ -1855,6 +1901,11 @@ public partial class MainWindow : Window
                 new FileHistoryWindow(_session, status.Name, showBlame: false).Show(this);
                 return Task.CompletedTask;
             },
+            ["file.filterInGrid"] = status =>
+            {
+                _filterBar.ApplyPathFilter(GitCommands.PathUtil.ToPosixPath(status.Name));
+                return Task.CompletedTask;
+            },
             ["file.blame"] = status =>
             {
                 new FileHistoryWindow(_session, status.Name, showBlame: true).Show(this);
@@ -1991,6 +2042,9 @@ public partial class MainWindow : Window
             DiffText.Text = ex.ToString();
         }
     }
+
+    /// <summary>The browse log's filter bar (over the session's portable FilterInfo).</summary>
+    private FilterBar _filterBar = null!;
 
     /// <summary>The browse diff pane's current unified diff text (inlines don't retain it) and its source.</summary>
     private string? _browseDiffText;
