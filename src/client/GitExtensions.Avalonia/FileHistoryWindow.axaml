@@ -22,12 +22,15 @@
                 </ScrollViewer>
             </TabItem>
             <TabItem x:Name="DiffTab" Header="Diff">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Horizontal" Margin="8,4">
-                        <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
-                        <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
-                    </StackPanel>
-                </ScrollViewer>
+                <DockPanel>
+                    <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" Margin="8,0,0,0" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                            <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
+                            <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
             </TabItem>
             <TabItem x:Name="ViewTab" Header="View">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto">

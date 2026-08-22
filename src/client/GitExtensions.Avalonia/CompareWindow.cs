@@ -85,11 +85,7 @@ public sealed class CompareWindow : Window
                     Children =
                     {
                         WithColumn(new ScrollViewer { Content = _files }, 0),
-                        WithColumn(new ScrollViewer
-                        {
-                            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                            Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { _diffGutter, _diffText } },
-                        }, 2),
+                        WithColumn(BuildDiffPane(), 2),
                     },
                 }, 1),
             },
@@ -177,6 +173,26 @@ public sealed class CompareWindow : Window
 
     /// <summary>The diff pane's current unified diff text (inlines don't retain it).</summary>
     private string? _diffPaneText;
+
+    /// <summary>The diff pane with its view bar docked on top.</summary>
+    private Control BuildDiffPane()
+    {
+        DiffViewBar viewBar = new(_session);
+        viewBar.OptionsChanged += (_, _) => _ = ShowSelectedFileAsync();
+        DockPanel.SetDock(viewBar, global::Avalonia.Controls.Dock.Top);
+        return new DockPanel
+        {
+            Children =
+            {
+                viewBar,
+                new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                    Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { _diffGutter, _diffText } },
+                },
+            },
+        };
+    }
 
     /// <summary>Apply/revert the selected lines of the compared diff to the working tree.</summary>
     private async Task RunCommittedLinePatchAsync(string actionId, int selectionStart, int selectionLength)

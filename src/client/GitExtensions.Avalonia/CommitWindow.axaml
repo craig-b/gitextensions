@@ -45,12 +45,15 @@
         <GridSplitter Grid.Column="1" Grid.RowSpan="2" Background="#40808080" ResizeDirection="Columns" />
 
         <Grid Grid.Column="2" Grid.Row="0" RowDefinitions="*,4,220" Margin="4">
-            <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto">
-                <StackPanel Orientation="Horizontal">
-                    <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
-                    <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
-                </StackPanel>
-            </ScrollViewer>
+            <DockPanel Grid.Row="0">
+                <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" />
+                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Horizontal">
+                        <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
+                        <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
 
             <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
 

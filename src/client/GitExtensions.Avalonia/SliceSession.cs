@@ -418,6 +418,20 @@ public sealed class SliceSession
 
     public System.Text.Encoding FilesEncoding => _module.FilesEncoding;
 
+    /// <summary>Session-scoped "Treat all files as text" (like WinForms, never persisted).</summary>
+    public bool TreatAllFilesAsText { get; set; }
+
+    /// <summary>
+    ///  The live context-line count. AppSettings.NumberOfContextLines is inert unless
+    ///  "remember" is on, so the session carries the runtime value (the WinForms shape).
+    /// </summary>
+    public int DiffContextLines { get; set; } = AppSettings.NumberOfContextLines;
+
+    /// <summary>The view bar's options as extra git-diff flags.</summary>
+    private string ExtraDiffArguments
+        => GitUI.Editor.Diff.DiffViewArguments.Build(
+            AppSettings.IgnoreWhitespaceKind.Value, DiffContextLines, AppSettings.ShowEntireFile.Value, TreatAllFilesAsText).ToString();
+
     /// <summary>Runs a planned line patch: the patch bytes on stdin, the plan's exact git-apply flags.</summary>
     public Task<(bool Success, string Output)> ApplyLinePatchAsync(GitCommands.Patches.LinePatchPlan plan)
         => Task.Run(() =>
@@ -699,6 +713,7 @@ public sealed class SliceSession
                 "--patch",
                 "--color=always",
                 "--no-ext-diff",
+                ExtraDiffArguments,
                 secondId.ToString(),
                 "--",
                 file.Name.QuoteNE()
@@ -712,6 +727,7 @@ public sealed class SliceSession
                 "--color=always",
                 "--find-renames",
                 "--find-copies",
+                ExtraDiffArguments,
                 firstId.ToString(),
                 secondId.ToString(),
                 "--",
@@ -744,6 +760,7 @@ public sealed class SliceSession
                 "--no-ext-diff",
                 "--color=always",
                 "--no-index",
+                ExtraDiffArguments,
                 "--",
                 "/dev/null",
                 file.Name.QuoteNE()
@@ -758,6 +775,7 @@ public sealed class SliceSession
                 "--no-ext-diff",
                 "--color=always",
                 { staged, "--cached" },
+                ExtraDiffArguments,
                 "--",
                 file.Name.QuoteNE()
             };

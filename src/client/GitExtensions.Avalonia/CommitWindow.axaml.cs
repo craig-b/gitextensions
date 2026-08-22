@@ -53,6 +53,17 @@ public partial class CommitWindow : Window
                 ? (_diffPaneStaged ? GitCommands.Actions.DiffLineTarget.Index : GitCommands.Actions.DiffLineTarget.WorkTree)
                 : GitCommands.Actions.DiffLineTarget.None,
             runPatchVerb: RunLinePatchVerbAsync);
+        DiffViewBar viewBar = new(_session);
+        viewBar.OptionsChanged += (_, _) =>
+        {
+            if (_diffPaneFile is GitItemStatus file)
+            {
+                _diffCts?.Cancel();
+                _diffCts = new System.Threading.CancellationTokenSource();
+                _ = ShowFileDiffAsync(file, _diffPaneStaged, _diffCts.Token);
+            }
+        };
+        DiffViewBarHost.Content = viewBar;
 
         Loaded += async (_, _) =>
         {

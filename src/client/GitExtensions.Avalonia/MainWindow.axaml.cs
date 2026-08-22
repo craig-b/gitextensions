@@ -46,6 +46,9 @@ public partial class MainWindow : Window
             () => _browseDiffText,
             getPatchTarget: () => _browseDiffFile is { IsNew: false } ? GitCommands.Actions.DiffLineTarget.Committed : GitCommands.Actions.DiffLineTarget.None,
             runPatchVerb: RunCommittedLinePatchAsync);
+        DiffViewBar browseViewBar = new(_session);
+        browseViewBar.OptionsChanged += (_, _) => RefreshBrowseDiff();
+        DiffViewBarHost.Content = browseViewBar;
         RebuildHotkeyMap();
         KeyDown += (_, keyArgs) =>
         {
@@ -1962,6 +1965,8 @@ public partial class MainWindow : Window
             {
                 _browseDiffText = diffText;
                 _browseDiffFile = file;
+                _browseDiffFirstId = firstId;
+                _browseDiffSecondId = secondId;
                 DiffText.Inlines!.Clear();
                 DiffText.Inlines.AddRange(InlineRendering.ToInlines(diffText, spans));
                 DiffGutter.Text = LineNumberGutter.Build(diffText, lineNumbers);
@@ -1978,9 +1983,22 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The browse diff pane's current unified diff text (inlines don't retain it) and its file.</summary>
+    /// <summary>The browse diff pane's current unified diff text (inlines don't retain it) and its source.</summary>
     private string? _browseDiffText;
     private GitItemStatus? _browseDiffFile;
+    private ObjectId? _browseDiffFirstId;
+    private ObjectId? _browseDiffSecondId;
+
+    /// <summary>Re-renders the current file diff after a view-bar option change.</summary>
+    private void RefreshBrowseDiff()
+    {
+        if (_browseDiffFile is GitItemStatus file && _browseDiffSecondId is ObjectId secondId)
+        {
+            _fileDiffCts?.Cancel();
+            _fileDiffCts = new CancellationTokenSource();
+            _ = ShowRevisionFileDiffAsync(_browseDiffFirstId, secondId, file, _fileDiffCts.Token);
+        }
+    }
 
     /// <summary>Apply/revert the selected lines of a committed diff to the working tree (line-level cherry-pick).</summary>
     internal async Task RunCommittedLinePatchAsync(string actionId, int selectionStart, int selectionLength)

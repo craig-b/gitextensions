@@ -51,6 +51,15 @@ public partial class FileHistoryWindow : Window
             () => _diffTabText,
             getPatchTarget: () => GitCommands.Actions.DiffLineTarget.Committed,
             runPatchVerb: RunCommittedLinePatchAsync);
+        DiffViewBar viewBar = new(_session);
+        viewBar.OptionsChanged += (_, _) =>
+        {
+            if (_selectedRevision is GitRevision revision)
+            {
+                _ = ShowSelectionAsync(revision);
+            }
+        };
+        DiffViewBarHost.Content = viewBar;
         BlameGutter.ContextRequested += OnBlameContextRequested;
         BlameBody.ContextRequested += OnBlameContextRequested;
 
