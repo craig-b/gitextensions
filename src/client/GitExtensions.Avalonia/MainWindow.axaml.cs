@@ -204,6 +204,72 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_REFOPSTEST") == "1")
+        {
+            // Exercises the batch-ref operations engine end-to-end (seed, force gate, delete,
+            // remote-counterpart delete, push with per-row porcelain results).
+            // MUTATES the repo and its remote - scratch repos only.
+            Loaded += async (_, _) =>
+            {
+                void Report(string name, bool ok, string detail = "")
+                    => Console.Error.WriteLine($"[refops] {name}: {(ok ? "OK" : "FAIL")}{(detail.Length > 0 ? $" | {detail}" : "")}");
+
+                await Task.Delay(2500);
+
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("branch") { "bat/merged" });
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("tag") { "bat-tag" });
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("push") { "-u", "origin", "bat/merged" });
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("checkout") { "-b", "bat/unmerged" });
+                System.IO.File.WriteAllText(System.IO.Path.Combine(_session.WorkingDir, "bat.txt"), "x\n");
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("add") { "bat.txt" });
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("commit") { "-m", "bat-commit".Quote() });
+                await _session.RunBatchRefCommandAsync(new GitExtUtils.GitArgumentBuilder("checkout") { "-" });
+
+                IReadOnlyList<GitCommands.Refs.BatchRefRow> rows = await _session.GetBatchRefRowsAsync(
+                [
+                    ("bat/merged", GitCommands.Refs.BatchRefKind.LocalBranch),
+                    ("bat/unmerged", GitCommands.Refs.BatchRefKind.LocalBranch),
+                    ("bat-tag", GitCommands.Refs.BatchRefKind.Tag),
+                ]);
+                Report("seed", rows.Count == 3, string.Join("; ", rows.Select(row => $"{row.Name} merged={row.MergedIntoCurrent} up={row.Upstream}")));
+                Report("force-gate", GitCommands.Refs.BatchRefOperations.RequiresForceDelete(rows));
+
+                GitCommands.Refs.BatchRefCommand push = GitCommands.Refs.BatchRefOperations.BuildPushCommand(
+                    [.. rows.Where(row => row.Name != "bat/merged")], "origin", forceWithLease: false);
+                (bool pushOk, string pushOut) = await _session.RunBatchRefCommandAsync(push.Arguments);
+                var pushResults = GitCommands.Refs.BatchRefOperations.ParseResults(push, pushOk, pushOut);
+                Report("push-batch", pushResults.All(result => result.Outcome is GitCommands.Refs.BatchRefOutcome.Succeeded),
+                    string.Join("; ", pushResults.Select(result => $"{result.Name}={result.Outcome}")));
+
+                var deleteCommands = GitCommands.Refs.BatchRefOperations.BuildDeleteCommands(
+                    [.. rows], force: true, deleteRemoteCounterparts: true);
+                List<GitCommands.Refs.BatchRefRowResult> deleteResults = [];
+                foreach (GitCommands.Refs.BatchRefCommand command in deleteCommands)
+                {
+                    (bool ok, string output) = await _session.RunBatchRefCommandAsync(command.Arguments);
+                    deleteResults.AddRange(GitCommands.Refs.BatchRefOperations.ParseResults(command, ok, output));
+                }
+
+                Report("delete-batch", deleteResults.All(result => result.Outcome is GitCommands.Refs.BatchRefOutcome.Succeeded),
+                    string.Join("; ", deleteResults.Select(result => $"{result.Name}={result.Outcome}")));
+                Report("counterpart-covered", deleteCommands.Any(command => command.Kind is GitCommands.Refs.BatchRefCommandKind.DeleteRemoteCounterparts));
+
+                if (Environment.GetEnvironmentVariable("GE_SPIKE_REFOPSTEST_SNAPSHOT") is string snapshotPath)
+                {
+                    RefOperationsWindow window = new(_session, rows, rows.Select(row => row.Name).ToHashSet());
+                    window.Show(this);
+                    await Task.Delay(700);
+                    global::Avalonia.PixelSize size = new((int)window.Bounds.Width, (int)window.Bounds.Height);
+                    using RenderTargetBitmap bitmap = new(size);
+                    bitmap.Render(window);
+                    bitmap.Save(snapshotPath);
+                    Report("snapshot", true, snapshotPath);
+                }
+
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_FILEOPSTEST") == "1")
         {
             // Exercises the per-file session operations behind the file context menu.

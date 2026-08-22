@@ -872,6 +872,7 @@ public partial class MainWindow
 
     private Dictionary<string, Func<IReadOnlyList<RefTreeNode>, Task>> RefRangeHandlers => new()
     {
+        ["refs.operateOn"] = nodes => OpenRefOperationsAsync(nodes, checkAll: true),
         ["refs.compareSelected"] = nodes =>
         {
             RefTreeNode first = nodes[0];
@@ -990,6 +991,7 @@ public partial class MainWindow
         ["worktrees.prune"] = _ => WithPanelRefresh(RunOperationAsync("Prune worktrees", _session.PruneWorktreesAsync)),
 
         // branch folder
+        ["folder.operateOnBranches"] = node => OpenRefOperationsAsync(BranchLeavesUnder(node), checkAll: true),
         ["folder.createBranch"] = async node =>
         {
             string? name = await ConfirmDialog.InputAsync(this, "Create branch", "Branch name:", $"{node.FullPath}/");
@@ -999,6 +1001,57 @@ public partial class MainWindow
             }
         },
     };
+
+    /// <summary>All local-branch leaves under a branch folder node, in panel order.</summary>
+    private static IReadOnlyList<RefTreeNode> BranchLeavesUnder(RefTreeNode folder)
+    {
+        List<RefTreeNode> leaves = [];
+        Walk(folder);
+        return leaves;
+
+        void Walk(RefTreeNode node)
+        {
+            if (node.Kind is RefTreeNodeKind.LocalBranch)
+            {
+                leaves.Add(node);
+            }
+
+            foreach (RefTreeNode child in node.Children)
+            {
+                Walk(child);
+            }
+        }
+    }
+
+    /// <summary>Opens the batch-ref operations dialog seeded with the given ref nodes.</summary>
+    internal async Task OpenRefOperationsAsync(IReadOnlyList<RefTreeNode> nodes, bool checkAll)
+    {
+        List<(string Name, GitCommands.Refs.BatchRefKind Kind)> seeds = [.. nodes
+            .Where(node => node.Kind is RefTreeNodeKind.LocalBranch or RefTreeNodeKind.RemoteBranch or RefTreeNodeKind.Tag)
+            .Select(node => (node.FullPath, node.Kind switch
+            {
+                RefTreeNodeKind.RemoteBranch => GitCommands.Refs.BatchRefKind.RemoteBranch,
+                RefTreeNodeKind.Tag => GitCommands.Refs.BatchRefKind.Tag,
+                _ => GitCommands.Refs.BatchRefKind.LocalBranch,
+            }))];
+
+        if (seeds.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<GitCommands.Refs.BatchRefRow> rows = await _session.GetBatchRefRowsAsync(seeds);
+        RefOperationsWindow window = new(
+            _session,
+            rows,
+            checkAll ? rows.Select(row => row.Name).ToHashSet() : []);
+        await window.ShowDialog(this);
+        if (window.RefsChanged)
+        {
+            await ReloadLogAsync();
+            await LoadRefPanelAsync();
+        }
+    }
 
     /// <summary>Awaits an operation, then refreshes the sidebar (refs/stashes/worktrees may have changed).</summary>
     private async Task WithPanelRefresh(Task operation)
@@ -1289,6 +1342,9 @@ public partial class MainWindow
         entries.Add(("Create new repository...", InitRepositoryAsync));
 
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
+
+        entries.Add(("Operate on refs...", () => OpenRefOperationsAsync(
+            [.. Flatten(branches)], checkAll: false)));
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))
         {
             if (leaf.ObjectId is ObjectId objectId)

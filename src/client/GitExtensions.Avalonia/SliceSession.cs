@@ -396,6 +396,26 @@ public sealed class SliceSession
     public Task<MergedBranchScan> GetMergedBranchScanAsync()
         => Task.Run(() => MergedBranchScan.Parse(_module.GetMergedBranches()));
 
+    /// <summary>Seeds the batch-ref dialog: one for-each-ref call plus the merged-branch scan.</summary>
+    public async Task<IReadOnlyList<GitCommands.Refs.BatchRefRow>> GetBatchRefRowsAsync(
+        IReadOnlyList<(string Name, GitCommands.Refs.BatchRefKind Kind)> refs)
+    {
+        IReadOnlySet<string>? merged = null;
+        if (refs.Any(reference => reference.Kind is GitCommands.Refs.BatchRefKind.LocalBranch))
+        {
+            merged = (await GetMergedBranchScanAsync()).MergedBranches;
+        }
+
+        string output = await Task.Run(() => _module.GitExecutable.GetOutput(
+            GitCommands.Refs.BatchRefOperations.ForEachRefCommand(
+                refs.Select(reference => GitCommands.Refs.BatchRefOperations.FullRefName(reference.Name, reference.Kind)))));
+        return GitCommands.Refs.BatchRefOperations.ParseRows(output, merged is null ? null : merged.Contains);
+    }
+
+    /// <summary>Runs one batch-ref command (delete/push list forms) and returns its raw output for per-row parsing.</summary>
+    public Task<(bool Success, string Output)> RunBatchRefCommandAsync(GitExtensions.Extensibility.ArgumentString arguments)
+        => Task.Run(() => RunGitOperation(arguments));
+
     public Task<(bool Success, string Output)> CreateBranchAtAsync(string branchName, ObjectId commitId, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, commitId, checkout)));
 
