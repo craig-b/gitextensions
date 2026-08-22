@@ -815,6 +815,68 @@ public sealed class SliceSession
         return stream?.ToArray();
     }
 
+    /// <summary>
+    ///  Resets the selected files' changes: to the index for the unstaged list, to HEAD for the
+    ///  staged list; optionally deletes new files (GitModule.ResetChanges owns the whole dance).
+    /// </summary>
+    public Task<(bool Success, string Output)> ResetFileChangesAsync(IReadOnlyList<GitItemStatus> files, bool toHead, bool resetAndDelete)
+        => Task.Run(() =>
+        {
+            ObjectId resetId = toHead ? CurrentCheckout : ObjectId.IndexId;
+            bool success = _module.ResetChanges(resetId, files, resetAndDelete, new FullPathResolver(() => _module.WorkingDir), out System.Text.StringBuilder output);
+            return (success, output.ToString());
+        });
+
+    /// <summary>Per-file external difftool; revisions are shas or the artificial guids (detached).</summary>
+    public Task OpenFileDifftoolAsync(string fileName, string? oldFileName, string firstRevision, string secondRevision)
+        => Task.Run(() => _module.OpenWithDifftool(fileName, oldFileName, firstRevision, secondRevision));
+
+    /// <summary>Appends root-anchored ignore patterns to .gitignore or .git/info/exclude.</summary>
+    public Task<(bool Success, string Output)> AddToGitIgnoreAsync(IReadOnlyList<string> fileNames, bool localExclude)
+        => Task.Run(() =>
+        {
+            GitCommands.Editing.RepoDotFileEditor editor = GitCommands.Editing.RepoDotFileEditor.ForGitIgnore(_module, localExclude);
+            if (editor.FilePath is not string path)
+            {
+                return (false, "Cannot resolve the ignore file path.");
+            }
+
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+            string prefix = File.Exists(path) && File.ReadAllText(path) is { Length: > 0 } text && !text.EndsWith('\n') ? "\n" : "";
+            File.AppendAllText(path, prefix + string.Join("\n", fileNames.Select(name => "/" + name)) + "\n");
+            return (true, "");
+        });
+
+    /// <summary>git mv (creates the destination folder first, like the WinForms flow).</summary>
+    public Task<(bool Success, string Output)> RenameFileAsync(bool isFolder, string oldName, string newName)
+        => Task.Run(() =>
+        {
+            try
+            {
+                new GitCommands.Git.Extended.MoveCommand(_module.GitExecutable)
+                    .Execute(new GitCommands.Git.Extended.MoveCommand.Arguments(isFolder, oldName, newName));
+                return (true, "");
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        });
+
+    public Task<(bool Success, string Output)> SetSkipWorktreeAsync(IReadOnlyList<GitItemStatus> files, bool skipWorktree)
+        => Task.Run(() => (_module.SkipWorktreeFiles(files, skipWorktree, out string output), output));
+
+    public Task<(bool Success, string Output)> SetAssumeUnchangedAsync(IReadOnlyList<GitItemStatus> files, bool assumeUnchanged)
+        => Task.Run(() => (_module.AssumeUnchangedFiles(files, assumeUnchanged, out string output), output));
+
+    /// <summary>git rm --cached: the file stays on disk but leaves the index.</summary>
+    public Task<(bool Success, string Output)> StopTrackingFileAsync(string fileName)
+        => Task.Run(() => (_module.StopTrackingFile(fileName), ""));
+
+    /// <summary>Updates one submodule (all-submodules overload is UpdateSubmodulesAsync).</summary>
+    public Task<(bool Success, string Output)> UpdateSubmoduleAsync(string name)
+        => Task.Run(() => RunGitOperation(Commands.SubmoduleUpdate(name)));
+
     /// <summary>The file-availability half of the tab decision (worktree file for artificial revisions).</summary>
     public bool FileExistsAtRevision(string fileName, GitRevision revision)
         => revision.IsArtificial

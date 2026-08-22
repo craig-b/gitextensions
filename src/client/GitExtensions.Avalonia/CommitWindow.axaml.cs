@@ -7,6 +7,7 @@ using GitCommands;
 using GitCommands.Commit;
 using GitExtensions.Avalonia.Rendering;
 using GitExtensions.Extensibility.Git;
+using GitUIPluginInterfaces;
 
 namespace GitExtensions.Avalonia;
 
@@ -165,6 +166,133 @@ public partial class CommitWindow : Window
                 OsShellUtil.Open(System.IO.Path.GetDirectoryName(AbsolutePath(selected[0]))!);
                 return Task.CompletedTask;
             },
+            ["file.resetChanges"] = async () =>
+            {
+                int newFiles = selected.Count(status => status.IsNew);
+                string question = newFiles > 0
+                    ? $"Reset changes to {selected.Count} file(s)?\n{newFiles} new file(s) will be DELETED."
+                    : $"Reset changes to {selected.Count} file(s)?";
+                if (!await ConfirmDialog.ConfirmAsync(this, "Reset changes", question))
+                {
+                    return;
+                }
+
+                (bool success, string output) = await _session.ResetFileChangesAsync(selected, toHead: staged, resetAndDelete: newFiles > 0);
+                if (!success)
+                {
+                    await ConfirmDialog.ErrorAsync(this, "Reset changes", output);
+                }
+
+                await ReloadStatusAsync();
+            },
+            ["file.openDifftool"] = () => _session.OpenFileDifftoolAsync(
+                selected[0].Name,
+                selected[0].OldName,
+                staged ? "HEAD" : GitRevision.IndexGuid,
+                staged ? GitRevision.IndexGuid : GitRevision.WorkTreeGuid),
+            ["file.rename"] = async () =>
+            {
+                string oldName = selected[0].Name;
+                string? newName = await ConfirmDialog.InputAsync(this, "Rename / move", $"New name for {oldName}:", oldName);
+                if (string.IsNullOrWhiteSpace(newName) || newName == oldName)
+                {
+                    return;
+                }
+
+                (bool success, string output) = await _session.RenameFileAsync(isFolder: false, oldName, newName.Trim());
+                if (!success)
+                {
+                    await ConfirmDialog.ErrorAsync(this, "Rename", output);
+                }
+
+                await ReloadStatusAsync();
+            },
+            ["file.delete"] = async () =>
+            {
+                if (!await ConfirmDialog.ConfirmAsync(this, "Delete", $"Delete {selected.Count} file(s) from disk?\nThis cannot be undone."))
+                {
+                    return;
+                }
+
+                if (staged)
+                {
+                    await Task.Run(() => _session.UnstageFiles(selected));
+                }
+
+                foreach (GitItemStatus status in selected.Where(status => !status.IsSubmodule))
+                {
+                    string path = AbsolutePath(status);
+                    try
+                    {
+                        if (System.IO.File.Exists(path))
+                        {
+                            System.IO.File.Delete(path);
+                        }
+                        else if (System.IO.Directory.Exists(path))
+                        {
+                            System.IO.Directory.Delete(path, recursive: true);
+                        }
+                    }
+                    catch (System.IO.IOException)
+                    {
+                        // In-use files stay; the reload shows what survived.
+                    }
+                }
+
+                await ReloadStatusAsync();
+            },
+            ["file.gitignore"] = () => AddToIgnoreAsync(localExclude: false),
+            ["file.gitignoreLocal"] = () => AddToIgnoreAsync(localExclude: true),
+            ["file.skipWorktree"] = async () =>
+            {
+                await _session.SetSkipWorktreeAsync(selected, skipWorktree: true);
+                await ReloadStatusAsync();
+            },
+            ["file.assumeUnchanged"] = async () =>
+            {
+                await _session.SetAssumeUnchangedAsync(selected, assumeUnchanged: true);
+                await ReloadStatusAsync();
+            },
+            ["file.stopTracking"] = async () =>
+            {
+                (bool success, string output) = await _session.StopTrackingFileAsync(selected[0].Name);
+                if (!success)
+                {
+                    await ConfirmDialog.ErrorAsync(this, "Stop tracking", output);
+                }
+
+                await ReloadStatusAsync();
+            },
+            ["submodule.open"] = () =>
+            {
+                new MainWindow(AbsolutePath(FirstSubmodule())).Show();
+                return Task.CompletedTask;
+            },
+            ["submodule.update"] = async () =>
+            {
+                await _session.UpdateSubmoduleAsync(FirstSubmodule().Name);
+                await ReloadStatusAsync();
+            },
+            ["submodule.reset"] = async () =>
+            {
+                GitItemStatus submodule = FirstSubmodule();
+                if (await ConfirmDialog.ConfirmAsync(this, "Reset submodule", $"Reset ALL changes in {submodule.Name}? Untracked files are kept."))
+                {
+                    await new SliceSession(AbsolutePath(submodule)).ResetAllChangesAsync(clean: false);
+                    await ReloadStatusAsync();
+                }
+            },
+            ["submodule.stash"] = async () =>
+            {
+                await new SliceSession(AbsolutePath(FirstSubmodule())).StashSaveAsync();
+                await ReloadStatusAsync();
+            },
+            ["submodule.commit"] = async () =>
+            {
+                CommitWindow submoduleCommit = new(new SliceSession(AbsolutePath(FirstSubmodule())));
+                await submoduleCommit.ShowDialog(this);
+                await ReloadStatusAsync();
+            },
             ["conflict.ours"] = () => ResolveConflictsAsync(selected, GitCommands.Conflicts.ConflictSide.Local),
             ["conflict.theirs"] = () => ResolveConflictsAsync(selected, GitCommands.Conflicts.ConflictSide.Remote),
             ["conflict.openWindow"] = async () =>
@@ -210,10 +338,23 @@ public partial class CommitWindow : Window
 
         string AbsolutePath(GitItemStatus status) => System.IO.Path.Combine(workingDir, status.Name);
 
+        GitItemStatus FirstSubmodule() => selected.First(status => status.IsSubmodule);
+
         Task ShowHistory(bool showBlame)
         {
             new FileHistoryWindow(_session, selected[0].Name, showBlame).Show(this);
             return Task.CompletedTask;
+        }
+
+        async Task AddToIgnoreAsync(bool localExclude)
+        {
+            (bool success, string output) = await _session.AddToGitIgnoreAsync([.. selected.Select(status => status.Name)], localExclude);
+            if (!success)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Ignore", output);
+            }
+
+            await ReloadStatusAsync();
         }
     }
 

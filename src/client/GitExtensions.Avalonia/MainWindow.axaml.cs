@@ -204,6 +204,61 @@ public partial class MainWindow : Window
             };
         }
 
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_FILEOPSTEST") == "1")
+        {
+            // Exercises the per-file session operations behind the file context menu.
+            // MUTATES the repo (files, index, .gitignore) - scratch repos only.
+            Loaded += async (_, _) =>
+            {
+                async Task Report(string name, Task<(bool Success, string Output)> operation)
+                {
+                    (bool success, string output) = await operation;
+                    Console.Error.WriteLine($"[fileops] {name}: {(success ? "OK" : "FAIL")} | {output.Replace("\n", " / ").Trim()}");
+                }
+
+                string Abs(string name) => System.IO.Path.Combine(_session.WorkingDir, name);
+
+                await Report("ignore-append", _session.AddToGitIgnoreAsync(["harness-ignored.tmp"], localExclude: false));
+                await Report("exclude-append", _session.AddToGitIgnoreAsync(["harness-excluded.tmp"], localExclude: true));
+
+                System.IO.File.WriteAllText(Abs("harness-file.txt"), "one\n");
+                (IReadOnlyList<GitItemStatus> unstaged, _) = _session.GetWorkTreeStatus(CancellationToken.None);
+                GitItemStatus? newFile = unstaged.FirstOrDefault(status => status.Name == "harness-file.txt");
+                Console.Error.WriteLine($"[fileops] status-sees-new: {(newFile is not null ? "OK" : "FAIL")}");
+                if (newFile is not null)
+                {
+                    await Report("stage", Task.Run(() => _session.StageFiles([newFile])));
+                    (_, IReadOnlyList<GitItemStatus> staged) = _session.GetWorkTreeStatus(CancellationToken.None);
+                    if (staged.FirstOrDefault(status => status.Name == "harness-file.txt") is GitItemStatus stagedFile)
+                    {
+                        // GitModule filters on the item's current flag, so keep it in sync between
+                        // toggles (a fresh status query would carry the updated flag).
+                        await Report("skip-worktree-on", _session.SetSkipWorktreeAsync([stagedFile], skipWorktree: true));
+                        stagedFile.IsSkipWorktree = true;
+                        await Report("skip-worktree-off", _session.SetSkipWorktreeAsync([stagedFile], skipWorktree: false));
+                        stagedFile.IsSkipWorktree = false;
+                        await Report("assume-unchanged-on", _session.SetAssumeUnchangedAsync([stagedFile], assumeUnchanged: true));
+                        stagedFile.IsAssumeUnchanged = true;
+                        await Report("assume-unchanged-off", _session.SetAssumeUnchangedAsync([stagedFile], assumeUnchanged: false));
+                    }
+
+                    await Report("rename", _session.RenameFileAsync(isFolder: false, "harness-file.txt", "harness-renamed.txt"));
+                    await Report("stop-tracking", _session.StopTrackingFileAsync("harness-renamed.txt"));
+                    (IReadOnlyList<GitItemStatus> afterStop, _) = _session.GetWorkTreeStatus(CancellationToken.None);
+                    if (afterStop.FirstOrDefault(status => status.Name == "harness-renamed.txt") is GitItemStatus leftover)
+                    {
+                        await Report("reset-delete-new", _session.ResetFileChangesAsync([leftover], toHead: true, resetAndDelete: true));
+                    }
+
+                    Console.Error.WriteLine($"[fileops] file-gone: {(!System.IO.File.Exists(Abs("harness-renamed.txt")) ? "OK" : "FAIL")}");
+                }
+
+                byte[]? headBytes = await _session.GetFileBytesAtRevisionAsync("README.md", _session.CurrentCheckout);
+                Console.Error.WriteLine($"[fileops] bytes-at-head(README.md): {(headBytes is null ? "null (no README at HEAD)" : $"OK {headBytes.Length}B")}");
+                Environment.Exit(0);
+            };
+        }
+
         if (Environment.GetEnvironmentVariable("GE_SPIKE_FILEHISTORYTEST") is string fileHistoryFile)
         {
             Loaded += (_, _) =>
@@ -1601,6 +1656,25 @@ public partial class MainWindow : Window
             },
             ["file.saveAs"] = status => SaveFileAtRevisionAsAsync(status, revision),
             ["file.openTemp"] = status => OpenFileAtRevisionTempAsync(status, revision),
+            ["file.openDifftool"] = status =>
+            {
+                if (!revision.HasParent)
+                {
+                    return ConfirmDialog.ErrorAsync(this, "Difftool", "The root commit has no parent to diff against.");
+                }
+
+                return _session.OpenFileDifftoolAsync(status.Name, status.OldName, revision.FirstParentId!.ToString(), revision.ObjectId.ToString());
+            },
+            ["submodule.open"] = status =>
+            {
+                string path = System.IO.Path.Combine(_session.WorkingDir, status.Name);
+                if (System.IO.Directory.Exists(path))
+                {
+                    new MainWindow(path).Show();
+                }
+
+                return Task.CompletedTask;
+            },
         };
     }
 

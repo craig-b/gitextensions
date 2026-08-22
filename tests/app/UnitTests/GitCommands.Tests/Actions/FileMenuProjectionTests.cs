@@ -27,8 +27,18 @@ public sealed class FileMenuProjectionTests
         menu[0].Id.Should().Be("conflict.ours");
         menu.Select(action => action.Id).Should().Contain("file.history");
 
-        FileMenuRegistry.FileMenuFor(new FileMenuContext())
+        FileMenuRegistry.FileMenuFor(new FileMenuContext(AnySubmodule: true))
             .Should().BeSameAs(FileMenuRegistry.FileActions);
+    }
+
+    [Test]
+    public void Submodule_group_exists_only_for_submodule_selections()
+    {
+        FileMenuRegistry.FileMenuFor(new FileMenuContext())
+            .Should().NotContain(action => action.Group == "submodule");
+
+        FileMenuRegistry.FileMenuFor(new FileMenuContext(AnySubmodule: true))
+            .Should().Contain(action => action.Id == "submodule.update");
     }
 
     [Test]

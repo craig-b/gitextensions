@@ -85,9 +85,17 @@ public static class FileMenuRegistry
         ["submodule"] = "Submodule",
     };
 
-    /// <summary>The file-menu action list for a selection: conflicts prepend their group.</summary>
+    /// <summary>
+    ///  The file-menu action list for a selection: conflicts prepend their group; the submodule
+    ///  group exists only for submodule selections (structural, not gray - matches WinForms).
+    /// </summary>
     public static IReadOnlyList<ActionDescriptor> FileMenuFor(FileMenuContext context)
-        => context.AnyConflicted ? [.. ConflictActions, .. FileActions] : FileActions;
+    {
+        IReadOnlyList<ActionDescriptor> actions = context.AnySubmodule
+            ? FileActions
+            : [.. FileActions.Where(action => action.Group != "submodule")];
+        return context.AnyConflicted ? [.. ConflictActions, .. actions] : actions;
+    }
 
     public static bool IsApplicable(ActionDescriptor action, FileMenuContext context)
         => action.Id switch
