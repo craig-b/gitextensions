@@ -180,7 +180,7 @@ public partial class MainWindow
             static IEnumerable<RefTreeNode> Flatten(IReadOnlyList<RefTreeNode> nodes)
                 => nodes.SelectMany(node => node.Children.Count == 0 ? [node] : Flatten(node.Children));
         },
-        ["compare.selected"] = async revision =>
+        ["range.compareSelected"] = async revision =>
         {
             IReadOnlyList<GitRevision> selected = LogControl.SelectedRevisions;
             if (selected.Count < 2)
@@ -191,6 +191,50 @@ public partial class MainWindow
 
             // Rows sort newest-first; the older commit is the BASE.
             new CompareWindow(_session, selected[^1].ObjectId, selected[^1].Subject, selected[0].ObjectId, selected[0].Subject).Show(this);
+        },
+        ["range.copyHashes"] = _ => CopyToClipboardAsync(string.Join("\n", LogControl.SelectedRevisions.Select(revision => revision.ObjectId.ToString()))),
+        ["range.cherryPick"] = async _ =>
+        {
+            IReadOnlyList<GitRevision> selected = LogControl.SelectedRevisions;
+            if (selected.Count < 2 || !await ConfirmDialog.ConfirmAsync(this, "Cherry-pick",
+                $"Cherry-pick {selected.Count} commits onto the current branch, oldest first?"))
+            {
+                return;
+            }
+
+            await RunOperationAsync($"Cherry-pick {selected.Count} commits", async () =>
+            {
+                foreach (GitRevision revision in selected.Reverse())
+                {
+                    (bool success, string output) = await _session.CherryPickAsync(revision.ObjectId);
+                    if (!success)
+                    {
+                        return (false, $"Stopped at {revision.ObjectId.ToShortString()}:\n{output}");
+                    }
+                }
+
+                return (true, "");
+            });
+        },
+        ["range.squash"] = async _ =>
+        {
+            IReadOnlyList<GitRevision> selected = LogControl.SelectedRevisions;
+            if (SquashSelection.Validate(selected, _session.CurrentCheckout) is string error)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Squash", error);
+                return;
+            }
+
+            if (!await ConfirmDialog.ConfirmAsync(this, "Squash",
+                $"Squash {selected.Count} commits into one?\nThis soft-resets to {SquashSelection.ResetTarget(selected).ToShortString()} and opens the commit window with all messages."))
+            {
+                return;
+            }
+
+            await RunOperationAsync("Squash: soft reset", () => _session.ResetAsync(ResetMode.Soft, SquashSelection.ResetTarget(selected)));
+            CommitWindow commitWindow = new(_session, SquashSelection.CombinedMessage(selected));
+            await commitWindow.ShowDialog(this);
+            await ReloadLogAsync();
         },
         ["compare.selectBase"] = revision =>
         {
@@ -332,6 +376,21 @@ public partial class MainWindow
             }
         },
         ["ref.copyName"] = node => CopyToClipboardAsync(node.FullPath),
+        ["ref.createBranchFrom"] = async node =>
+        {
+            if ((node.ObjectId ?? _session.ResolveRef(node.FullPath)) is not ObjectId target)
+            {
+                await ConfirmDialog.ErrorAsync(this, "Create branch", $"Cannot resolve {node.FullPath}.");
+                return;
+            }
+
+            string? name = await ConfirmDialog.InputAsync(this, "Create branch", $"Branch name (from {node.FullPath}, without checking it out):", "feature/my-branch");
+            if (name is not null)
+            {
+                await RunOperationAsync($"Create branch {name}", () => _session.CreateBranchAtAsync(name, target, checkout: false));
+            }
+        },
+        ["ref.pushTag"] = node => RunOperationAsync($"Push tag {node.FullPath}", () => _session.PushTagAsync(_session.ResolveTagPushRemote(), node.FullPath)),
         ["ref.push"] = node => RunOperationAsync($"Push {node.FullPath}", () => _session.PushBranchAsync(node.FullPath)),
         ["ref.pull"] = node =>
         {
@@ -585,7 +644,8 @@ public partial class MainWindow
             [.. GridMenuRegistry.CommitMenuFor(context), .. GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.CommitMenu)],
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
-            action => handlers[action.Id](revision));
+            action => handlers[action.Id](revision),
+            GridMenuRegistry.CommitSubmenuGroups);
 
         if (menu.Items.Count > 0)
         {
@@ -731,7 +791,8 @@ public partial class MainWindow
         IReadOnlyList<ActionDescriptor> actions,
         Func<ActionDescriptor, bool> isImplemented,
         Func<ActionDescriptor, bool> isApplicable,
-        Func<ActionDescriptor, Task> execute)
+        Func<ActionDescriptor, Task> execute,
+        IReadOnlyDictionary<string, string>? submenuGroups = null)
     {
         var groups = MenuProjector.Project(
             [.. actions.Where(isImplemented)],
@@ -748,20 +809,41 @@ public partial class MainWindow
             }
 
             first = false;
+            if (submenuGroups?.TryGetValue(group[0].Action.Group, out string? submenuCaption) is true)
+            {
+                MenuItem parent = new()
+                {
+                    Header = Loc.T(submenuCaption!),
+                    IsEnabled = group.Any(item => item.Enabled),
+                };
+                foreach (ProjectedMenuItem item in group)
+                {
+                    parent.Items.Add(MakeItem(item));
+                }
+
+                menu.Items.Add(parent);
+                continue;
+            }
+
             foreach (ProjectedMenuItem item in group)
             {
-                MenuItem menuItem = new()
-                {
-                    Header = Loc.T(item.Action.Caption),
-                    IsEnabled = item.Enabled,
-                };
-                ActionDescriptor action = item.Action;
-                menuItem.Click += (_, _) => _ = execute(action);
-                menu.Items.Add(menuItem);
+                menu.Items.Add(MakeItem(item));
             }
         }
 
         return menu;
+
+        MenuItem MakeItem(ProjectedMenuItem item)
+        {
+            MenuItem menuItem = new()
+            {
+                Header = Loc.T(item.Action.Caption),
+                IsEnabled = item.Enabled,
+            };
+            ActionDescriptor action = item.Action;
+            menuItem.Click += (_, _) => _ = execute(action);
+            return menuItem;
+        }
     }
 
     /// <summary>Verification harness (GE_SPIKE_MENUTEST): print the projected menus and palette size.</summary>
@@ -779,6 +861,13 @@ public partial class MainWindow
                 _menuProfile,
                 action => GridMenuRegistry.IsApplicable(action, context));
             Console.Error.WriteLine($"[menu] commit menu: {string.Join(" | ", groups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
+
+            GridCommitMenuContext rangeContext = context with { SelectedCount = 2 };
+            var rangeGroups = MenuProjector.Project(
+                [.. GridMenuRegistry.CommitMenuFor(rangeContext).Where(action => CommitActionHandlers.ContainsKey(action.Id))],
+                _menuProfile,
+                action => GridMenuRegistry.IsApplicable(action, rangeContext));
+            Console.Error.WriteLine($"[menu] range menu (2 selected): {string.Join(" | ", rangeGroups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
         }
 
         RefMenuContext refContext = new(RefMenuKind.LocalBranch, IsCurrent: false);

@@ -52,7 +52,7 @@ public sealed class HotkeyResolutionTests
         HotkeysPageModel page = new();
 
         int entryCount = page.Groups.Sum(group => group.Entries.Count);
-        entryCount.Should().Be(GridMenuRegistry.CommitActions.Count + GridMenuRegistry.RefActions.Count);
-        page.Groups.Select(group => group.Caption).Should().Equal("Commit menu", "Ref menu");
+        entryCount.Should().Be(GridMenuRegistry.CommitActions.Count + GridMenuRegistry.RangeActions.Count + GridMenuRegistry.RefActions.Count);
+        page.Groups.Select(group => group.Caption).Should().Equal("Commit menu", "Range menu (multi-selection)", "Ref menu");
     }
 }

@@ -55,13 +55,16 @@ public sealed class MenuProjectionTests
     }
 
     [Test]
-    public void Contextual_rows_replace_the_commit_menu_and_bisect_prepends()
+    public void Contextual_rows_replace_the_commit_menu_keeping_copy_and_bisect_prepends()
     {
-        GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(IsArtificial: true))
-            .Should().BeSameAs(GridMenuRegistry.ArtificialRowActions);
+        IReadOnlyList<ActionDescriptor> artificial = GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(IsArtificial: true));
+        artificial.Select(action => action.Id).Should().Equal(
+            "artificial.commit", "artificial.resetChanges",
+            "copy.hash", "copy.message", "copy.author", "copy.date", "copy.refNames");
 
-        GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(IsStash: true))
-            .Should().BeSameAs(GridMenuRegistry.StashRowActions);
+        IReadOnlyList<ActionDescriptor> stash = GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(IsStash: true));
+        stash[0].Id.Should().Be("stash.apply");
+        stash.Select(action => action.Id).Should().Contain("copy.hash", because: "replacements keep the copy group");
 
         IReadOnlyList<ActionDescriptor> bisect = GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(InBisect: true));
         bisect[0].Id.Should().Be("bisect.good");
@@ -69,6 +72,21 @@ public sealed class MenuProjectionTests
 
         GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext())
             .Should().BeSameAs(GridMenuRegistry.CommitActions);
+    }
+
+    [Test]
+    public void Multi_row_selection_replaces_the_commit_menu_with_the_range_menu()
+    {
+        GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(SelectedCount: 2))
+            .Should().BeSameAs(GridMenuRegistry.RangeActions);
+
+        // The range menu wins over every other contextual state.
+        GridMenuRegistry.CommitMenuFor(new GridCommitMenuContext(IsStash: true, InBisect: true, SelectedCount: 3))
+            .Should().BeSameAs(GridMenuRegistry.RangeActions);
+
+        ActionDescriptor cherryPick = GridMenuRegistry.RangeActions.Single(action => action.Id == "range.cherryPick");
+        GridMenuRegistry.IsApplicable(cherryPick, new GridCommitMenuContext(SelectedCount: 2)).Should().BeTrue();
+        GridMenuRegistry.IsApplicable(cherryPick, new GridCommitMenuContext(SelectedCount: 2, IsBareRepository: true)).Should().BeFalse();
     }
 
     [Test]
@@ -90,5 +108,9 @@ public sealed class MenuProjectionTests
         GridMenuRegistry.IsApplicable(Get("ref.delete"), currentLocal).Should().BeFalse();
         GridMenuRegistry.IsApplicable(Get("ref.delete"), tag).Should().BeTrue();
         GridMenuRegistry.IsApplicable(Get("ref.copyName"), currentLocal).Should().BeTrue();
+        GridMenuRegistry.IsApplicable(Get("ref.pushTag"), tag).Should().BeTrue();
+        GridMenuRegistry.IsApplicable(Get("ref.pushTag"), otherLocal).Should().BeFalse();
+        GridMenuRegistry.IsApplicable(Get("ref.createBranchFrom"), tag).Should().BeTrue();
+        GridMenuRegistry.IsApplicable(Get("ref.createBranchFrom"), currentLocal).Should().BeTrue();
     }
 }

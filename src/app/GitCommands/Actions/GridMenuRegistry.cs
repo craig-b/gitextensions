@@ -25,11 +25,22 @@ public sealed record RefMenuContext(RefMenuKind Kind, bool IsCurrent = false);
 /// <summary>
 ///  The revision grid's action registry: the commit menu (row
 ///  right-click) and the ref menu (branch/tag chip right-click) as declared action lists.
-///  Contextual rows (work tree/index, stashes) REPLACE the commit menu; bisect prepends its
-///  group. Views and the palette project these via <see cref="MenuProjector"/>.
+///  Contextual rows (work tree/index, stashes, 2+ selected rows) REPLACE the commit menu
+///  (keeping the copy group); bisect prepends its group. Views and the palette project
+///  these via <see cref="MenuProjector"/>.
 /// </summary>
 public static class GridMenuRegistry
 {
+    /// <summary>The copy group, kept on every commit-menu variant - stash/artificial hashes stay copyable.</summary>
+    public static IReadOnlyList<ActionDescriptor> CopyActions { get; } =
+    [
+        new("copy.hash", "Commit hash", "copy", ActionTier.Core),
+        new("copy.message", "Message", "copy", ActionTier.Core),
+        new("copy.author", "Author", "copy", ActionTier.Core),
+        new("copy.date", "Date", "copy", ActionTier.Core),
+        new("copy.refNames", "Branch and tag names", "copy", ActionTier.Common),
+    ];
+
     public static IReadOnlyList<ActionDescriptor> ArtificialRowActions { get; } =
     [
         new("artificial.commit", "Commit...", "working", ActionTier.Core),
@@ -41,6 +52,15 @@ public static class GridMenuRegistry
         new("stash.apply", "Apply stash", "stash", ActionTier.Core),
         new("stash.pop", "Pop stash", "stash", ActionTier.Core),
         new("stash.drop", "Drop stash...", "stash", ActionTier.Core, Destructive: true),
+    ];
+
+    /// <summary>Replaces the commit menu when 2+ rows are selected (the range menu).</summary>
+    public static IReadOnlyList<ActionDescriptor> RangeActions { get; } =
+    [
+        new("range.compareSelected", "Compare selected commits", "range", ActionTier.Core),
+        new("range.cherryPick", "Cherry-pick selected commits...", "range", ActionTier.Core),
+        new("range.squash", "Squash selected into one commit...", "range", ActionTier.Core),
+        new("range.copyHashes", "Copy commit hashes", "range", ActionTier.Core),
     ];
 
     public static IReadOnlyList<ActionDescriptor> BisectActions { get; } =
@@ -68,15 +88,10 @@ public static class GridMenuRegistry
         new("compare.toCurrentBranch", "Compare to current branch", "compare", ActionTier.Common),
         new("compare.toWorkingDir", "Compare to working directory", "compare", ActionTier.Common),
         new("compare.toBranch", "Compare to branch...", "compare", ActionTier.Common),
-        new("compare.selected", "Compare selected commits", "compare", ActionTier.Common),
         new("compare.selectBase", "Select as BASE to compare", "compare", ActionTier.Advanced),
         new("compare.toBase", "Compare to BASE", "compare", ActionTier.Advanced),
 
-        new("copy.hash", "Commit hash", "copy", ActionTier.Core),
-        new("copy.message", "Message", "copy", ActionTier.Core),
-        new("copy.author", "Author", "copy", ActionTier.Core),
-        new("copy.date", "Date", "copy", ActionTier.Core),
-        new("copy.refNames", "Branch and tag names", "copy", ActionTier.Common),
+        .. CopyActions,
 
         new("rewrite.edit", "Edit commit", "history-rewrite", ActionTier.Advanced),
         new("rewrite.reword", "Reword commit", "history-rewrite", ActionTier.Advanced),
@@ -103,7 +118,9 @@ public static class GridMenuRegistry
         new("ref.checkout", "Checkout", "primary", ActionTier.Core),
         new("ref.mergeIntoCurrent", "Merge into current branch...", "primary", ActionTier.Core),
         new("ref.rebaseCurrentOnto", "Rebase current branch onto this...", "primary", ActionTier.Common),
+        new("ref.createBranchFrom", "Create branch from here...", "primary", ActionTier.Common),
         new("ref.push", "Push...", "sync", ActionTier.Core),
+        new("ref.pushTag", "Push tag", "sync", ActionTier.Common),
         new("ref.pull", "Pull this branch...", "sync", ActionTier.Common),
         new("ref.compareToCurrent", "Compare to current branch", "compare", ActionTier.Common),
         new("ref.copyName", "Copy name", "copy", ActionTier.Core),
@@ -112,17 +129,36 @@ public static class GridMenuRegistry
         new("ref.delete", "Delete...", "modify", ActionTier.Core, Destructive: true, Hotkey: "Del"),
     ];
 
-    /// <summary>The commit-menu action list for a row: contextual rows replace it, bisect prepends.</summary>
+    /// <summary>
+    ///  Commit-menu groups views render as named submenus rather than separator-delimited
+    ///  runs (the redesign's Copy / History rewrite / Run script submenus).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> CommitSubmenuGroups { get; } = new Dictionary<string, string>
+    {
+        ["copy"] = "Copy",
+        ["history-rewrite"] = "History rewrite",
+        ["scripts"] = "Run script",
+    };
+
+    /// <summary>
+    ///  The commit-menu action list for a row: a multi-row selection or a contextual row
+    ///  replaces it (contextual rows keep the copy group), bisect prepends.
+    /// </summary>
     public static IReadOnlyList<ActionDescriptor> CommitMenuFor(GridCommitMenuContext context)
     {
+        if (context.SelectedCount >= 2)
+        {
+            return RangeActions;
+        }
+
         if (context.IsArtificial)
         {
-            return ArtificialRowActions;
+            return [.. ArtificialRowActions, .. CopyActions];
         }
 
         if (context.IsStash)
         {
-            return StashRowActions;
+            return [.. StashRowActions, .. CopyActions];
         }
 
         return context.InBisect ? [.. BisectActions, .. CommitActions] : CommitActions;
@@ -138,7 +174,7 @@ public static class GridMenuRegistry
                 or "commit.checkoutDetached" or "commit.archive"
                 or "rewrite.edit" or "rewrite.reword" or "rewrite.fixup" or "rewrite.squash" or "rewrite.amend"
                 => !context.IsBareRepository,
-            "compare.selected" => context.SelectedCount >= 2,
+            "range.cherryPick" or "range.squash" => !context.IsBareRepository && context.HasCurrentBranch,
             "compare.toBase" => context.HasBaseToCompare,
             "open.buildReport" => context.HasBuildUrl,
             "open.pullRequest" => context.HasPullRequestUrl,
@@ -151,6 +187,7 @@ public static class GridMenuRegistry
             "ref.checkout" => context.Kind is not RefMenuKind.Tag && !context.IsCurrent,
             "ref.mergeIntoCurrent" or "ref.rebaseCurrentOnto" => !context.IsCurrent,
             "ref.push" or "ref.rename" => context.Kind is RefMenuKind.LocalBranch,
+            "ref.pushTag" => context.Kind is RefMenuKind.Tag,
             "ref.pull" => context.Kind is RefMenuKind.RemoteBranch,
             "ref.delete" => !context.IsCurrent,
             "ref.compareToCurrent" => !context.IsCurrent,

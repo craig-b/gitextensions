@@ -255,7 +255,25 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
     {
         Focus();
         int row = (int)((_offset.Y + e.GetPosition(this).Y) / RowHeight);
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            // A right-click inside the selection keeps it (the range menu needs the multi-
+            // selection to survive) and promotes the clicked row to primary; outside, it selects.
+            if (_selectedIndexes.Contains(row))
+            {
+                _selectedIndex = row;
+                InvalidateVisual();
+                if (_graph.GetNodeForRow(row)?.GitRevision is { } revision)
+                {
+                    RevisionSelected?.Invoke(this, revision);
+                }
+            }
+            else
+            {
+                SelectRow(row);
+            }
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             ToggleRowSelection(row);
         }
