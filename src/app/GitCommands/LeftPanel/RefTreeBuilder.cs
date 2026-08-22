@@ -17,6 +17,30 @@ public enum RefTreeNodeKind
 
     /// <summary>A worktree row in the sidebar (FullPath = the worktree directory).</summary>
     Worktree,
+
+    /// <summary>A stash row (FullPath = the reflog selector, e.g. "stash@{0}").</summary>
+    Stash,
+
+    /// <summary>A submodule row (FullPath = the submodule's local path).</summary>
+    Submodule,
+
+    /// <summary>The "Branches" section header.</summary>
+    BranchesSection,
+
+    /// <summary>The "Remotes" section header.</summary>
+    RemotesSection,
+
+    /// <summary>The "Tags" section header.</summary>
+    TagsSection,
+
+    /// <summary>The "Stashes" section header.</summary>
+    StashesSection,
+
+    /// <summary>The "Submodules" section header.</summary>
+    SubmodulesSection,
+
+    /// <summary>The "Worktrees" section header.</summary>
+    WorktreesSection,
 }
 
 /// <summary>A node of the left panel's ref hierarchy: a folder, or a ref leaf carrying its ObjectId.</summary>

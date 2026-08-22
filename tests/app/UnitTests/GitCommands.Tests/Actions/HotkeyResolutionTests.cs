@@ -51,11 +51,35 @@ public sealed class HotkeyResolutionTests
     {
         HotkeysPageModel page = new();
 
+        // The left-panel group carries only ids not already listed under another surface
+        // (submodule verbs live in the file menu, ref additions in the ref menu).
+        string[] otherSurfaceIds =
+        [
+            .. FileMenuRegistry.FileActions.Select(action => action.Id),
+            .. GridMenuRegistry.RefActions.Select(action => action.Id),
+        ];
+        int leftPanelCount = new[]
+            {
+                LeftPanelMenuRegistry.RemoteRepoActions,
+                LeftPanelMenuRegistry.RemotesSectionActions,
+                LeftPanelMenuRegistry.StashNodeActions,
+                LeftPanelMenuRegistry.StashesSectionActions,
+                LeftPanelMenuRegistry.SubmoduleNodeActions,
+                LeftPanelMenuRegistry.SubmodulesSectionActions,
+                LeftPanelMenuRegistry.WorktreeNodeActions,
+                LeftPanelMenuRegistry.WorktreesSectionActions,
+                LeftPanelMenuRegistry.BranchFolderActions,
+                LeftPanelMenuRegistry.RefRangeActions,
+            }
+            .SelectMany(actions => actions)
+            .DistinctBy(action => action.Id)
+            .Count(action => !otherSurfaceIds.Contains(action.Id));
+
         int entryCount = page.Groups.Sum(group => group.Entries.Count);
         entryCount.Should().Be(
             GridMenuRegistry.CommitActions.Count + GridMenuRegistry.RangeActions.Count
-            + GridMenuRegistry.RefActions.Count + FileMenuRegistry.FileActions.Count);
+            + GridMenuRegistry.RefActions.Count + FileMenuRegistry.FileActions.Count + leftPanelCount);
         page.Groups.Select(group => group.Caption).Should().Equal(
-            "Commit menu", "Range menu (multi-selection)", "Ref menu", "File menu");
+            "Commit menu", "Range menu (multi-selection)", "Ref menu", "File menu", "Left panel");
     }
 }

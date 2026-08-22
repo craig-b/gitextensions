@@ -27,9 +27,12 @@ internal sealed class StashWindow : Window
     /// <summary>Whether any mutation succeeded - the caller refreshes the sidebar off this.</summary>
     public bool StashesChanged { get; private set; }
 
-    public StashWindow(SliceSession session)
+    private string? _initialSelector;
+
+    public StashWindow(SliceSession session, string? initialSelector = null)
     {
         _session = session;
+        _initialSelector = initialSelector;
 
         Title = Loc.T("Stashes");
         Width = 760;
@@ -119,7 +122,10 @@ internal sealed class StashWindow : Window
             ToolTip.SetTip(item, stash.ReflogSelector);
             return item;
         }).ToList();
-        _list.SelectedIndex = -1;
+        _list.SelectedIndex = _initialSelector is null
+            ? -1
+            : _stashes.FindIndex(stash => stash.ReflogSelector == _initialSelector || stash.FullPath == _initialSelector);
+        _initialSelector = null;
         _files.ItemsSource = null;
         UpdateButtons();
     }

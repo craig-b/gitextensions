@@ -405,6 +405,12 @@ public partial class MainWindow
             string branch = node.FullPath[(slash + 1)..];
             return RunOperationAsync($"Pull {node.FullPath}", () => _session.PullBranchAsync(remote, branch));
         },
+        ["ref.fetch"] = node => WithRemoteBranch(node, (remote, branch) =>
+            WithPanelRefresh(RunOperationAsync($"Fetch {node.FullPath}", () => _session.FetchBranchAsync(remote, branch)))),
+        ["ref.fetchCheckout"] = node => FetchThenAsync(node, "ref.checkout"),
+        ["ref.fetchMerge"] = node => FetchThenAsync(node, "ref.mergeIntoCurrent"),
+        ["ref.fetchRebase"] = node => FetchThenAsync(node, "ref.rebaseCurrentOnto"),
+        ["ref.fetchCreateBranch"] = node => FetchThenAsync(node, "ref.createBranchFrom"),
         ["ref.compareToCurrent"] = async node =>
         {
             if ((node.ObjectId ?? _session.ResolveRef(node.FullPath)) is not ObjectId target)
@@ -429,6 +435,24 @@ public partial class MainWindow
             }
         },
     };
+
+    /// <summary>Splits a remote-branch node's "remote/branch" path and runs the action, erroring on odd shapes.</summary>
+    private Task WithRemoteBranch(RefTreeNode node, Func<string, string, Task> action)
+    {
+        int slash = node.FullPath.IndexOf('/');
+        return slash <= 0
+            ? ConfirmDialog.ErrorAsync(this, "Fetch", $"Cannot determine the remote of {node.FullPath}.")
+            : action(node.FullPath[..slash], node.FullPath[(slash + 1)..]);
+    }
+
+    /// <summary>The remote-branch fetch combos: fetch the branch, then run the follow-up ref action on the fresh node.</summary>
+    private Task FetchThenAsync(RefTreeNode node, string followUpActionId)
+        => WithRemoteBranch(node, async (remote, branch) =>
+        {
+            await RunOperationAsync($"Fetch {node.FullPath}", () => _session.FetchBranchAsync(remote, branch));
+            await LoadRefPanelAsync();
+            await RefActionHandlers[followUpActionId](node);
+        });
 
     /// <summary>Fixup/squash/amend: a prefixed commit from staged changes, then the optional autosquash fold.</summary>
     private async Task StartPrefixedCommitAsync(GitUI.CommandsDialogs.CommitKind kind, GitRevision targetRevision)
@@ -673,7 +697,8 @@ public partial class MainWindow
             GridMenuRegistry.RefActions,
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
-            action => handlers[action.Id](node));
+            action => handlers[action.Id](node),
+            GridMenuRegistry.RefSubmenuGroups);
 
         if (menu.Items.Count > 0)
         {
@@ -683,28 +708,94 @@ public partial class MainWindow
 
     private void OnRefTreeContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (RefTree.SelectedItem is RefTreeNode { Kind: RefTreeNodeKind.Worktree } worktreeNode)
+        if (RefTree.SelectedItem is not RefTreeNode node)
+        {
+            return;
+        }
+
+        // 2+ selected ref nodes swap in the panel's range menu (the grid's range-menu pattern).
+        IReadOnlyList<RefTreeNode> selectedRefs = SelectedRefNodes();
+        if (selectedRefs.Count >= 2)
         {
             e.Handled = true;
-            OpenWorktreeMenu(worktreeNode);
+            OpenRefRangeMenu(selectedRefs);
             return;
         }
 
-        RefMenuKind? kind = (RefTree.SelectedItem as RefTreeNode)?.Kind switch
+        switch (node.Kind)
         {
-            RefTreeNodeKind.LocalBranch => RefMenuKind.LocalBranch,
+            case RefTreeNodeKind.LocalBranch or RefTreeNodeKind.RemoteBranch or RefTreeNodeKind.Tag:
+                e.Handled = true;
+                OpenSidebarRefMenu(node);
+                return;
+
+            case RefTreeNodeKind.Folder when IsInSection(node, RefTreeNodeKind.BranchesSection):
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.BranchFolderActions, _ => true);
+                return;
+
+            case RefTreeNodeKind.RemoteRepo:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.RemoteRepoMenuFor(
+                    new LeftPanelRemoteContext(node.Enabled, HasHttpUrl: node.Remote?.FetchUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) is true)), _ => true);
+                return;
+
+            case RefTreeNodeKind.Stash:
+                e.Handled = true;
+                LeftPanelStashContext stashContext = new(_session.IsBareRepository);
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.StashNodeActions,
+                    action => LeftPanelMenuRegistry.IsApplicable(action, stashContext));
+                return;
+
+            case RefTreeNodeKind.Submodule:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.SubmoduleMenuFor(
+                    new LeftPanelSubmoduleContext(IsCurrent: false, _session.IsBareRepository)), _ => true);
+                return;
+
+            case RefTreeNodeKind.Worktree:
+                e.Handled = true;
+                LeftPanelWorktreeContext worktreeContext = new(
+                    node.IsCurrent,
+                    IsDeleted: !System.IO.Directory.Exists(node.FullPath),
+                    DirectoryExists: System.IO.Directory.Exists(node.FullPath));
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.WorktreeNodeActions,
+                    action => LeftPanelMenuRegistry.IsApplicable(action, worktreeContext));
+                return;
+
+            case RefTreeNodeKind.RemotesSection:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.RemotesSectionActions, _ => true);
+                return;
+
+            case RefTreeNodeKind.StashesSection:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.StashesSectionActions, _ => true);
+                return;
+
+            case RefTreeNodeKind.SubmodulesSection:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.SubmodulesSectionActions, _ => true);
+                return;
+
+            case RefTreeNodeKind.WorktreesSection:
+                e.Handled = true;
+                OpenLeftPanelMenu(node, LeftPanelMenuRegistry.WorktreesSectionActions, _ => true);
+                return;
+        }
+    }
+
+    /// <summary>The registry ref menu for a sidebar branch/tag node (same projection as the grid's chips).</summary>
+    private void OpenSidebarRefMenu(RefTreeNode node)
+    {
+        RefMenuKind kind = node.Kind switch
+        {
             RefTreeNodeKind.RemoteBranch => RefMenuKind.RemoteBranch,
             RefTreeNodeKind.Tag => RefMenuKind.Tag,
-            _ => null,
+            _ => RefMenuKind.LocalBranch,
         };
 
-        if (kind is null || RefTree.SelectedItem is not RefTreeNode node)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        RefMenuContext context = new(kind.Value, node.IsCurrent);
+        RefMenuContext context = new(kind, node.IsCurrent, FromLeftPanel: true);
         Dictionary<string, Func<RefTreeNode, Task>> handlers = RefActionHandlers;
         foreach (GitCommands.Scripts.ScriptDefinition script in _scripts)
         {
@@ -716,6 +807,23 @@ public partial class MainWindow
             [.. GridMenuRegistry.RefActions, .. GitCommands.Scripts.ScriptActions.ToDescriptors(_scripts, GitCommands.Scripts.ScriptSurfaces.RefMenu)],
             action => handlers.ContainsKey(action.Id),
             action => GridMenuRegistry.IsApplicable(action, context),
+            action => handlers[action.Id](node),
+            GridMenuRegistry.RefSubmenuGroups);
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(RefTree);
+        }
+    }
+
+    /// <summary>Opens a panel-unique node menu (remote repo, stash, submodule, worktree, sections, folders).</summary>
+    private void OpenLeftPanelMenu(RefTreeNode node, IReadOnlyList<ActionDescriptor> actions, Func<ActionDescriptor, bool> isApplicable)
+    {
+        Dictionary<string, Func<RefTreeNode, Task>> handlers = LeftPanelActionHandlers;
+        ContextMenu menu = BuildMenu(
+            actions,
+            action => handlers.ContainsKey(action.Id),
+            isApplicable,
             action => handlers[action.Id](node));
 
         if (menu.Items.Count > 0)
@@ -724,45 +832,208 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>The worktree node menu (not registry-driven yet - the worktree surface has no registry).</summary>
-    private void OpenWorktreeMenu(RefTreeNode node)
+    /// <summary>The panel's range menu for a multi-selection of ref nodes.</summary>
+    private void OpenRefRangeMenu(IReadOnlyList<RefTreeNode> selectedRefs)
     {
-        ContextMenu menu = new();
-        AddItem("Open in new window", () =>
+        LeftPanelRangeContext context = new(selectedRefs.Count);
+        Dictionary<string, Func<IReadOnlyList<RefTreeNode>, Task>> handlers = RefRangeHandlers;
+        ContextMenu menu = BuildMenu(
+            LeftPanelMenuRegistry.RefRangeActions,
+            action => handlers.ContainsKey(action.Id),
+            action => LeftPanelMenuRegistry.IsApplicable(action, context),
+            action => handlers[action.Id](selectedRefs));
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Open(RefTree);
+        }
+    }
+
+    /// <summary>The branch/tag nodes of the sidebar's current multi-selection.</summary>
+    private IReadOnlyList<RefTreeNode> SelectedRefNodes()
+        => RefTree.SelectedItems is null
+            ? []
+            : [.. RefTree.SelectedItems.OfType<RefTreeNode>()
+                .Where(item => item.Kind is RefTreeNodeKind.LocalBranch or RefTreeNodeKind.RemoteBranch or RefTreeNodeKind.Tag)];
+
+    /// <summary>Whether the node sits under the given section header of the sidebar.</summary>
+    private bool IsInSection(RefTreeNode node, RefTreeNodeKind sectionKind)
+    {
+        if (RefTree.ItemsSource is not IEnumerable<RefTreeNode> sections)
+        {
+            return false;
+        }
+
+        return sections.Any(section => section.Kind == sectionKind && Contains(section));
+
+        bool Contains(RefTreeNode candidate)
+            => candidate == node || candidate.Children.Any(Contains);
+    }
+
+    private Dictionary<string, Func<IReadOnlyList<RefTreeNode>, Task>> RefRangeHandlers => new()
+    {
+        ["refs.compareSelected"] = nodes =>
+        {
+            RefTreeNode first = nodes[0];
+            RefTreeNode second = nodes[1];
+            if ((first.ObjectId ?? _session.ResolveRef(first.FullPath)) is not ObjectId firstId
+                || (second.ObjectId ?? _session.ResolveRef(second.FullPath)) is not ObjectId secondId)
+            {
+                return ConfirmDialog.ErrorAsync(this, "Compare", "Cannot resolve the selected refs.");
+            }
+
+            new CompareWindow(_session, firstId, first.FullPath, secondId, second.FullPath).Show(this);
+            return Task.CompletedTask;
+        },
+    };
+
+    private Dictionary<string, Func<RefTreeNode, Task>> LeftPanelActionHandlers => new()
+    {
+        // remote repo node
+        ["remote.fetch"] = node => WithPanelRefresh(RunOperationAsync($"Fetch {node.Name}", () => _session.FetchRemoteAsync(node.Name, prune: false))),
+        ["remote.fetchPrune"] = node => WithPanelRefresh(RunOperationAsync($"Fetch & prune {node.Name}", () => _session.FetchRemoteAsync(node.Name, prune: true))),
+        ["remote.activate"] = node => SetRemoteStateAsync(node.Name, disabled: false, fetchAfter: false),
+        ["remote.activateFetch"] = node => SetRemoteStateAsync(node.Name, disabled: false, fetchAfter: true),
+        ["remote.deactivate"] = node => SetRemoteStateAsync(node.Name, disabled: true, fetchAfter: false),
+        ["remote.openUrl"] = node =>
+        {
+            if (node.Remote?.FetchUrl is string url)
+            {
+                GitCommands.OsShellUtil.OpenUrlInDefaultBrowser(url);
+            }
+
+            return Task.CompletedTask;
+        },
+        ["remote.manage"] = _ => OpenRemotesWindowAsync(),
+
+        // remotes section
+        ["remotes.fetchAll"] = _ => WithPanelRefresh(RunOperationAsync("Fetch all remotes", () => _session.FetchAllAsync(prune: false))),
+        ["remotes.fetchPruneAll"] = _ => WithPanelRefresh(RunOperationAsync("Fetch & prune all remotes", () => _session.FetchAllAsync(prune: true))),
+        ["remotes.manage"] = _ => OpenRemotesWindowAsync(),
+
+        // stash node
+        ["stash.show"] = node => OpenStashManagerAsync(node.FullPath),
+        ["stash.apply"] = node => WithPanelRefresh(RunOperationAsync($"Apply {node.FullPath}", () => _session.StashApplyAsync(node.FullPath))),
+        ["stash.pop"] = node => WithPanelRefresh(RunOperationAsync($"Pop {node.FullPath}", () => _session.StashPopAsync(node.FullPath))),
+        ["stash.drop"] = async node =>
+        {
+            if (await ConfirmDialog.ConfirmAsync(this, "Drop stash", $"Drop {node.Name}?\nThis cannot be undone."))
+            {
+                await WithPanelRefresh(RunOperationAsync($"Drop {node.FullPath}", () => _session.StashDropAsync(node.FullPath)));
+            }
+        },
+        ["stash.copyHash"] = node => node.ObjectId is ObjectId stashId ? CopyToClipboardAsync(stashId.ToString()) : Task.CompletedTask,
+
+        // stashes section
+        ["stashes.save"] = _ => WithPanelRefresh(RunOperationAsync("Stash changes", () => _session.StashSaveAsync())),
+        ["stashes.saveStaged"] = _ => WithPanelRefresh(RunOperationAsync("Stash staged", _session.StashStagedAsync)),
+        ["stashes.manage"] = _ => OpenStashManagerAsync(initialSelector: null),
+
+        // submodule node (reset/stash/commit run a session inside the submodule, like the file menu)
+        ["submodule.switchTo"] = node => SwitchRepositoryAsync(node.FullPath),
+        ["submodule.open"] = node =>
         {
             new MainWindow(node.FullPath).Show();
             return Task.CompletedTask;
-        });
-        AddItem("Create worktree...", async () =>
+        },
+        ["submodule.update"] = node => WithPanelRefresh(RunOperationAsync($"Update {node.Name}", () => _session.UpdateSubmoduleAsync(node.Name))),
+        ["submodule.reset"] = async node =>
+        {
+            if (await ConfirmDialog.ConfirmAsync(this, "Reset submodule", $"Reset ALL changes in {node.Name}? Untracked files are kept."))
+            {
+                await new SliceSession(node.FullPath).ResetAllChangesAsync(clean: false);
+                await ReloadLogAsync();
+            }
+        },
+        ["submodule.stash"] = async node =>
+        {
+            await new SliceSession(node.FullPath).StashSaveAsync();
+            await ReloadLogAsync();
+        },
+        ["submodule.commit"] = async node =>
+        {
+            CommitWindow submoduleCommit = new(new SliceSession(node.FullPath));
+            await submoduleCommit.ShowDialog(this);
+            await ReloadLogAsync();
+        },
+
+        // submodules section
+        ["submodules.updateAll"] = _ => WithPanelRefresh(RunOperationAsync("Update submodules", _session.UpdateSubmodulesAsync)),
+        ["submodules.syncAll"] = _ => WithPanelRefresh(RunOperationAsync("Synchronize submodules", _session.SyncSubmodulesAsync)),
+
+        // worktree node
+        ["worktree.open"] = node => SwitchRepositoryAsync(node.FullPath),
+        ["worktree.copyPath"] = node => CopyToClipboardAsync(node.FullPath),
+        ["worktree.showInFolder"] = node =>
+        {
+            GitCommands.OsShellUtil.Open(node.FullPath);
+            return Task.CompletedTask;
+        },
+        ["worktree.delete"] = async node =>
+        {
+            if (await ConfirmDialog.ConfirmAsync(this, "Delete worktree", $"Remove the worktree at {node.FullPath}?\nThis cannot be undone."))
+            {
+                await WithPanelRefresh(RunOperationAsync("Delete worktree", () => _session.RemoveWorktreeAsync(node.FullPath, force: true)));
+            }
+        },
+
+        // worktrees section
+        ["worktrees.create"] = async _ =>
         {
             IReadOnlyList<string> branches = await Task.Run(_session.GetLocalBranchNames);
             var choice = await CreateWorktreeDialog.ShowAsync(this, _session.WorkingDir.TrimEnd('/', '\\'), branches, _session.SelectedBranch);
             if (choice is var (directory, newBranchOption) && choice is not null)
             {
-                await RunOperationAsync("Create worktree", () => _session.CreateWorktreeAsync(directory, newBranchOption));
-                await LoadRefPanelAsync();
+                await WithPanelRefresh(RunOperationAsync("Create worktree", () => _session.CreateWorktreeAsync(directory, newBranchOption)));
             }
-        });
-        AddItem("Delete worktree...", async () =>
-        {
-            if (await ConfirmDialog.ConfirmAsync(this, "Delete worktree", $"Remove the worktree at {node.FullPath}?\nThis cannot be undone."))
-            {
-                await RunOperationAsync("Delete worktree", () => _session.RemoveWorktreeAsync(node.FullPath, force: true));
-                await LoadRefPanelAsync();
-            }
-        });
-        AddItem("Prune worktrees", async () =>
-        {
-            await RunOperationAsync("Prune worktrees", _session.PruneWorktreesAsync);
-            await LoadRefPanelAsync();
-        });
-        menu.Open(RefTree);
+        },
+        ["worktrees.prune"] = _ => WithPanelRefresh(RunOperationAsync("Prune worktrees", _session.PruneWorktreesAsync)),
 
-        void AddItem(string caption, Func<Task> execute)
+        // branch folder
+        ["folder.createBranch"] = async node =>
         {
-            MenuItem item = new() { Header = caption };
-            item.Click += (_, _) => _ = execute();
-            menu.Items.Add(item);
+            string? name = await ConfirmDialog.InputAsync(this, "Create branch", "Branch name:", $"{node.FullPath}/");
+            if (!string.IsNullOrWhiteSpace(name) && name.Trim() != node.FullPath)
+            {
+                await WithPanelRefresh(RunOperationAsync($"Create branch {name}", () => _session.CreateBranchAsync(name.Trim(), checkout: false)));
+            }
+        },
+    };
+
+    /// <summary>Awaits an operation, then refreshes the sidebar (refs/stashes/worktrees may have changed).</summary>
+    private async Task WithPanelRefresh(Task operation)
+    {
+        await operation;
+        await LoadRefPanelAsync();
+    }
+
+    private async Task SetRemoteStateAsync(string remoteName, bool disabled, bool fetchAfter)
+    {
+        GitCommands.Remotes.IConfigFileRemoteSettingsManager manager = _session.CreateRemotesManager();
+        await Task.Run(() => manager.ToggleRemoteState(remoteName, disabled));
+        if (fetchAfter)
+        {
+            await RunOperationAsync($"Fetch {remoteName}", () => _session.FetchRemoteAsync(remoteName, prune: false));
+        }
+
+        await LoadRefPanelAsync();
+    }
+
+    private async Task OpenRemotesWindowAsync()
+    {
+        RemotesWindow remotesWindow = new(_session);
+        await remotesWindow.ShowDialog(this);
+        await LoadRefPanelAsync();
+    }
+
+    private async Task OpenStashManagerAsync(string? initialSelector)
+    {
+        StashWindow stashWindow = new(_session, initialSelector);
+        await stashWindow.ShowDialog(this);
+        if (stashWindow.StashesChanged)
+        {
+            await ReloadLogAsync();
+            await LoadRefPanelAsync();
         }
     }
 
@@ -876,6 +1147,35 @@ public partial class MainWindow
             _menuProfile,
             action => GridMenuRegistry.IsApplicable(action, refContext));
         Console.Error.WriteLine($"[menu] ref menu (local, not current): {string.Join(" | ", refGroups.Select(group => string.Join(", ", group.Select(item => item.Action.Caption))))}");
+
+        RefMenuContext panelRemoteBranch = new(RefMenuKind.RemoteBranch, FromLeftPanel: true);
+        var panelRefGroups = MenuProjector.Project(
+            [.. GridMenuRegistry.RefActions.Where(action => RefActionHandlers.ContainsKey(action.Id))],
+            _menuProfile,
+            action => GridMenuRegistry.IsApplicable(action, panelRemoteBranch));
+        Console.Error.WriteLine($"[menu] ref menu (remote branch, left panel): {string.Join(" | ", panelRefGroups.Select(group => string.Join(", ", group.Select(item => item.Enabled ? item.Action.Caption : $"({item.Action.Caption})"))))}");
+
+        Dictionary<string, Func<RefTreeNode, Task>> panelHandlers = LeftPanelActionHandlers;
+        foreach ((string label, IReadOnlyList<ActionDescriptor> actions) in new (string, IReadOnlyList<ActionDescriptor>)[]
+        {
+            ("remote repo (enabled)", LeftPanelMenuRegistry.RemoteRepoMenuFor(new LeftPanelRemoteContext(RemoteEnabled: true, HasHttpUrl: true))),
+            ("remote repo (disabled)", LeftPanelMenuRegistry.RemoteRepoMenuFor(new LeftPanelRemoteContext(RemoteEnabled: false))),
+            ("stash node", LeftPanelMenuRegistry.StashNodeActions),
+            ("stashes section", LeftPanelMenuRegistry.StashesSectionActions),
+            ("submodule node", LeftPanelMenuRegistry.SubmoduleMenuFor(new LeftPanelSubmoduleContext())),
+            ("submodules section", LeftPanelMenuRegistry.SubmodulesSectionActions),
+            ("worktree node", LeftPanelMenuRegistry.WorktreeNodeActions),
+            ("worktrees section", LeftPanelMenuRegistry.WorktreesSectionActions),
+            ("branch folder", LeftPanelMenuRegistry.BranchFolderActions),
+            ("ref range", LeftPanelMenuRegistry.RefRangeActions),
+        })
+        {
+            var panelGroups = MenuProjector.Project(
+                [.. actions.Where(action => panelHandlers.ContainsKey(action.Id) || RefRangeHandlers.ContainsKey(action.Id))],
+                _menuProfile,
+                _ => true);
+            Console.Error.WriteLine($"[menu] left panel {label}: {string.Join(" | ", panelGroups.Select(group => string.Join(", ", group.Select(item => item.Action.Caption))))}");
+        }
 
         // The file tree fills asynchronously after the row selection; wait for the first leaf.
         GitItemStatus? firstFile = null;

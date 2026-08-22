@@ -24,7 +24,7 @@
             <TextBlock x:Name="OperationStatus" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />
         </StackPanel>
 
-        <TreeView x:Name="RefTree" Grid.Column="0" Grid.Row="2" SelectionChanged="OnRefTreeSelectionChanged" DoubleTapped="OnRefTreeDoubleTapped">
+        <TreeView x:Name="RefTree" Grid.Column="0" Grid.Row="2" SelectionMode="Multiple" SelectionChanged="OnRefTreeSelectionChanged" DoubleTapped="OnRefTreeDoubleTapped">
             <TreeView.ItemTemplate>
                 <TreeDataTemplate x:DataType="lp:RefTreeNode" ItemsSource="{Binding Children}">
                     <TextBlock Text="{Binding Name}" FontSize="12" />

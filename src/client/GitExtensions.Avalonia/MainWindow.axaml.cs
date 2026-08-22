@@ -487,10 +487,11 @@ public partial class MainWindow : Window
         var (branches, remotes, tags) = await Task.Run(_session.GetRefPanel);
         IReadOnlyList<GitCommands.LeftPanel.StashTreeNode> stashes = await Task.Run(_session.GetStashPanel);
         IReadOnlyList<GitCommands.LeftPanel.WorktreeTreeNode> worktrees = await Task.Run(_session.GetWorktreePanel);
+        IReadOnlyList<GitCommands.LeftPanel.RefTreeNode> submodules = await Task.Run(_session.GetSubmodulePanel);
 
-        GitCommands.LeftPanel.RefTreeNode Section(string name, IEnumerable<GitCommands.LeftPanel.RefTreeNode> children)
+        GitCommands.LeftPanel.RefTreeNode Section(string name, GitCommands.LeftPanel.RefTreeNodeKind kind, IEnumerable<GitCommands.LeftPanel.RefTreeNode> children)
         {
-            GitCommands.LeftPanel.RefTreeNode section = new() { Name = name, FullPath = "" };
+            GitCommands.LeftPanel.RefTreeNode section = new() { Name = name, FullPath = "", Kind = kind };
             section.Children.AddRange(children);
             return section;
         }
@@ -508,29 +509,39 @@ public partial class MainWindow : Window
             return inactive;
         });
 
-        RefTree.ItemsSource = new[]
-        {
-            Section($"Branches ({branches.Count})", branches),
-            Section($"Remotes ({remotes.Count})", remoteNodes),
-            Section($"Tags ({tags.Count})", tags),
-            Section($"Stashes ({stashes.Count})", stashes.Select(stash => new GitCommands.LeftPanel.RefTreeNode
+        List<GitCommands.LeftPanel.RefTreeNode> sections =
+        [
+            Section($"Branches ({branches.Count})", GitCommands.LeftPanel.RefTreeNodeKind.BranchesSection, branches),
+            Section($"Remotes ({remotes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.RemotesSection, remoteNodes),
+            Section($"Tags ({tags.Count})", GitCommands.LeftPanel.RefTreeNodeKind.TagsSection, tags),
+            Section($"Stashes ({stashes.Count})", GitCommands.LeftPanel.RefTreeNodeKind.StashesSection, stashes.Select(stash => new GitCommands.LeftPanel.RefTreeNode
             {
                 Name = stash.DisplayName,
                 FullPath = stash.FullPath,
                 ObjectId = stash.ObjectId,
+                Kind = GitCommands.LeftPanel.RefTreeNodeKind.Stash,
             })),
-            Section($"Worktrees ({worktrees.Count})", worktrees.Select(worktree => new GitCommands.LeftPanel.RefTreeNode
+            Section($"Worktrees ({worktrees.Count})", GitCommands.LeftPanel.RefTreeNodeKind.WorktreesSection, worktrees.Select(worktree => new GitCommands.LeftPanel.RefTreeNode
             {
                 Name = worktree.IsCurrent ? $"{worktree.DisplayPath} (current)" : worktree.DisplayPath,
                 FullPath = worktree.Worktree.Path,
+                IsCurrent = worktree.IsCurrent,
                 Kind = GitCommands.LeftPanel.RefTreeNodeKind.Worktree,
             })),
-        };
+        ];
+
+        if (submodules.Count > 0)
+        {
+            sections.Add(Section($"Submodules ({submodules.Count})", GitCommands.LeftPanel.RefTreeNodeKind.SubmodulesSection, submodules));
+        }
+
+        RefTree.ItemsSource = sections;
     }
 
     private void OnRefTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (RefTree.SelectedItem is GitCommands.LeftPanel.RefTreeNode { ObjectId: ObjectId objectId })
+        if (RefTree.SelectedItems is { Count: 1 }
+            && RefTree.SelectedItem is GitCommands.LeftPanel.RefTreeNode { ObjectId: ObjectId objectId })
         {
             LogControl.TryJumpTo(objectId);
         }
@@ -538,12 +549,25 @@ public partial class MainWindow : Window
 
     private async void OnRefTreeDoubleTapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
     {
-        if (RefTree.SelectedItem is not GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.LocalBranch, IsCurrent: false } branch)
+        switch (RefTree.SelectedItem)
         {
-            return;
-        }
+            case GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.LocalBranch, IsCurrent: false } branch:
+                await CheckoutBranchInteractiveAsync(branch.FullPath);
+                return;
 
-        await CheckoutBranchInteractiveAsync(branch.FullPath);
+            case GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.Stash } stash:
+                await OpenStashManagerAsync(stash.FullPath);
+                return;
+
+            case GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.Worktree, IsCurrent: false } worktree
+                when System.IO.Directory.Exists(worktree.FullPath):
+                await SwitchRepositoryAsync(worktree.FullPath);
+                return;
+
+            case GitCommands.LeftPanel.RefTreeNode { Kind: GitCommands.LeftPanel.RefTreeNodeKind.Submodule } submodule:
+                await SwitchRepositoryAsync(submodule.FullPath);
+                return;
+        }
     }
 
     /// <summary>Checkout with the dialog's local-changes choice (stash&reapply/merge/discard/leave), shared by the sidebar and the menu bar.</summary>

@@ -130,6 +130,18 @@ public sealed class SliceSession
     public IReadOnlyList<WorktreeTreeNode> GetWorktreePanel()
         => WorktreeTreeBuilder.Build(_module.GetWorktrees(), _module.WorkingDir);
 
+    /// <summary>
+    ///  The submodule rows for the left panel: this repo's direct submodules as a flat list
+    ///  (Name = the relative path git knows the submodule by, FullPath = absolute).
+    /// </summary>
+    public IReadOnlyList<RefTreeNode> GetSubmodulePanel()
+        => [.. _module.GetSubmodulesLocalPaths(recursive: false).Select(path => new RefTreeNode
+        {
+            Name = path,
+            FullPath = Path.Combine(_module.WorkingDir, path),
+            Kind = RefTreeNodeKind.Submodule,
+        })];
+
     /// <summary>Creates a worktree with the model's command (worktree.useRelativePaths seeded when unset).</summary>
     public Task<(bool Success, string Output)> CreateWorktreeAsync(string directory, string newBranchOption)
         => Task.Run(() =>
@@ -466,6 +478,18 @@ public sealed class SliceSession
     public Task<(bool Success, string Output)> FetchAsync()
         => Task.Run(() => RunGitOperation(_module.FetchCmd(remote: null, remoteBranch: null, localBranch: null)));
 
+    /// <summary>Fetches one remote, optionally pruning its stale remote-tracking refs.</summary>
+    public Task<(bool Success, string Output)> FetchRemoteAsync(string remote, bool prune)
+        => Task.Run(() => RunGitOperation(_module.FetchCmd(remote, remoteBranch: null, localBranch: null, pruneRemoteBranches: prune)));
+
+    /// <summary>Fetches every remote (git fetch --all), optionally pruning.</summary>
+    public Task<(bool Success, string Output)> FetchAllAsync(bool prune)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("fetch") { "--progress", "--all", { prune, "--prune" } }));
+
+    /// <summary>Fetches a single branch of a remote (the left panel's per-branch Fetch).</summary>
+    public Task<(bool Success, string Output)> FetchBranchAsync(string remote, string branch)
+        => Task.Run(() => RunGitOperation(_module.FetchCmd(remote, remoteBranch: branch, localBranch: null)));
+
     /// <summary>Pulls the current branch from its tracking remote (or the default remote).</summary>
     public Task<(bool Success, string Output)> PullAsync(bool rebase)
     {
@@ -542,6 +566,9 @@ public sealed class SliceSession
 
     public Task<(bool Success, string Output)> StashPopAsync()
         => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "pop" }));
+
+    public Task<(bool Success, string Output)> StashPopAsync(string reflogSelector)
+        => Task.Run(() => RunGitOperation(new GitArgumentBuilder("stash") { "pop", reflogSelector.QuoteNE() }));
 
     public Task<(bool Success, string Output)> CreateBranchAsync(string branchName, bool checkout)
         => Task.Run(() => RunGitOperation(Commands.Branch(branchName, CurrentCheckout, checkout)));

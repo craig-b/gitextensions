@@ -19,8 +19,8 @@ public enum RefMenuKind
     Tag,
 }
 
-/// <summary>What the ref-chip menu knows about the clicked ref.</summary>
-public sealed record RefMenuContext(RefMenuKind Kind, bool IsCurrent = false);
+/// <summary>What the ref menu knows about the clicked ref (a grid chip or a left-panel node).</summary>
+public sealed record RefMenuContext(RefMenuKind Kind, bool IsCurrent = false, bool FromLeftPanel = false);
 
 /// <summary>
 ///  The revision grid's action registry: the commit menu (row
@@ -114,7 +114,13 @@ public static class GridMenuRegistry
         new("ref.push", "Push...", "sync", ActionTier.Core),
         new("ref.pushTag", "Push tag", "sync", ActionTier.Common),
         new("ref.pull", "Pull this branch...", "sync", ActionTier.Common),
+        new("ref.fetch", "Fetch this branch", "sync", ActionTier.Common),
+        new("ref.fetchCheckout", "Fetch & checkout", "fetch-combo", ActionTier.Advanced),
+        new("ref.fetchMerge", "Fetch & merge (pull)...", "fetch-combo", ActionTier.Advanced),
+        new("ref.fetchRebase", "Fetch & rebase...", "fetch-combo", ActionTier.Advanced),
+        new("ref.fetchCreateBranch", "Fetch & create branch...", "fetch-combo", ActionTier.Advanced),
         new("ref.compareToCurrent", "Compare to current branch", "compare", ActionTier.Common),
+        new("ref.filterForSelected", "Filter for selected", "compare", ActionTier.Common),
         new("ref.copyName", "Copy name", "copy", ActionTier.Core),
         new("ref.selectInLeftPanel", "Select in left panel", "copy", ActionTier.Common),
         new("ref.rename", "Rename...", "modify", ActionTier.Common, Hotkey: "F2"),
@@ -129,6 +135,13 @@ public static class GridMenuRegistry
     {
         ["copy"] = "Copy",
         ["history-rewrite"] = "History rewrite",
+        ["scripts"] = "Run script",
+    };
+
+    /// <summary>Ref-menu groups views render as named submenus (the remote-branch fetch combos).</summary>
+    public static IReadOnlyDictionary<string, string> RefSubmenuGroups { get; } = new Dictionary<string, string>
+    {
+        ["fetch-combo"] = "Fetch &",
         ["scripts"] = "Run script",
     };
 
@@ -180,7 +193,9 @@ public static class GridMenuRegistry
             "ref.mergeIntoCurrent" or "ref.rebaseCurrentOnto" => !context.IsCurrent,
             "ref.push" or "ref.rename" => context.Kind is RefMenuKind.LocalBranch,
             "ref.pushTag" => context.Kind is RefMenuKind.Tag,
-            "ref.pull" => context.Kind is RefMenuKind.RemoteBranch,
+            "ref.pull" or "ref.fetch" or "ref.fetchCheckout" or "ref.fetchMerge" or "ref.fetchRebase"
+                or "ref.fetchCreateBranch" => context.Kind is RefMenuKind.RemoteBranch,
+            "ref.selectInLeftPanel" => !context.FromLeftPanel,
             "ref.delete" => !context.IsCurrent,
             "ref.compareToCurrent" => !context.IsCurrent,
             _ => true,
