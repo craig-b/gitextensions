@@ -260,8 +260,15 @@ public partial class MainWindow : Window
                 int byPath = await CountAsync();
                 _session.Filter.ResetAllFilters();
 
-                Console.Error.WriteLine($"[filter] all={all} message(feat-one)={byMessage} branch(feature/one)={byBranch} path(b.txt)={byPath}");
-                bool ok = byMessage == 1 && byBranch > 0 && byBranch < all && byPath >= 1 && byPath < all;
+                GitRevision headRevision = _session.GetRevision(_session.CurrentCheckout);
+                IReadOnlyList<GitUI.FileStatusWithDescription> grepGroups =
+                    _session.GetRevisionFileGroups(headRevision, "twenty", CancellationToken.None);
+                bool grepOk = grepGroups.Any(group =>
+                    group.Summary.StartsWith("grep", StringComparison.OrdinalIgnoreCase)
+                    && group.Statuses.Any(status => status.Name == "lp.txt"));
+
+                Console.Error.WriteLine($"[filter] all={all} message(feat-one)={byMessage} branch(feature/one)={byBranch} path(b.txt)={byPath} grep(twenty)={grepOk}");
+                bool ok = byMessage == 1 && byBranch > 0 && byBranch < all && byPath >= 1 && byPath < all && grepOk;
                 Console.Error.WriteLine($"[filter] {(ok ? "OK" : "FAIL")}");
                 Environment.Exit(ok ? 0 : 1);
             };
@@ -1768,6 +1775,35 @@ public partial class MainWindow : Window
     private readonly Dictionary<GitItemStatus, GitUI.FileStatusWithDescription> _fileGroups = new(ReferenceEqualityComparer.Instance);
     private CancellationTokenSource? _fileDiffCts;
 
+    /// <summary>The file tree's git-grep search; non-empty adds the grep group to the file groups.</summary>
+    private string? _grepSearch;
+
+    private void OnGrepBoxKeyDown(object? sender, global::Avalonia.Input.KeyEventArgs e)
+    {
+        if (e.Key == global::Avalonia.Input.Key.Enter)
+        {
+            e.Handled = true;
+            _grepSearch = string.IsNullOrWhiteSpace(GrepBox.Text) ? null : GrepBox.Text;
+            if (_selectedRevision is GitRevision revision)
+            {
+                _ = ShowRevisionAsync(revision);
+            }
+        }
+        else if (e.Key == global::Avalonia.Input.Key.Escape)
+        {
+            e.Handled = true;
+            GrepBox.Text = "";
+            if (_grepSearch is not null)
+            {
+                _grepSearch = null;
+                if (_selectedRevision is GitRevision revision)
+                {
+                    _ = ShowRevisionAsync(revision);
+                }
+            }
+        }
+    }
+
     private async Task ShowRevisionAsync(GitRevision revision)
     {
         _selectionCts?.Cancel();
@@ -1778,7 +1814,7 @@ public partial class MainWindow : Window
         {
             var (header, body) = await Task.Run(() => _session.GetCommitInfo(revision), cancellationToken);
             IReadOnlyList<GitUI.FileStatusWithDescription> groups =
-                await Task.Run(() => _session.GetRevisionFileGroups(revision, cancellationToken), cancellationToken);
+                await Task.Run(() => _session.GetRevisionFileGroups(revision, _grepSearch, cancellationToken), cancellationToken);
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -1817,7 +1853,10 @@ public partial class MainWindow : Window
         }
 
         // The same policy as the WinForms list: show group headers only for multiple groups.
-        (bool showDiffGroups, _, _, _) = GitCommands.FileStatus.FileStatusGroupPolicy.ComputeFlags(groups, groupByRevision: false, GitCommands.FileStatus.GitGrepState.None);
+        (bool showDiffGroups, _, _, _) = GitCommands.FileStatus.FileStatusGroupPolicy.ComputeFlags(
+            groups,
+            groupByRevision: false,
+            string.IsNullOrWhiteSpace(_grepSearch) ? GitCommands.FileStatus.GitGrepState.None : GitCommands.FileStatus.GitGrepState.Provided);
 
         List<StatusNode> roots = [];
         foreach (GitUI.FileStatusWithDescription group in groups)
@@ -1904,6 +1943,11 @@ public partial class MainWindow : Window
             ["file.filterInGrid"] = status =>
             {
                 _filterBar.ApplyPathFilter(GitCommands.PathUtil.ToPosixPath(status.Name));
+                return Task.CompletedTask;
+            },
+            ["file.gitGrep"] = _ =>
+            {
+                GrepBox.Focus();
                 return Task.CompletedTask;
             },
             ["file.blame"] = status =>

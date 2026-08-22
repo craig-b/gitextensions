@@ -692,11 +692,25 @@ public sealed class SliceSession
     ///  the real FileStatusDiffCalculator, so merge commits get per-parent groups.
     /// </summary>
     public IReadOnlyList<FileStatusWithDescription> GetRevisionFileGroups(GitRevision revision, CancellationToken cancellationToken)
+        => GetRevisionFileGroups(revision, grepSearch: null, cancellationToken);
+
+    /// <summary>The revision's file groups, optionally with a git-grep group (GitGrepQuery wraps plain text as -e).</summary>
+    public IReadOnlyList<FileStatusWithDescription> GetRevisionFileGroups(GitRevision revision, string? grepSearch, CancellationToken cancellationToken)
     {
         FileStatusDiffCalculator calculator = new(() => _module);
         calculator.SetDiff([revision], headId: default(ObjectId), allowMultiDiff: false);
-        return calculator.Calculate(prevList: [], refreshDiff: true, refreshGrep: false, cancellationToken);
+        bool grep = !string.IsNullOrWhiteSpace(grepSearch);
+        if (grep)
+        {
+            calculator.SetGrep(GitCommands.FileStatus.GitGrepQuery.BuildSearchArgument(grepSearch!), fileTreeMode: false);
+        }
+
+        return calculator.Calculate(prevList: [], refreshDiff: true, refreshGrep: grep, cancellationToken);
     }
+
+    /// <summary>Every path in the revision's tree (the find-file listing).</summary>
+    public IReadOnlyList<string> GetFullTree(ObjectId objectId)
+        => _module.GetFullTree(objectId.ToString());
 
     /// <summary>
     ///  One file's diff between two revisions of a diff group, through the M4 highlight pipeline.

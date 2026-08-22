@@ -55,7 +55,9 @@
             <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
 
             <Grid Grid.Row="2" ColumnDefinitions="230,4,*">
-                <TreeView x:Name="FileTree" Grid.Column="0" SelectionChanged="OnFileTreeSelectionChanged">
+                <DockPanel Grid.Column="0">
+                <TextBox x:Name="GrepBox" DockPanel.Dock="Top" Watermark="Find in commit files (git-grep)" FontSize="11" Margin="0,0,0,2" KeyDown="OnGrepBoxKeyDown" />
+                <TreeView x:Name="FileTree" SelectionChanged="OnFileTreeSelectionChanged">
                     <TreeView.Styles>
                         <Style Selector="TreeViewItem">
                             <Setter Property="IsExpanded" Value="True" />
@@ -67,6 +69,7 @@
                         </TreeDataTemplate>
                     </TreeView.ItemTemplate>
                 </TreeView>
+                </DockPanel>
 
                 <GridSplitter Grid.Column="1" Background="#40808080" ResizeDirection="Columns" />
 

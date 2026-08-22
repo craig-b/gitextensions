@@ -1378,6 +1378,28 @@ public partial class MainWindow
             // copy is pane-global, so it lives here per the pointer rule.
             entries.Add(("Copy whole patch", () => CopyToClipboardAsync(_browseDiffText!)));
         }
+
+        if (_selectedRevision is GitRevision findFileRevision && !findFileRevision.IsArtificial)
+        {
+            // The WinForms Find-file (Ctrl+Shift+F) locates a file in the revision's full
+            // tree; the client's nearest surface for an arbitrary tree file is its history.
+            entries.Add(("Find file in commit...", async () =>
+            {
+                IReadOnlyList<string> paths = await Task.Run(() => _session.GetFullTree(findFileRevision.ObjectId));
+                await CommandPalette.ShowAsync(this,
+                    [.. paths.Select(path => ((string Label, Func<Task> Execute))(path, () =>
+                    {
+                        new FileHistoryWindow(_session, path).Show(this);
+                        return Task.CompletedTask;
+                    }))]);
+            }));
+        }
+
+        entries.Add(("Filter: reset all", () =>
+        {
+            _filterBar.ClearAll();
+            return Task.CompletedTask;
+        }));
         foreach (RefTreeNode leaf in Flatten(branches).Concat(Flatten(remotes)).Concat(Flatten(tags)))
         {
             if (leaf.ObjectId is ObjectId objectId)
