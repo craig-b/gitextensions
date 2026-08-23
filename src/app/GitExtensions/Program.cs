@@ -2,6 +2,8 @@
 using System.Configuration;
 using System.Diagnostics;
 using GitCommands;
+using GitCommands.Open;
+using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -14,7 +16,9 @@ using GitUI.NBugReports;
 using GitUI.Theming;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using ResourceManager;
 using MessageBoxes = GitUI.MessageBoxes;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions;
 
@@ -31,6 +35,15 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // AppSettings is platform-neutral and cannot read Application.* itself. Supply the WinForms
+        // values before anything can touch AppSettings, whose static constructor latches the paths.
+        // GetUserAppDataPath stays a delegate: evaluating it creates the directory, which portable
+        // installations must never do.
+        AppPaths.ProductVersion = Application.ProductVersion;
+        AppPaths.ProductName = Application.ProductName ?? string.Empty;
+        AppPaths.ApplicationExecutablePath = Application.ExecutablePath;
+        AppPaths.GetUserAppDataPath = static () => Application.UserAppDataPath;
+
         // If you want to suppress the BugReportInvoker when debugging and exit quickly, uncomment the condition:
         ////if (!Debugger.IsAttached)
         {
@@ -109,7 +122,23 @@ internal static class Program
             ThreadHelper.JoinableTaskContext = new JoinableTaskContext();
         }
 
-        ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath);
+        // AppSettings stores fonts as FontDescriptor and cannot reference SystemFonts, so the host
+        // supplies the platform UI font that the Font/CommitFont defaults fall back to.
+        AppSettings.DefaultUiFont = (SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont).ToDescriptor();
+
+        // TaskManager is platform-neutral, so it cannot reference Application directly. Route its
+        // fire-and-forget exceptions to the WinForms handler wired above, which reaches BugReportInvoker.
+        // Without this they would only be traced.
+        TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
+
+        // The engine surfaces the occasional error outside any UI flow (see UserNotification);
+        // route those to a message box. Without this they would only be traced.
+        UserNotification.ShowError = static (text, caption) => GitExtensions.Extensibility.MessageBoxes.ShowError(owner: null, text, caption);
+
+        // GitUIPluginInterfaces cannot reference Application directly, so the default plugins
+        // path (beside the executable) is computed here and supplied the same way as userPluginsPath.
+        string defaultPluginsPath = Path.Join(new FileInfo(Application.ExecutablePath).Directory!.FullName, "Plugins");
+        ManagedExtensibility.Initialise(userPluginsPath: AppSettings.UserPluginsPath, defaultPluginsPath: defaultPluginsPath);
 
         AppSettings.LoadSettings();
 
@@ -159,7 +188,7 @@ internal static class Program
                     {
                         if (!checkSettingsLogic.AutoSolveAllSettings() || !checklistSettingsPage.CheckSettings())
                         {
-                            uiCommands.StartSettingsDialog(owner: null);
+                            uiCommands.Execute(new UICmd.OpenSettings(null), null);
                         }
                     }
                 }
@@ -183,7 +212,7 @@ internal static class Program
 
         if (args.Length <= 1)
         {
-            commands.StartBrowseDialog(owner: null);
+            commands.Execute(new UICmd.Browse(), null);
         }
         else
         {
@@ -242,11 +271,17 @@ internal static class Program
             }
         }
 
-        if (args.Length <= 1 && workingDir is null && AppSettings.StartWithRecentWorkingDir)
+        if (args.Length <= 1 && workingDir is null)
         {
-            if (GitModule.IsValidGitWorkingDir(AppSettings.RecentWorkingDir))
+            StartupWorkingDir startup = StartupWorkingDir.Resolve(AppSettings.StartWithRecentWorkingDir, AppSettings.RecentWorkingDir, GitModule.IsValidGitWorkingDir);
+            workingDir = startup.WorkingDir;
+
+            if (startup.StalePathToPrune is string stalePath)
             {
-                workingDir = AppSettings.RecentWorkingDir;
+                // The remembered repository no longer exists: forget it instead of re-checking it
+                // (and silently landing on the dashboard) on every launch.
+                AppSettings.RecentWorkingDir = string.Empty;
+                ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.RemoveRecentAsync(stalePath));
             }
         }
 

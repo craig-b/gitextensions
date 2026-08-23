@@ -9,6 +9,14 @@ namespace GitCommandsTests;
 
 public sealed class ExecutableTests
 {
+    // These tests need a real external process that keeps running for a controllable duration
+    // (there's no built-in "sleep" on Windows), so they shell out to "ping -n/-c <count>
+    // 127.0.0.1" - a trick that works on both OSes, just with a different executable name and
+    // count switch. Resolving to the platform's own executable/switch here is the same fix as
+    // "ping.exe" -> an OS-conditional that yields "ping.exe" on Windows, applied consistently.
+    private static string PingExecutable => OperatingSystem.IsWindows() ? "ping.exe" : "ping";
+    private static string PingCountSwitch => OperatingSystem.IsWindows() ? "-n" : "-c";
+
     [SetUp]
     public void SetUp()
     {
@@ -29,8 +37,8 @@ public sealed class ExecutableTests
         using CancellationTokenSource cts = new();
 
         // start a process running for seconds
-        IExecutable executable = new Executable("ping.exe");
-        IProcess process = executable.Start($"-n {cancelDelay.TotalSeconds + 60} 127.0.0.1", cancellationToken: cts.Token);
+        IExecutable executable = new Executable(PingExecutable);
+        IProcess process = executable.Start($"{PingCountSwitch} {cancelDelay.TotalSeconds + 60} 127.0.0.1", cancellationToken: cts.Token);
         DateTime startedAt = DateTime.Now;
 
         // cancel after delay
@@ -68,8 +76,8 @@ public sealed class ExecutableTests
         await TaskScheduler.Default;
 
         // start a process running for seconds
-        IExecutable executable = new Executable("ping.exe");
-        using IProcess process = executable.Start($"-n {(halfRuntime.TotalSeconds * 2) + 1} 127.0.0.1");
+        IExecutable executable = new Executable(PingExecutable);
+        using IProcess process = executable.Start($"{PingCountSwitch} {(halfRuntime.TotalSeconds * 2) + 1} 127.0.0.1");
 
         // wait for process exit, but cancel the wait while the process is still running
         using CancellationTokenSource cts = new();
@@ -100,15 +108,25 @@ public sealed class ExecutableTests
         const int cancelDelay = 1000;
         const int exitDelay = cancelDelay;
         const int minRuntime = cancelDelay + exitDelay;
-        // cmd.exe with no arguments exits immediately when stdin is not a terminal (e.g., on CI runners).
-        // Run a subcommand that blocks for the required duration instead.
-        string arguments = exeFile.Contains("ping") ? $"-n {(minRuntime / 1000) + 2} 127.0.0.1"
-                         : exeFile.Contains("cmd") ? $"/c ping -n {(minRuntime / 1000) + 2} 127.0.0.1"
-                         : "";
+        int pingCount = (minRuntime / 1000) + 2;
+
+        // cmd.exe with no arguments exits immediately when stdin is not a terminal (e.g., on CI
+        // runners). Run a subcommand that blocks for the required duration instead. Off Windows,
+        // "cmd.exe" and "ping.exe" as literal executables don't exist; resolve exeFile to the
+        // platform's own shell/ping and matching count switch, which is the same intent (a shell
+        // wrapping a ping call, or a direct ping call) translated per OS.
+        (string resolvedExeFile, string arguments) = (exeFile, OperatingSystem.IsWindows()) switch
+        {
+            ("ping.exe", true) => ("ping.exe", $"-n {pingCount} 127.0.0.1"),
+            ("ping.exe", false) => ("ping", $"-c {pingCount} 127.0.0.1"),
+            ("cmd.exe", true) => ("cmd.exe", $"/c ping -n {pingCount} 127.0.0.1"),
+            ("cmd.exe", false) => ("/bin/sh", $"-c \"ping -c {pingCount} 127.0.0.1\""),
+            _ => (exeFile, "")
+        };
 
         using CancellationTokenSource cancellationTokenSource = new();
         CancellationToken cancellationToken = cancellationTokenSource.Token;
-        IExecutable executable = new Executable(exeFile);
+        IExecutable executable = new Executable(resolvedExeFile);
 
         Exception? exception = null;
         ExecutionResult? executionResult = null;

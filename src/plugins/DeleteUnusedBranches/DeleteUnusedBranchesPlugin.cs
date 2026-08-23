@@ -55,7 +55,7 @@ public class DeleteUnusedBranchesPlugin : GitPluginBase, IGitPluginForRepository
             _includeUnmergedBranchesFlag.ValueOrDefault(Settings));
 
         using DeleteUnusedBranchesForm frm = new(settings, args.GitModule, args.GitUICommands, this);
-        frm.ShowDialog(args.OwnerForm);
+        frm.ShowDialog(args.OwnerForm as IWin32Window);
 
         return frm.HasDeletedBranch;
     }

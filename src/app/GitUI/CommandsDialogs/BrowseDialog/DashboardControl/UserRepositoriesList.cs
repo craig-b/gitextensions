@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using GitCommands;
+using GitCommands.Dashboard;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -86,8 +87,8 @@ public partial class UserRepositoriesList : GitExtensionsControl
 
         _foreColorBrush = new SolidBrush(base.ForeColor);
 
-        _secondaryFont = new Font(AppSettings.Font.FontFamily, AppSettings.Font.SizeInPoints - 1f);
-        lblRecentRepositories.Font = new Font(AppSettings.Font.FontFamily, AppSettings.Font.SizeInPoints + 5.5f);
+        _secondaryFont = new Font(AppFonts.App.FontFamily, AppFonts.App.SizeInPoints - 1f);
+        lblRecentRepositories.Font = new Font(AppFonts.App.FontFamily, AppFonts.App.SizeInPoints + 5.5f);
         lblRecentRepositories.SetForeColorForBackColor();
 
         textBoxSearch.PlaceholderText = _repositorySearchPlaceholder.Text;
@@ -318,11 +319,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
             ListViewGroup[] groups =
             [
                 _lvgRecentRepositories,
-                .. recentRepositories.Concat(favouriteRepositories)
-                        .Select(repo => repo.Repo.Category)
-                        .Where(c => !string.IsNullOrWhiteSpace(c))
-                        .Distinct(GroupHeaderComparer)
-                        .OrderBy(c => c)
+                .. DashboardList.CategoryHeaders(recentRepositories, favouriteRepositories)
                         .Select(c => new ListViewGroup(c, c)
                         {
                             CollapsedState = ListViewGroupCollapsedState.Expanded,
@@ -347,7 +344,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
                 ListViewItem item = new(recent.Caption)
                 {
                     ForeColor = ForeColor,
-                    Font = AppSettings.Font,
+                    Font = AppFonts.App,
                     Group = isFavourite ? GetTileGroup(recent.Repo) : _lvgRecentRepositories,
                     ImageIndex = 0,
                     UseItemStyleForSubItems = false,
@@ -465,7 +462,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
         var longestPath = recentRepositories.Union(favouriteRepositories)
                                             .Select(r =>
                                             {
-                                                Size size = TextRenderer.MeasureText(r.Caption, AppSettings.Font);
+                                                Size size = TextRenderer.MeasureText(r.Caption, AppFonts.App);
                                                 return new
                                                 {
                                                     r.Caption,
@@ -549,10 +546,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
 
     private void UpdateCategoryName(string? originalName, string? newName)
     {
-        foreach (Repository repository in GetRepositories().Where(r => r.Category == originalName))
-        {
-            ThreadHelper.JoinableTaskFactory.Run(() => Controller.AssignCategoryAsync(repository, newName));
-        }
+        ThreadHelper.JoinableTaskFactory.Run(() => Controller.RenameCategoryAsync(GetRepositories(), originalName, newName));
 
         ShowRecentRepositories();
     }
@@ -621,7 +615,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
         // render path
         PointF textPadding = new(e.Bounds.Left + spacing4, e.Bounds.Top + spacing6);
         PointF pointPath = new(textPadding.X + textOffset, textPadding.Y);
-        RectangleF pathBounds = DrawText(e.Graphics, e.Item.Text, AppSettings.Font, _foreColorBrush, textWidth, pointPath, spacing4 * 2);
+        RectangleF pathBounds = DrawText(e.Graphics, e.Item.Text, AppFonts.App, _foreColorBrush, textWidth, pointPath, spacing4 * 2);
 
         if (e.Item.SubItems.Count > 1)
         {
@@ -887,11 +881,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
             return;
         }
 
-        foreach (Repository repository in repositories)
-        {
-            ThreadHelper.JoinableTaskFactory.Run(
-                () => RepositoryHistoryManager.Locals.RemoveRecentAsync(repository.Path));
-        }
+        ThreadHelper.JoinableTaskFactory.Run(() => Controller.ClearRecentAsync(repositories));
 
         ShowRecentRepositories();
     }

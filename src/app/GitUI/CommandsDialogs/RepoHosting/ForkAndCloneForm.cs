@@ -37,11 +37,9 @@ public partial class ForkAndCloneForm : GitExtensionsForm
     private const string UpstreamRemoteName = "upstream";
     private readonly IGitUICommands _commands;
     private readonly IRepositoryHostPlugin _gitHoster;
-    private readonly EventHandler<GitModuleEventArgs>? _gitModuleChanged;
 
-    public ForkAndCloneForm(IGitUICommands commands, IRepositoryHostPlugin gitHoster, EventHandler<GitModuleEventArgs>? gitModuleChanged)
+    public ForkAndCloneForm(IGitUICommands commands, IRepositoryHostPlugin gitHoster)
     {
-        _gitModuleChanged = gitModuleChanged;
         _commands = commands;
         _gitHoster = gitHoster;
         InitializeComponent();
@@ -293,7 +291,7 @@ public partial class ForkAndCloneForm : GitExtensionsForm
     {
         string initialDir = destinationTB.Text.Length > 0 ? destinationTB.Text : "C:\\";
 
-        string? userSelectedPath = OsShellUtil.PickFolder(this, initialDir);
+        string? userSelectedPath = FolderPicker.PickFolder(this, initialDir);
 
         if (userSelectedPath is not null)
         {
@@ -398,7 +396,7 @@ public partial class ForkAndCloneForm : GitExtensionsForm
             }
         }
 
-        _gitModuleChanged?.Invoke(this, new GitModuleEventArgs(module));
+        _commands.RaiseRepositoryAcquired(module);
 
         Close();
     }

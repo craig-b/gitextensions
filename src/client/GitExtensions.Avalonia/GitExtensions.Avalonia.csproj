@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    THE VERTICAL SLICE (cross-platform-plan.md §19.1): the first non-WinForms client, proving the
+    portable core is consumable end-to-end on Linux - open a repository, browse the log, read
+    commit info from the M6 RichContent model, and view a colored diff from the M4 StyledSpan
+    model.
+
+    It references the REAL core projects' plain-net10.0 flavor (PortableCore.props multi-targets
+    them); the probe remains the file-by-file portability ratchet but is no longer the client's
+    runtime. This replaced the original probe-assembly scaffolding once the core was productized -
+    and as predicted, the client code did not change when the reference swapped.
+
+    Toolkit: Avalonia 11 (plan §3 - default candidate, chosen at the slice). Views here are
+    deliberately thin; all logic they bind to lives in the portable core.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>true</IsPublishable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- Slice scaffolding: same diagnostics posture as the probe. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableStyleCopAnalyzers>false</EnableStyleCopAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1416;NU1701</NoWarn>
+  </PropertyGroup>
+
+  <!-- Root Directory.Build.props injects CommonAssemblyInfo.cs, which carries
+       [SupportedOSPlatform("windows7.0")] - meant for the net10.0-windows projects. Same removal
+       as PortabilityProbe.Tests.csproj, same reason. -->
+  <ItemGroup>
+    <Compile Remove="$(RepoRoot)CommonAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The application icon, shared with the installer artwork. PNG rather than the .ico
+         flavor: Skia on Linux does not decode .ico. -->
+    <AvaloniaResource Include="$(RepoRoot)setup\assets\Logo\git-extensions-logo-256px.png" Link="Assets\git-extensions-logo.png" />
+
+    <!-- The xlf catalog for the §11 source-join client localization. -->
+    <None Include="..\..\app\GitUI\Translation\*.xlf" Link="Translation\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\app\GitExtensions.Extensibility\GitExtensions.Extensibility.csproj" />
+    <ProjectReference Include="..\..\app\GitExtUtils\GitExtUtils.csproj" />
+    <ProjectReference Include="..\..\app\GitCommands\GitCommands.csproj" />
+    <ProjectReference Include="..\..\plugins\GitUIPluginInterfaces\GitUIPluginInterfaces.csproj" />
+  </ItemGroup>
+
+
+</Project>

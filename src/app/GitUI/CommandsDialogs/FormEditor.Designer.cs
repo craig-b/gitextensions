@@ -36,7 +36,7 @@ partial class FormEditor
         labelWarning = new Label();
         toolStrip1 = new GitUI.ToolStripEx();
         toolStripSaveButton = new ToolStripButton();
-        fileViewer = new GitUI.Editor.FileViewer();
+        fileViewer = new GitUI.Editor.EditableFileViewer();
         tableLayoutPanel1.SuspendLayout();
         panelMessage.SuspendLayout();
         flowLayoutPanel1.SuspendLayout();
@@ -156,7 +156,7 @@ partial class FormEditor
 
     #endregion
 
-    private GitUI.Editor.FileViewer fileViewer;
+    private GitUI.Editor.EditableFileViewer fileViewer;
     private ToolStripEx toolStrip1;
     private ToolStripButton toolStripSaveButton;
     private TableLayoutPanel tableLayoutPanel1;

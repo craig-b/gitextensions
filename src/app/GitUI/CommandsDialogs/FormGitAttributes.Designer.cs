@@ -30,7 +30,7 @@ partial class FormGitAttributes
     {
         System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormGitAttributes));
         splitContainer1 = new SplitContainer();
-        _NO_TRANSLATE_GitAttributesText = new GitUI.Editor.FileViewer();
+        _NO_TRANSLATE_GitAttributesText = new GitUI.Editor.EditableFileViewer();
         label1 = new Label();
         Save = new Button();
 
@@ -62,7 +62,6 @@ partial class FormGitAttributes
         // _NO_TRANSLATE_GitAttributesText
         // 
         _NO_TRANSLATE_GitAttributesText.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _NO_TRANSLATE_GitAttributesText.IsReadOnly = false;
         _NO_TRANSLATE_GitAttributesText.Location = new Point(0, 0);
         _NO_TRANSLATE_GitAttributesText.Margin = new Padding(3, 2, 3, 2);
         _NO_TRANSLATE_GitAttributesText.Name = "_NO_TRANSLATE_GitAttributesText";
@@ -114,7 +113,7 @@ partial class FormGitAttributes
     #endregion
 
     private SplitContainer splitContainer1;
-    private GitUI.Editor.FileViewer _NO_TRANSLATE_GitAttributesText;
+    private GitUI.Editor.EditableFileViewer _NO_TRANSLATE_GitAttributesText;
     private Button Save;
     private Label label1;
 }

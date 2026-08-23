@@ -9,6 +9,7 @@ using GitExtUtils.GitUI.Theming;
 using GitUI.CommandsDialogs.SubmodulesDialog;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -182,7 +183,7 @@ public partial class FormSubmodules : GitModuleForm
     {
         IGitModule submodule = Module.GetSubmodule(SubModuleLocalPath.Text);
 
-        UICommands.WithGitModule(submodule).StartPullDialog(this);
+        UICommands.WithGitModule(submodule).Execute(new UICmd.Pull(), this);
 
         using (WaitCursorScope.Enter())
         {

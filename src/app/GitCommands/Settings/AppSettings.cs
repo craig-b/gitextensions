@@ -21,12 +21,15 @@ public static partial class AppSettings
 {
     // semi-constants
     public static Version AppVersion => Assembly.GetCallingAssembly().GetName().Version!;
-    public static string ProductVersion => Application.ProductVersion;
+    public static string ProductVersion => AppPaths.ProductVersion;
     public static readonly string ApplicationName = "Git Extensions";
     public static readonly string ApplicationId = ApplicationName.Replace(" ", "");
-    public static readonly string SettingsFileName = ApplicationId + ".settings";
+
+    // The INI store (an opt-in host decision, see HostSettingsStore) uses its own file
+    // name so the two stores never contend for one file.
+    public static readonly string SettingsFileName = HostSettingsStore.UseIniStore ? "settings.ini" : ApplicationId + ".settings";
     public static readonly string UserPluginsDirectoryName = "UserPlugins";
-    private static string _applicationExecutablePath = Application.ExecutablePath;
+    private static string _applicationExecutablePath = AppPaths.ApplicationExecutablePath;
     private static string? _documentationBaseUrl;
 
     public static Lazy<string?> ApplicationDataPath { get; private set; }
@@ -66,7 +69,7 @@ public static partial class AppSettings
             }
 
             // Make ApplicationDataPath version independent
-            return Application.UserAppDataPath.Replace(Application.ProductVersion, string.Empty)
+            return AppPaths.GetUserAppDataPath().Replace(AppPaths.ProductVersion, string.Empty)
                                               .Replace(ApplicationName, ApplicationId); // 'GitExtensions' has been changed to 'Git Extensions' in v3.0
         });
 
@@ -116,7 +119,10 @@ public static partial class AppSettings
                 return false;
             }
 
-            File.WriteAllText(SettingsFilePath, "<?xml version=\"1.0\" encoding=\"utf-8\"?><dictionary />", Encoding.UTF8);
+            File.WriteAllText(
+                SettingsFilePath,
+                HostSettingsStore.UseIniStore ? "# Git Extensions settings\n" : "<?xml version=\"1.0\" encoding=\"utf-8\"?><dictionary />",
+                Encoding.UTF8);
             return true;
         }
     }
@@ -259,8 +265,18 @@ public static partial class AppSettings
 
     #region Registry helpers
 
+    // The registry stores a handful of legacy/installer-shared values. Off Windows there is no
+    // registry: reads return the default, writes are dropped. Guarding here rather than at each
+    // caller keeps every consumer platform-safe, including the static constructor
+    // (MigrateSshSettings and ImportFromRegistry both end up in these helpers).
+
     private static bool ReadBoolRegKey(string key, bool defaultValue)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return defaultValue;
+        }
+
         object? obj = VersionIndependentRegKey.GetValue(key);
         if (obj is not string)
         {
@@ -277,18 +293,29 @@ public static partial class AppSettings
 
     private static void WriteBoolRegKey(string key, bool value)
     {
-        VersionIndependentRegKey.SetValue(key, value ? "true" : "false");
+        if (OperatingSystem.IsWindows())
+        {
+            VersionIndependentRegKey.SetValue(key, value ? "true" : "false");
+        }
     }
 
     [return: NotNullIfNotNull(nameof(defaultValue))]
     private static string? ReadStringRegValue(string key, string? defaultValue)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return defaultValue;
+        }
+
         return (string?)VersionIndependentRegKey.GetValue(key, defaultValue);
     }
 
     private static void WriteStringRegValue(string key, string value)
     {
-        VersionIndependentRegKey.SetValue(key, value);
+        if (OperatingSystem.IsWindows())
+        {
+            VersionIndependentRegKey.SetValue(key, value);
+        }
     }
 
     #endregion
@@ -989,6 +1016,41 @@ public static partial class AppSettings
         set => SetEnum("DefaultPullAction", value);
     }
 
+    /// <summary>The context-menu profile: Simple, Normal, or Custom.</summary>
+    public static Actions.MenuProfileMode MenuProfileMode
+    {
+        get => GetEnum("MenuProfileMode", Actions.MenuProfileMode.Normal);
+        set => SetEnum("MenuProfileMode", value);
+    }
+
+    /// <summary>Whether inapplicable menu items are grayed (positional stability) or hidden.</summary>
+    public static Actions.InapplicableItemPolicy MenuInapplicableItemPolicy
+    {
+        get => GetEnum("MenuInapplicableItemPolicy", Actions.InapplicableItemPolicy.Gray);
+        set => SetEnum("MenuInapplicableItemPolicy", value);
+    }
+
+    /// <summary>The Custom profile's ordered action ids (comma-separated; blank = Normal's order).</summary>
+    public static string MenuCustomOrder
+    {
+        get => GetString("MenuCustomOrder", "") ?? "";
+        set => SetString("MenuCustomOrder", value);
+    }
+
+    /// <summary>The client's theme variant: blank follows the system, else "Light"/"Dark".</summary>
+    public static string ClientThemeVariant
+    {
+        get => GetString("ClientThemeVariant", "") ?? "";
+        set => SetString("ClientThemeVariant", value);
+    }
+
+    /// <summary>The client sidebar's section order as comma-separated section names; empty = default order.</summary>
+    public static string LeftPanelSectionOrder
+    {
+        get => GetString("LeftPanelSectionOrder", "") ?? "";
+        set => SetString("LeftPanelSectionOrder", value);
+    }
+
     /// <summary>
     /// Gets or sets the default pull action as configured in the FormPull dialog.
     /// </summary>
@@ -1507,31 +1569,41 @@ public static partial class AppSettings
 
     #region Fonts
 
-    public static Font FixedWidthFont
+    /// <summary>
+    ///  The platform's default UI font, used where no font has been configured.
+    /// </summary>
+    /// <remarks>
+    ///  These defaults were <c>SystemFonts.MessageBoxFont</c>, which is Windows-only and throws
+    ///  elsewhere. The host supplies the real value at startup (see GitExtensions.Program); the
+    ///  fallback here only applies to tests and non-UI hosts.
+    /// </remarks>
+    public static FontDescriptor DefaultUiFont { get; set; } = new("Segoe UI", 9f);
+
+    public static FontDescriptor FixedWidthFont
     {
-        get => GetFont("difffont", new Font("Consolas", 10));
+        get => GetFont("difffont", new FontDescriptor("Consolas", 10f));
         set => SetFont("difffont", value);
     }
 
-    public static Font CommitFont
+    public static FontDescriptor CommitFont
     {
-        get => GetFont("commitfont", SystemFonts.MessageBoxFont!);
+        get => GetFont("commitfont", DefaultUiFont);
         set => SetFont("commitfont", value);
     }
 
-    public static Font MonospaceFont
+    public static FontDescriptor MonospaceFont
     {
-        get => GetFont("monospacefont", new Font("Consolas", 9));
+        get => GetFont("monospacefont", new FontDescriptor("Consolas", 9f));
         set => SetFont("monospacefont", value);
     }
 
-    public static Font Font
+    public static FontDescriptor Font
     {
-        get => GetFont("font", SystemFonts.MessageBoxFont!);
+        get => GetFont("font", DefaultUiFont);
         set => SetFont("font", value);
     }
 
-    public static Font? ConEmuConsoleFont
+    public static FontDescriptor? ConEmuConsoleFont
     {
         get => GetFont("conemuconsolefont", null);
         set => SetFont("conemuconsolefont", value);
@@ -1661,8 +1733,7 @@ public static partial class AppSettings
         {
             SettingsContainer.LockedAction(() =>
             {
-                // prepend "Global\" in order to be safe in preparation for non-Windows OS, too
-                _globalMutex ??= new Mutex(initiallyOwned: false, name: @$"Global\Mutex{SettingsFilePath.ToPosixPath()}");
+                _globalMutex ??= new Mutex(initiallyOwned: false, name: GetSettingsMutexName());
 
                 try
                 {
@@ -1677,9 +1748,24 @@ public static partial class AppSettings
 
             Saved?.Invoke();
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceError("Failed to save settings: {0}", ex);
         }
+    }
+
+    private static string GetSettingsMutexName()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Must not change: concurrently running app versions synchronize on this exact name.
+            return @$"Global\Mutex{SettingsFilePath.ToPosixPath()}";
+        }
+
+        // Unix named mutexes map to file names, so path separators (and the Global\ prefix) are
+        // invalid there; derive a flat name that is still unique per settings file.
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(SettingsFilePath));
+        return $"GitExtensions-Settings-{Convert.ToHexString(hash)}";
     }
 
     public static void LoadSettings()
@@ -2092,7 +2178,9 @@ public static partial class AppSettings
 
     // There is a bug in .NET/.NET Designer that fails to execute Properties.Settings.Default call.
     // Return false whilst we're in the designer.
-    public static bool IsPortable() => !IsDesignMode && Properties.Settings.Default.IsPortable;
+    // HostPortability.IsPortableOverride short-circuits the ConfigurationManager path entirely -
+    // that mechanism is reflection-based and unavailable to trimmed clients (plan §19.1a).
+    public static bool IsPortable() => HostPortability.IsPortableOverride ?? (!IsDesignMode && Properties.Settings.Default.IsPortable);
 
     // Currently not configurable in UI (Set manually in settings file)
     public static bool WriteErrorLog
@@ -2117,6 +2205,11 @@ public static partial class AppSettings
 
     private static IEnumerable<(string name, string? value)> GetSettingsFromRegistry()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            yield break;
+        }
+
         RegistryKey? oldSettings = VersionIndependentRegKey.OpenSubKey("GitExtensions");
 
         if (oldSettings is null)
@@ -2167,8 +2260,8 @@ public static partial class AppSettings
 
     // Font
     [return: NotNullIfNotNull("defaultValue")]
-    public static Font? GetFont(string name, Font? defaultValue) => SettingsContainer.GetFont(name, defaultValue);
-    public static void SetFont(string name, Font? value) => SettingsContainer.SetFont(name, value);
+    public static FontDescriptor? GetFont(string name, FontDescriptor? defaultValue) => SettingsContainer.GetFont(name, defaultValue);
+    public static void SetFont(string name, FontDescriptor? value) => SettingsContainer.SetFont(name, value);
 
     [Obsolete("AppSettings is no longer responsible for colors, ThemeModule is. Only used by ThemeMigration.")]
     public static Color GetColor(AppColor name)

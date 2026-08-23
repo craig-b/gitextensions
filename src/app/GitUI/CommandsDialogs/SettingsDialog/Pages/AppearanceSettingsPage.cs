@@ -1,7 +1,6 @@
 using GitCommands;
-using GitCommands.Utils;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
-using GitExtensions.Extensibility.Translations;
 using GitExtUtils.GitUI;
 using GitUI.Avatars;
 using ResourceManager;
@@ -18,23 +17,17 @@ public partial class AppearanceSettingsPage : SettingsPageWithHeader
     private readonly TranslationString _noImageServiceTooltip = new($"A default image, if the provider has no image for the email address.\r\n\r\nClick this info icon for more details.");
     private readonly TranslationString _avatarProviderTooltip = new($"The avatar provider defines the source for user-defined avatar images.\r\nThe \"Default\" provider uses GitHub and Gravatar,\r\nthe \"Custom\" provider allows you to set custom provider URLs and\r\n\"None\" disables user-defined avatars.\r\n\r\nClick this info icon for more details.");
 
+    private readonly AppearancePageModel _model = new();
+
     public AppearanceSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
     {
         InitializeComponent();
         InitializeComplete();
 
-        FillComboBoxWithEnumValues<AvatarProvider>(AvatarProvider);
-        FillComboBoxWithEnumValues<AvatarFallbackType>(_NO_TRANSLATE_NoImageService);
-    }
-
-    private static void FillComboBoxWithEnumValues<T>(ComboBox comboBox) where T : Enum
-    {
-        comboBox.DisplayMember = nameof(ComboBoxItem<>.Text);
-        comboBox.ValueMember = nameof(ComboBoxItem<>.Value);
-        comboBox.DataSource = EnumHelper.GetValues<T>()
-            .Select(e => new ComboBoxItem<T>(e.GetDescription(), e))
-            .ToArray();
+        // the model owns the choice orders; this view keeps its translated captions
+        AvatarProvider.DataSource = _model.AvatarProvider.Choices.ToList();
+        _NO_TRANSLATE_NoImageService.DataSource = _model.AvatarFallbackType.Choices.ToList();
     }
 
     protected override void OnRuntimeLoad()
@@ -65,40 +58,51 @@ public partial class AppearanceSettingsPage : SettingsPageWithHeader
         return new SettingsPageReferenceByType(typeof(AppearanceSettingsPage));
     }
 
+    private IEnumerable<(BoolSettingsEntry Entry, Control Control)> BoolEntryControls =>
+    [
+        (_model.ShowRelativeDate, chkShowRelativeDate),
+        (_model.ShowRepoCurrentBranch, chkShowRepoCurrentBranch),
+        (_model.EnableAutoScale, chkEnableAutoScale),
+        (_model.ShowAuthorAvatarInCommitGraph, ShowAuthorAvatarInCommitGraph),
+        (_model.ShowAuthorAvatarInCommitInfo, ShowAuthorAvatarInCommitInfo),
+    ];
+
     protected override void SettingsToPage()
     {
-        chkShowRelativeDate.Checked = AppSettings.RelativeDate;
-        chkShowRepoCurrentBranch.Checked = AppSettings.ShowRepoCurrentBranch;
-        chkShowCurrentBranchInVisualStudio.Checked = AppSettings.ShowCurrentBranchInVisualStudio;
-        chkEnableAutoScale.Checked = AppSettings.EnableAutoScale;
-        truncatePathMethod.SelectedIndex = GetTruncatePathMethodIndex(AppSettings.TruncatePathMethod);
+        _model.Load();
 
-        _NO_TRANSLATE_DaysToCacheImages.Value = AppSettings.AvatarImageCacheDays;
-        ShowAuthorAvatarInCommitInfo.Checked = AppSettings.ShowAuthorAvatarInCommitInfo;
-        ShowAuthorAvatarInCommitGraph.Checked = AppSettings.ShowAuthorAvatarColumn;
-        AvatarProvider.SelectedValue = AppSettings.AvatarProvider;
-        _NO_TRANSLATE_NoImageService.SelectedValue = AppSettings.AvatarFallbackType;
-        txtCustomAvatarTemplate.Text = AppSettings.CustomAvatarTemplate;
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            SettingsPageBindings.SetChecked(control, entry.Value);
+        }
+
+        // registry-backed toggle for the Visual Studio plugin - Windows-only view chrome
+        chkShowCurrentBranchInVisualStudio.Checked = AppSettings.ShowCurrentBranchInVisualStudio;
+
+        truncatePathMethod.SelectedIndex = _model.TruncateLongFilenames.SelectedIndex;
+        _NO_TRANSLATE_DaysToCacheImages.Value = _model.AvatarImageCacheDays.Value;
+        AvatarProvider.SelectedIndex = _model.AvatarProvider.SelectedIndex;
+        _NO_TRANSLATE_NoImageService.SelectedIndex = _model.AvatarFallbackType.SelectedIndex;
+        txtCustomAvatarTemplate.Text = _model.CustomAvatarTemplate.Value;
         ManageAvatarOptionsDisplay();
 
         Language.Items.Clear();
-        Language.Items.Add("English");
-        Language.Items.AddRange(Translator.GetAllTranslations());
-        Language.Text = AppSettings.Translation;
+        Language.Items.AddRange(AppearancePageModel.GetAvailableLanguages());
+        Language.Text = _model.Language.Value;
 
         Dictionary.Items.Clear();
         Dictionary.Items.Add(_noDictFile.Text);
-        if (AppSettings.Dictionary.Equals("none", StringComparison.InvariantCultureIgnoreCase))
+        if (_model.Dictionary.Value.Equals("none", StringComparison.InvariantCultureIgnoreCase))
         {
             Dictionary.SelectedIndex = 0;
         }
         else
         {
-            string dictionaryFile = string.Concat(Path.Join(AppSettings.GetDictionaryDir(), AppSettings.Dictionary), ".dic");
+            string dictionaryFile = string.Concat(Path.Join(AppSettings.GetDictionaryDir(), _model.Dictionary.Value), ".dic");
             if (File.Exists(dictionaryFile))
             {
-                Dictionary.Items.Add(AppSettings.Dictionary);
-                Dictionary.Text = AppSettings.Dictionary;
+                Dictionary.Items.Add(_model.Dictionary.Value);
+                Dictionary.Text = _model.Dictionary.Value;
             }
             else
             {
@@ -107,66 +111,41 @@ public partial class AppearanceSettingsPage : SettingsPageWithHeader
         }
 
         base.SettingsToPage();
-        return;
-
-        static int GetTruncatePathMethodIndex(TruncatePathMethod method)
-        {
-            return method switch
-            {
-                TruncatePathMethod.Compact => 1,
-                TruncatePathMethod.TrimStart => 2,
-                TruncatePathMethod.FileNameOnly => 3,
-                _ => 0
-            };
-        }
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.RelativeDate = chkShowRelativeDate.Checked;
-        AppSettings.ShowRepoCurrentBranch = chkShowRepoCurrentBranch.Checked;
-        AppSettings.ShowCurrentBranchInVisualStudio = chkShowCurrentBranchInVisualStudio.Checked;
-        AppSettings.EnableAutoScale = chkEnableAutoScale.Checked;
-        AppSettings.TruncatePathMethod = GetTruncatePathMethodString(truncatePathMethod.SelectedIndex);
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            entry.Value = SettingsPageBindings.GetChecked(control);
+        }
 
+        // clearing the avatar cache is this view's job; decide before the model saves
         bool shouldClearCache =
-            AppSettings.AvatarProvider != (AvatarProvider)AvatarProvider.SelectedValue!
-            || AppSettings.AvatarFallbackType != (AvatarFallbackType)_NO_TRANSLATE_NoImageService.SelectedValue!
+            (int)AppSettings.AvatarProvider != AvatarProvider.SelectedIndex
+            || (int)AppSettings.AvatarFallbackType != _NO_TRANSLATE_NoImageService.SelectedIndex
             || AppSettings.CustomAvatarTemplate != txtCustomAvatarTemplate.Text;
 
-        AppSettings.ShowAuthorAvatarColumn = ShowAuthorAvatarInCommitGraph.Checked;
-        AppSettings.ShowAuthorAvatarInCommitInfo = ShowAuthorAvatarInCommitInfo.Checked;
-        AppSettings.AvatarImageCacheDays = (int)_NO_TRANSLATE_DaysToCacheImages.Value;
-        AppSettings.CustomAvatarTemplate = txtCustomAvatarTemplate.Text;
+        AppSettings.ShowCurrentBranchInVisualStudio = chkShowCurrentBranchInVisualStudio.Checked;
 
-        AppSettings.Translation = Language.Text;
-        ResourceManager.TranslatedStrings.Reinitialize();
+        _model.TruncateLongFilenames.SelectedIndex = truncatePathMethod.SelectedIndex;
+        _model.AvatarImageCacheDays.Value = (int)_NO_TRANSLATE_DaysToCacheImages.Value;
+        _model.AvatarProvider.SelectedIndex = AvatarProvider.SelectedIndex;
+        _model.AvatarFallbackType.SelectedIndex = _NO_TRANSLATE_NoImageService.SelectedIndex;
+        _model.CustomAvatarTemplate.Value = txtCustomAvatarTemplate.Text;
+        _model.Language.Value = Language.Text;
+        _model.Dictionary.Value = Dictionary.SelectedIndex == 0 ? "none" : Dictionary.Text;
+
+        // the model reinitializes the portable TranslatedStrings; this view refreshes its own
+        _model.Save();
         TranslatedStrings.Reinitialize();
-
-        AppSettings.AvatarProvider = (AvatarProvider)AvatarProvider.SelectedValue;
-
-        if (_NO_TRANSLATE_NoImageService.SelectedValue is AvatarFallbackType imageType)
-        {
-            AppSettings.AvatarFallbackType = imageType;
-        }
 
         if (shouldClearCache)
         {
             new AvatarControl().ClearCache();
         }
 
-        AppSettings.Dictionary = Dictionary.SelectedIndex == 0 ? "none" : Dictionary.Text;
-
         base.PageToSettings();
-        return;
-
-        static TruncatePathMethod GetTruncatePathMethodString(int index) => index switch
-        {
-            1 => TruncatePathMethod.Compact,
-            2 => TruncatePathMethod.TrimStart,
-            3 => TruncatePathMethod.FileNameOnly,
-            _ => TruncatePathMethod.None,
-        };
     }
 
     private void Dictionary_DropDown(object sender, EventArgs e)
@@ -177,12 +156,9 @@ public partial class AppearanceSettingsPage : SettingsPageWithHeader
 
             Dictionary.Items.Clear();
             Dictionary.Items.Add(_noDictFile.Text);
-            foreach (
-                string fileName in
-                    Directory.GetFiles(AppSettings.GetDictionaryDir(), "*.dic", SearchOption.TopDirectoryOnly))
+            foreach (string name in AppearancePageModel.GetAvailableDictionaries())
             {
-                FileInfo file = new(fileName);
-                Dictionary.Items.Add(file.Name.Replace(".dic", ""));
+                Dictionary.Items.Add(name);
             }
 
             Dictionary.Text = currentDictionary;
@@ -221,21 +197,9 @@ public partial class AppearanceSettingsPage : SettingsPageWithHeader
 
     private void ManageAvatarOptionsDisplay()
     {
-        bool showCustomTemplate = (AvatarProvider)AvatarProvider.SelectedValue! == GitCommands.AvatarProvider.Custom;
+        bool showCustomTemplate = AvatarProvider.SelectedIndex == (int)GitCommands.AvatarProvider.Custom;
 
         lblCustomAvatarTemplate.Visible = showCustomTemplate;
         txtCustomAvatarTemplate.Visible = showCustomTemplate;
-    }
-
-    private sealed class ComboBoxItem<T>
-    {
-        public string Text { get; }
-        public T Value { get; }
-
-        public ComboBoxItem(string text, T value)
-        {
-            Text = text;
-            Value = value;
-        }
     }
 }

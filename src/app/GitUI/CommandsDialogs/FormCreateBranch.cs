@@ -7,6 +7,7 @@ using GitExtUtils;
 using GitUI.HelperDialogs;
 using GitUIPluginInterfaces;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -169,7 +170,7 @@ public sealed partial class FormCreateBranch : GitExtensionsDialog
 
             if (success && chkCheckoutAfterCreate.Checked && objectId != originalHash)
             {
-                UICommands.UpdateSubmodules(this);
+                UICommands.Execute(new UICmd.UpdateSubmodules(), this);
             }
 
             DialogResult = success ? DialogResult.OK : DialogResult.None;

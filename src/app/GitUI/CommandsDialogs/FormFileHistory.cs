@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Text;
 using GitCommands;
+using GitCommands.FileHistory;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Translations;
@@ -13,6 +14,7 @@ using GitUI.UserControls;
 using GitUIPluginInterfaces;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -85,7 +87,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         // Replace Windows path separator to Linux path separator.
         // This is needed to keep the file history working when started from file tree in
         // browse dialog.
-        FileName = fileName.RemoveQuotes().ToPosixPath();
+        FileName = FileHistoryStartup.NormalizeFileName(fileName);
 
         SetTitle();
 
@@ -133,7 +135,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
             ToolStripFilters.SetRevisionFilter(revision.Guid);
         }
 
-        tabControl1.SelectedTab = blameTabExists && showBlame ? BlameTab : DiffTab;
+        tabControl1.SelectedTab = FileHistoryStartup.InitialTab(blameTabExists, showBlame) is FileHistoryTab.Blame ? BlameTab : DiffTab;
 
         return;
 
@@ -185,7 +187,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
     {
         base.OnRuntimeLoad(e);
 
-        bool autoLoad = (tabControl1.SelectedTab == BlameTab && AppSettings.LoadBlameOnShow) || AppSettings.LoadFileHistoryOnShow;
+        bool autoLoad = FileHistoryStartup.ShouldAutoLoad(tabControl1.SelectedTab == BlameTab, AppSettings.LoadBlameOnShow, AppSettings.LoadFileHistoryOnShow);
 
         if (autoLoad)
         {
@@ -268,9 +270,9 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         IReadOnlyList<ObjectId> children = RevisionGrid.GetRevisionChildren(revision.ObjectId);
         string fileName = GetFileNameForRevision(revision) ?? FileName;
         bool isFolder = fileName.EndsWith('/');
-        bool fileAvailable
-            = !isFolder && (revision.IsArtificial ? File.Exists(fileName)
-            : !Module.GetFileBlobHash(fileName, revision.ObjectId).IsZero);
+        bool fileExists = revision.IsArtificial ? File.Exists(fileName) : !Module.GetFileBlobHash(fileName, revision.ObjectId).IsZero;
+        FileHistoryTabDecision tabs = FileHistoryTabDecision.Resolve(revision.IsArtificial, isFolder, fileExists, blameSupported: true);
+        bool fileAvailable = tabs.FileAvailable;
 
         SetTitle(alternativeFileName: fileName);
 
@@ -279,38 +281,36 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
             = _commitInfoTabPageText
             + (isFolder || fileAvailable ? "" : string.Format(_fileNotFound.Text, fileName.Quote()));
 
-        TabPage? preferredTab = null;
-        if (revision.IsArtificial)
+        TabPage? preferredTab = tabs.PreferredTab switch
+        {
+            FileHistoryTab.CommitInfo => CommitInfoTabPage,
+            FileHistoryTab.Diff => DiffTab,
+            _ => null,
+        };
+
+        if (!tabs.ShowCommitInfo)
         {
             CommitInfoTabPage.Parent = null;
-            preferredTab = DiffTab;
         }
-        else
+        else if (CommitInfoTabPage.Parent is null)
         {
-            if (CommitInfoTabPage.Parent is null)
-            {
-                tabControl1.TabPages.Insert(0, CommitInfoTabPage);
-            }
+            tabControl1.TabPages.Insert(0, CommitInfoTabPage);
         }
 
-        if (!fileAvailable)
+        if (!tabs.ShowDiff)
         {
             // Note that artificial commits for object type tree (folder) will be handled here too,
             // i.e. no tab at all is visible
             DiffTab.Parent = null;
-            preferredTab = CommitInfoTabPage;
         }
-        else
+        else if (DiffTab.Parent is null)
         {
-            if (DiffTab.Parent is null)
-            {
-                int index = tabControl1.TabPages.IndexOf(CommitInfoTabPage);
-                DebugHelpers.Assert(index != -1, "TabControl should contain commit info tab page");
-                tabControl1.TabPages.Insert(index + 1, DiffTab);
-            }
+            int index = tabControl1.TabPages.IndexOf(CommitInfoTabPage);
+            DebugHelpers.Assert(index != -1, "TabControl should contain commit info tab page");
+            tabControl1.TabPages.Insert(index + 1, DiffTab);
         }
 
-        if (revision.IsArtificial || !fileAvailable)
+        if (!tabs.ShowView || !tabs.ShowBlame)
         {
             BlameTab.Parent = null;
             ViewTab.Parent = null;
@@ -409,7 +409,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
             ? GetFileNameForRevision(selectedRevisions[0])
             : null;
 
-        UICommands.OpenWithDifftool(this, selectedRevisions, FileName, orgFileName, diffKind, true, customTool: toolName);
+        UICommands.Execute(new UICmd.OpenWithDifftool(selectedRevisions, FileName, orgFileName, diffKind, true, CustomTool: toolName), this);
     }
 
     private void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -498,7 +498,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         IReadOnlyList<GitRevision> selectedRevisions = RevisionGrid.GetSelectedRevisions();
         if (selectedRevisions.Count == 1)
         {
-            UICommands.StartCherryPickDialog(this, selectedRevisions[0]);
+            UICommands.Execute(new UICmd.CherryPick([selectedRevisions[0]]), this);
         }
     }
 
@@ -507,7 +507,7 @@ public sealed partial class FormFileHistory : GitModuleForm, IRevisionGridFileUp
         IReadOnlyList<GitRevision> selectedRevisions = RevisionGrid.GetSelectedRevisions();
         if (selectedRevisions.Count == 1)
         {
-            UICommands.StartRevertCommitDialog(this, selectedRevisions[0]);
+            UICommands.Execute(new UICmd.RevertCommit(selectedRevisions[0]), this);
         }
     }
 

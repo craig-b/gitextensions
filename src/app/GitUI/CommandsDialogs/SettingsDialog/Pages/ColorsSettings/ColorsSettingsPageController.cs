@@ -20,7 +20,7 @@ internal sealed class ColorsSettingsPageController
         _themePathProvider = themePathProvider;
     }
 
-    private bool IsCurrentWinAppMode => _page.SelectedThemeId == ThemeId.WindowsAppColorModeId && ThemeModule.Settings.Theme.Id == ThemeId.ColorModeThemeId;
+    private bool IsCurrentWinAppMode => _page.SelectedThemeId == ThemeId.WindowsAppColorModeId && ThemeModule.Settings.Theme.Id == ThemeWinFormsExtensions.ColorModeThemeId;
 
     public bool SettingsAreModified
         => !(_page.SelectedThemeId == ThemeModule.Settings.Theme.Id || IsCurrentWinAppMode)
@@ -34,7 +34,7 @@ internal sealed class ColorsSettingsPageController
         _page.SelectedThemeId = AppSettings.ThemeId;
         _page.SelectedThemeVariations = AppSettings.ThemeVariations;
         _page.UseSystemVisualStyle = IsCurrentWinAppMode
-            ? ThemeId.DefaultLight == ThemeId.ColorModeThemeId
+            ? ThemeId.DefaultLight == ThemeWinFormsExtensions.ColorModeThemeId
             : _page.SelectedThemeId == ThemeId.DefaultLight
                 ? true
                 : AppSettings.UseSystemVisualStyle;
@@ -65,7 +65,7 @@ internal sealed class ColorsSettingsPageController
         if (_page.SelectedThemeId == ThemeId.WindowsAppColorModeId)
         {
             // Display the value forced in ThemeModule.LoadThemeSettings(),
-            _page.UseSystemVisualStyle = ThemeId.ColorModeThemeId == ThemeId.DefaultLight || _page.SelectedThemeId == ThemeId.DefaultLight;
+            _page.UseSystemVisualStyle = ThemeWinFormsExtensions.ColorModeThemeId == ThemeId.DefaultLight || _page.SelectedThemeId == ThemeId.DefaultLight;
         }
         else if (_page.SelectedThemeId == ThemeId.DefaultLight)
         {
@@ -78,7 +78,7 @@ internal sealed class ColorsSettingsPageController
             {
                 // override default (at least dark in .NET10 requires overrides).
                 Theme theme = _themeRepository.GetTheme(_page.SelectedThemeId, _page.SelectedThemeVariations);
-                _page.UseSystemVisualStyle = theme.SystemColorMode == SystemColorMode.Classic;
+                _page.UseSystemVisualStyle = !theme.IsDark;
             }
             catch (Exception)
             {
@@ -116,7 +116,7 @@ internal sealed class ColorsSettingsPageController
         }
 
         ThemeId themeId = _page.SelectedThemeId == ThemeId.WindowsAppColorModeId
-            ? ThemeId.ColorModeThemeId
+            ? ThemeWinFormsExtensions.ColorModeThemeId
             : _page.SelectedThemeId;
 
         if (counter == 0)

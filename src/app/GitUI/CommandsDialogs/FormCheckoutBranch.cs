@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Checkout;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -6,6 +7,7 @@ using GitExtUtils;
 using GitExtUtils.GitUI;
 using GitUI.ScriptsEngine;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -145,8 +147,11 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
     public DialogResult DoDefaultActionOrShow(IWin32Window? owner)
     {
         bool localBranchSelected = !string.IsNullOrWhiteSpace(Branches.Text) && !Remotebranch.Checked;
-        if (!AppSettings.AlwaysShowCheckoutBranchDlg && localBranchSelected &&
-            (!HasUncommittedChanges || AppSettings.UseDefaultCheckoutBranchAction))
+        if (!CheckoutBranchCandidates.ShouldShowDialog(
+            AppSettings.AlwaysShowCheckoutBranchDlg,
+            localBranchSelected,
+            HasUncommittedChanges,
+            AppSettings.UseDefaultCheckoutBranchAction))
         {
             return PerformCheckout(owner);
         }
@@ -216,34 +221,13 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
         }
 
         IReadOnlyList<string> GetContainsObjectIdBranches()
-        {
-            HashSet<string> result = [];
-            if (_containObjectIds.Count > 0)
-            {
-                IEnumerable<string> branches = Module.GetAllBranchesWhichContainGivenCommit(_containObjectIds[0],
-                                                                                            getLocal: LocalBranch.Checked,
-                                                                                            getRemote: !LocalBranch.Checked,
-                                                                                            cancellationToken: default)
-                    .Where(a => !DetachedHeadParser.IsDetachedHead(a) &&
-                                !a.EndsWith("/HEAD"));
-                result.UnionWith(branches);
-            }
-
-            for (int index = 1; index < _containObjectIds.Count; index++)
-            {
-                ObjectId containObjectId = _containObjectIds[index];
-                IEnumerable<string> branches =
-                    Module.GetAllBranchesWhichContainGivenCommit(containObjectId,
-                                                                 getLocal: LocalBranch.Checked,
-                                                                 getRemote: !LocalBranch.Checked,
-                                                                 cancellationToken: default)
-                        .Where(a => !DetachedHeadParser.IsDetachedHead(a) &&
-                                    !a.EndsWith("/HEAD"));
-                result.IntersectWith(branches);
-            }
-
-            return result.ToList();
-        }
+            => CheckoutBranchCandidates.IntersectBranchesContainingCommits(
+                _containObjectIds,
+                objectId => Module.GetAllBranchesWhichContainGivenCommit(
+                    objectId,
+                    getLocal: LocalBranch.Checked,
+                    getRemote: !LocalBranch.Checked,
+                    cancellationToken: default));
     }
 
     private void OkClick(object sender, EventArgs e)
@@ -293,15 +277,11 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
                 if (localBranchRef is not null && remoteBranchRef is not null && !localBranchRef.ObjectId.IsZero && !remoteBranchRef.ObjectId.IsZero)
                 {
                     ObjectId mergeBaseId = Module.GetMergeBase(localBranchRef.ObjectId, remoteBranchRef.ObjectId);
-                    bool isResetFastForward = localBranchRef.ObjectId == mergeBaseId;
+                    ResetBranchFastForwardCheck fastForwardCheck = ResetBranchFastForwardCheck.Evaluate(localBranchRef.ObjectId, mergeBaseId);
 
-                    if (!isResetFastForward)
+                    if (!fastForwardCheck.IsFastForward)
                     {
-                        string mergeBaseText = mergeBaseId.IsZero
-                            ? "merge base"
-                            : mergeBaseId.ToShortString();
-
-                        string warningMessage = string.Format(_resetNonFastForwardBranch.Text, _localBranchName, mergeBaseText);
+                        string warningMessage = string.Format(_resetNonFastForwardBranch.Text, _localBranchName, fastForwardCheck.MergeBaseDisplay);
 
                         if (MessageBoxes.Show(this, warningMessage, _resetCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.No)
                         {
@@ -320,16 +300,19 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
             }
         }
 
-        LocalChangesAction localChanges = ChangesMode;
-        if (localChanges != LocalChangesAction.Reset && chkSetLocalChangesActionAsDefault.Checked)
+        CheckoutLocalChangesDecision localChangesDecision = CheckoutLocalChangesPolicy.Resolve(
+            ChangesMode,
+            chkSetLocalChangesActionAsDefault.Checked,
+            dialogVisible: Visible,
+            AppSettings.UseDefaultCheckoutBranchAction,
+            HasUncommittedChanges);
+
+        if (localChangesDecision.PersistAsDefault)
         {
-            AppSettings.CheckoutBranchAction = localChanges;
+            AppSettings.CheckoutBranchAction = ChangesMode;
         }
 
-        if ((!Visible && !AppSettings.UseDefaultCheckoutBranchAction) || !HasUncommittedChanges)
-        {
-            localChanges = LocalChangesAction.DontChange;
-        }
+        LocalChangesAction localChanges = localChangesDecision.EffectiveAction;
 
         bool stash = false;
         if (localChanges == LocalChangesAction.Stash)
@@ -342,7 +325,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
             stash = _isDirtyDir == true;
             if (stash)
             {
-                UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInAutoStash);
+                UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInAutoStash), owner);
             }
         }
 
@@ -354,7 +337,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
             return DialogResult.Cancel;
         }
 
-        if (UICommands.StartCommandLineProcessDialog(owner, Commands.CheckoutBranch(branchName, isRemote, localChanges, newBranchMode, newBranchName)))
+        if (UICommands.Execute(new UICmd.GitCommandLineProcess(Commands.CheckoutBranch(branchName, isRemote, localChanges, newBranchMode, newBranchName)), owner))
         {
             if (stash)
             {
@@ -384,7 +367,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
 
                 if (messageBoxResult ?? false)
                 {
-                    UICommands.StashPop(this);
+                    UICommands.Execute(new UICmd.StashPop(), this);
                 }
             }
 
@@ -392,7 +375,7 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
 
             if (originalId != currentId)
             {
-                UICommands.UpdateSubmodules(this);
+                UICommands.Execute(new UICmd.UpdateSubmodules(), this);
             }
 
             ScriptsRunner.RunEventScripts(ScriptEvent.AfterCheckout, this);
@@ -453,16 +436,14 @@ public partial class FormCheckoutBranch : GitExtensionsDialog
         }
         else
         {
-            _remoteName = GitRefName.GetRemoteName(branch, Module.GetRemoteNames());
-            _localBranchName = Module.GetLocalTrackingBranchName(_remoteName, branch) ?? "";
-            string remoteBranchName = _remoteName.Length > 0 ? branch[(_remoteName.Length + 1)..] : branch;
-            _newLocalBranchName = string.Concat(_remoteName, "_", remoteBranchName);
-            int i = 2;
-            while (LocalBranchExists(_newLocalBranchName))
-            {
-                _newLocalBranchName = string.Concat(_remoteName, "_", _localBranchName, "_", i.ToString());
-                i++;
-            }
+            RemoteBranchCheckoutNames names = RemoteBranchCheckoutNames.Resolve(
+                branch,
+                Module.GetRemoteNames(),
+                Module.GetLocalTrackingBranchName,
+                LocalBranchExists);
+            _remoteName = names.RemoteName;
+            _localBranchName = names.LocalBranchName;
+            _newLocalBranchName = names.SuggestedNewBranchName;
         }
 
         bool existsLocalBranch = LocalBranchExists(_localBranchName);

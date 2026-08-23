@@ -60,6 +60,10 @@ public sealed class RepositoryStorage : IRepositoryStorage
         IReadOnlyList<Repository>? history = _repositorySerialiser.Deserialize(setting);
         if (history is null)
         {
+            // A corrupt payload must survive until someone can look at it: the next Save would
+            // otherwise overwrite the only copy with the empty list returned here.
+            AppSettings.SetString($"{key}-corrupt-backup", setting);
+            System.Diagnostics.Trace.WriteLine($"RepositoryStorage: could not deserialise '{key}'; the raw value was preserved under '{key}-corrupt-backup'.");
             return [];
         }
 

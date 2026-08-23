@@ -5,6 +5,7 @@ using GitExtensions.Extensibility.Git;
 using GitUI;
 using GitUI.CommandsDialogs;
 using GitUIPluginInterfaces;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.UserControls.RevisionGrid;
 
@@ -332,7 +333,7 @@ public class RevisionGridControlTests
         AppSettings.RevisionGraphShowArtificialCommits = false;
 
         UITest.RunForm<FormBrowse>(
-            showForm: () => _commands.StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => _commands.Execute(new UICmd.Browse(), null).Should().BeTrue(),
             runTestAsync: async formBrowse =>
             {
                 DoEvents();
@@ -367,7 +368,7 @@ public class RevisionGridControlTests
         AppSettings.ShowGitStatusForArtificialCommits = showGitStatusForArtificialCommits;
 
         UITest.RunForm<FormBrowse>(
-            showForm: () => _commands.StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => _commands.Execute(new UICmd.Browse(), null).Should().BeTrue(),
             runTestAsync: async formBrowse =>
             {
                 DoEvents();

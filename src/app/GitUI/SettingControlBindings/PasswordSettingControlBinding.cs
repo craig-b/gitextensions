@@ -11,8 +11,7 @@ internal class PasswordSettingControlBinding : SettingControlBinding<PasswordSet
 
     public override TextBox CreateControl()
     {
-        Setting.CustomControl = new TextBox { PasswordChar = '\u25CF' };
-        return Setting.CustomControl;
+        return new TextBox { PasswordChar = '\u25CF' };
     }
 
     public override void LoadSetting(SettingsSource settings, TextBox control)

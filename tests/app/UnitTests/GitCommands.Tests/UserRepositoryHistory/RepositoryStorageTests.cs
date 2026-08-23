@@ -42,6 +42,21 @@ public class RepositoryStorageTests
     }
 
     [Test]
+    public void Load_should_preserve_an_undeserialisable_payload_under_a_corrupt_backup_key()
+    {
+        const string key = "corrupt-payload-key";
+        const string payload = "<this is not a repository list>";
+        AppSettings.SetString(key, payload);
+        _repositorySerialiser.Deserialize(payload).Returns(x => null);
+
+        IReadOnlyList<Repository> repositories = _repositoryStorage.Load(key);
+
+        repositories.Should().BeEmpty();
+        AppSettings.GetString($"{key}-corrupt-backup", null).Should().Be(
+            payload, because: "the only copy of the corrupt payload must survive a subsequent Save");
+    }
+
+    [Test]
     public void Load_should_return_collection()
     {
         AppSettings.SetString("a", "repos");

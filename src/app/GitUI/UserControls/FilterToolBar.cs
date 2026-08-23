@@ -498,7 +498,7 @@ internal partial class FilterToolBar : ToolStripEx
     internal void RefreshRevisionGridShortcutKeys(IReadOnlyList<HotkeyCommand> hotkeys)
     {
         tsbShowReflog.ToolTipText = TranslatedStrings.ShowReflogTooltip.UpdateSuffix(hotkeys.GetShortcutToolTip(RevisionGridControl.Command.ShowReflogReferences));
-        tsmiShowOnlyFirstParent.ToolTipText = TranslatedStrings.ShowOnlyFirstParent.UpdateSuffix(hotkeys.GetShortcutToolTip(RevisionGridControl.Command.ShowCurrentBranchOnly));
+        tsmiShowOnlyFirstParent.ToolTipText = ResourceManager.TranslatedStrings.ShowOnlyFirstParent.UpdateSuffix(hotkeys.GetShortcutToolTip(RevisionGridControl.Command.ShowCurrentBranchOnly));
 
         tsmiShowBranchesAll.ShortcutKeyDisplayString = hotkeys.GetShortcutDisplay(RevisionGridControl.Command.ShowAllBranches);
         tsmiShowBranchesFiltered.ShortcutKeyDisplayString = hotkeys.GetShortcutDisplay(RevisionGridControl.Command.ShowFilteredBranches);

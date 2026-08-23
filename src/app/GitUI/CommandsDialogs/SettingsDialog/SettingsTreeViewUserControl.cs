@@ -1,9 +1,11 @@
 ﻿using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Settings;
 using GitExtUtils.GitUI;
 using GitUI.Properties;
 using GitUI.UserControls;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog;
 
@@ -21,7 +23,7 @@ public sealed partial class SettingsTreeViewUserControl : UserControl
     {
         InitializeComponent();
 
-        Font = AppSettings.Font;
+        Font = AppFonts.App;
 
         textBoxFind.PlaceholderText = TranslatedStrings.SettingsTypeToFind;
 
@@ -123,27 +125,13 @@ public sealed partial class SettingsTreeViewUserControl : UserControl
             return;
         }
 
-        string searchFor = textBoxFind.Text.ToLowerInvariant();
-        LazyStringSplit andKeywords = searchFor.LazySplit(' ');
         foreach (TreeNode node in treeView1.AllNodes())
         {
             ISettingsPage settingsPage = (ISettingsPage)node.Tag!;
 
-            // search for title
-            if (settingsPage.GetTitle().Contains(searchFor, StringComparison.InvariantCultureIgnoreCase))
+            if (SettingsPageSearch.Matches(textBoxFind.Text, settingsPage.GetTitle(), settingsPage.GetSearchKeywords()))
             {
                 _nodesFoundByTextBox.Add(node);
-                continue;
-            }
-
-            // search for keywords (space combines as 'and')
-            if (andKeywords.All(keyword => settingsPage.GetSearchKeywords().Any(k => k.Contains(keyword, StringComparison.InvariantCultureIgnoreCase))))
-            {
-                // only part of a keyword must match to have a match
-                if (!_nodesFoundByTextBox.Contains(node))
-                {
-                    _nodesFoundByTextBox.Add(node);
-                }
             }
         }
 

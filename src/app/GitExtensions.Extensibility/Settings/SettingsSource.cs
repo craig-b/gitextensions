@@ -112,9 +112,9 @@ public abstract class SettingsSource : IConfigValueStore
     }
 
     [return: NotNullIfNotNull("defaultValue")]
-    public Font? GetFont(string name, Font? defaultValue) => FontParser.Parse(GetValue(name), defaultValue!);
+    public FontDescriptor? GetFont(string name, FontDescriptor? defaultValue) => FontParser.Parse(GetValue(name), defaultValue);
 
-    public void SetFont(string name, Font? value) => SetValue(name, value?.AsString());
+    public void SetFont(string name, FontDescriptor? value) => SetValue(name, value?.AsString());
 
     public Color GetColor(string name, Color defaultValue)
     {

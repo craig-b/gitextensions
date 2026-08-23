@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -17,12 +17,21 @@ public static class ThreadHelper
     private static TaskManager TaskManager =>
         _taskManager ?? throw new InvalidOperationException($"{nameof(ThreadHelper)}.{nameof(JoinableTaskContext)} has not been initialized.");
 
+    /// <summary>
+    ///  The ambient task manager. Exposed to <c>ControlThreadingExtensions</c> only, which owns the
+    ///  <c>InvokeAndForget(this Control, ...)</c> overloads that used to live here.
+    /// </summary>
+    internal static TaskManager AmbientTaskManager => TaskManager;
+
     public static bool HasJoinableTaskContext => _taskManager is not null;
 
     public static JoinableTaskContext JoinableTaskContext
     {
         get => TaskManager.JoinableTaskContext;
-        internal set => _taskManager = value is null ? null : new(value);
+
+        // Public since the vertical slice: initializing the context is a HOST responsibility
+        // (the WinForms Program, the test hosts, the Avalonia client) - not an internal detail.
+        set => _taskManager = value is null ? null : new(value);
     }
 
     public static JoinableTaskFactory JoinableTaskFactory => TaskManager.JoinableTaskFactory;
@@ -72,40 +81,31 @@ public static class ThreadHelper
     }
 
     /// <summary>
-    /// Asynchronously run <paramref name="asyncAction"/> on a background thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// Asynchronously run <paramref name="asyncAction"/> on a background thread and forward all exceptions to the application's unhandled-exception handler except for <see cref="OperationCanceledException"/>, which is ignored.
     /// </summary>
     public static void FileAndForget(Func<Task> asyncAction)
         => TaskManager.FileAndForget(asyncAction);
 
     /// <summary>
-    /// Asynchronously run <paramref name="action"/> on a background thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// Asynchronously run <paramref name="action"/> on a background thread and forward all exceptions to the application's unhandled-exception handler except for <see cref="OperationCanceledException"/>, which is ignored.
     /// </summary>
     public static void FileAndForget(Action action)
         => TaskManager.FileAndForget(action);
 
     /// <summary>
-    /// Asynchronously run <paramref name="joinableTask"/> on a background thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// Asynchronously run <paramref name="joinableTask"/> on a background thread and forward all exceptions to the application's unhandled-exception handler except for <see cref="OperationCanceledException"/>, which is ignored.
     /// </summary>
     public static void FileAndForget(this JoinableTask joinableTask)
         => TaskManager.FileAndForget(joinableTask.Task);
 
     /// <summary>
-    /// Asynchronously run <paramref name="task"/> on a background thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
+    /// Asynchronously run <paramref name="task"/> on a background thread and forward all exceptions to the application's unhandled-exception handler except for <see cref="OperationCanceledException"/>, which is ignored.
     /// </summary>
     public static void FileAndForget(this Task task)
         => TaskManager.FileAndForget(task);
 
-    /// <summary>
-    /// Asynchronously run <paramref name="asyncAction"/> on the UI thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
-    /// </summary>
-    public static void InvokeAndForget(this Control control, Func<Task> asyncAction, TaskManager? taskManager = null, CancellationToken cancellationToken = default)
-        => (taskManager ?? TaskManager).InvokeAndForget(control, asyncAction, cancellationToken);
-
-    /// <summary>
-    /// Asynchronously run <paramref name="action"/> on the UI thread and forward all exceptions to <see cref="Application.OnThreadException"/> except for <see cref="OperationCanceledException"/>, which is ignored.
-    /// </summary>
-    public static void InvokeAndForget(this Control control, Action action, TaskManager? taskManager = null, CancellationToken cancellationToken = default)
-        => InvokeAndForget(control, TaskManager.AsyncAction(action), taskManager, cancellationToken);
+    // Note: the InvokeAndForget(this Control, ...) overloads live in ControlThreadingExtensions,
+    // because they are the only members of this type that require System.Windows.Forms.
 
     public static async Task JoinPendingOperationsAsync(CancellationToken cancellationToken)
         => await TaskManager.JoinPendingOperationsAsync(cancellationToken);

@@ -6,8 +6,10 @@ namespace GitCommands;
 
 /// <summary>
 ///  Creates and caches <see cref="GitExecutor"/> instances by repository path.
+///  Public since the vertical slice (plan §19.1): a non-WinForms client constructs its
+///  GitModule directly rather than through GitUI's service container.
 /// </summary>
-internal sealed class GitExecutorProvider : IGitExecutorProvider
+public sealed class GitExecutorProvider : IGitExecutorProvider
 {
     private readonly IGitDirectoryResolver _gitDirectoryResolver;
     private readonly ConcurrentDictionary<string, IGitExecutor> _cache = new(StringComparer.Ordinal);

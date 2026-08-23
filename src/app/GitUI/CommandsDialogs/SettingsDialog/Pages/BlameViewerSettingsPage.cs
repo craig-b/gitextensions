@@ -1,4 +1,4 @@
-﻿using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
 using ResourceManager;
 
@@ -7,6 +7,8 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages;
 public partial class BlameViewerSettingsPage : SettingsPageWithHeader
 {
     private readonly TranslationString _blameWarningTooltip = new("Could prevent blame to calculate the accurate line number when blaming previous revisions.");
+
+    private readonly BlameViewerPageModel _model = new();
 
     public BlameViewerSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
@@ -17,36 +19,40 @@ public partial class BlameViewerSettingsPage : SettingsPageWithHeader
         cbDetectMoveAndCopyInAllFiles.ToolTipText = _blameWarningTooltip.Text;
     }
 
+    private IEnumerable<(BoolSettingsEntry Entry, Control Control)> EntryControls =>
+    [
+        (_model.IgnoreWhitespace, cbIgnoreWhitespace),
+        (_model.DetectMoveAndCopyInThisFile, cbDetectMoveAndCopyInThisFile),
+        (_model.DetectMoveAndCopyInAllFiles, cbDetectMoveAndCopyInAllFiles),
+        (_model.DisplayAuthorFirst, cbDisplayAuthorFirst),
+        (_model.ShowAuthor, cbShowAuthor),
+        (_model.ShowAuthorDate, cbShowAuthorDate),
+        (_model.ShowAuthorTime, cbShowAuthorTime),
+        (_model.ShowLineNumbers, cbShowLineNumbers),
+        (_model.ShowOriginalFilePath, cbShowOriginalFilePath),
+        (_model.ShowAuthorAvatar, cbShowAuthorAvatar),
+    ];
+
     protected override void SettingsToPage()
     {
-        cbIgnoreWhitespace.Checked = AppSettings.IgnoreWhitespaceOnBlame;
-        cbDetectMoveAndCopyInThisFile.Checked = AppSettings.DetectCopyInFileOnBlame;
-        cbDetectMoveAndCopyInAllFiles.Checked = AppSettings.DetectCopyInAllOnBlame;
+        _model.Load();
 
-        cbDisplayAuthorFirst.Checked = AppSettings.BlameDisplayAuthorFirst;
-        cbShowAuthor.Checked = AppSettings.BlameShowAuthor;
-        cbShowAuthorDate.Checked = AppSettings.BlameShowAuthorDate;
-        cbShowAuthorTime.Checked = AppSettings.BlameShowAuthorTime;
-        cbShowLineNumbers.Checked = AppSettings.BlameShowLineNumbers;
-        cbShowOriginalFilePath.Checked = AppSettings.BlameShowOriginalFilePath;
-        cbShowAuthorAvatar.Checked = AppSettings.BlameShowAuthorAvatar;
+        foreach ((BoolSettingsEntry entry, Control control) in EntryControls)
+        {
+            SettingsPageBindings.SetChecked(control, entry.Value);
+        }
 
         base.SettingsToPage();
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.IgnoreWhitespaceOnBlame = cbIgnoreWhitespace.Checked;
-        AppSettings.DetectCopyInAllOnBlame = cbDetectMoveAndCopyInAllFiles.Checked;
-        AppSettings.DetectCopyInFileOnBlame = cbDetectMoveAndCopyInThisFile.Checked;
+        foreach ((BoolSettingsEntry entry, Control control) in EntryControls)
+        {
+            entry.Value = SettingsPageBindings.GetChecked(control);
+        }
 
-        AppSettings.BlameDisplayAuthorFirst = cbDisplayAuthorFirst.Checked;
-        AppSettings.BlameShowAuthor = cbShowAuthor.Checked;
-        AppSettings.BlameShowAuthorDate = cbShowAuthorDate.Checked;
-        AppSettings.BlameShowAuthorTime = cbShowAuthorTime.Checked;
-        AppSettings.BlameShowLineNumbers = cbShowLineNumbers.Checked;
-        AppSettings.BlameShowOriginalFilePath = cbShowOriginalFilePath.Checked;
-        AppSettings.BlameShowAuthorAvatar = cbShowAuthorAvatar.Checked;
+        _model.Save();
 
         base.PageToSettings();
     }

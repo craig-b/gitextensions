@@ -13,8 +13,6 @@ public interface IRepositoryHostPlugin : IGitPlugin
 
     IReadOnlyList<IHostedRepository> GetMyRepos();
 
-    void ConfigureContextMenu(ContextMenuStrip contextMenu);
-
     bool ConfigurationOk { get; }
 
     bool GitModuleIsRelevantToMe();

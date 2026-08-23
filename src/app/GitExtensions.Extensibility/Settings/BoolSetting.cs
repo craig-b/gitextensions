@@ -17,7 +17,6 @@ public class BoolSetting : ISetting
     public string Name { get; }
     public string Caption { get; }
     public bool DefaultValue { get; }
-    public CheckBox? CustomControl { get; set; }
 
     public bool? this[SettingsSource settings]
     {

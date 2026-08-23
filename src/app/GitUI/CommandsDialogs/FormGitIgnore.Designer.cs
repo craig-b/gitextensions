@@ -37,7 +37,7 @@ partial class FormGitIgnore
         AddPattern = new Button();
         Save = new Button();
         splitContainer1 = new SplitContainer();
-        _NO_TRANSLATE_GitIgnoreEdit = new Editor.FileViewer();
+        _NO_TRANSLATE_GitIgnoreEdit = new Editor.EditableFileViewer();
         label1 = new TextBox();
         flowLayoutPanel1 = new FlowLayoutPanel();
         btnCancel = new Button();
@@ -178,7 +178,6 @@ partial class FormGitIgnore
         _NO_TRANSLATE_GitIgnoreEdit.AutoScroll = true;
         _NO_TRANSLATE_GitIgnoreEdit.BorderStyle = BorderStyle.None;
         _NO_TRANSLATE_GitIgnoreEdit.Dock = DockStyle.Fill;
-        _NO_TRANSLATE_GitIgnoreEdit.IsReadOnly = false;
         _NO_TRANSLATE_GitIgnoreEdit.Location = new Point(0, 0);
         _NO_TRANSLATE_GitIgnoreEdit.Margin = new Padding(0, 0, 3, 2);
         _NO_TRANSLATE_GitIgnoreEdit.Name = "_NO_TRANSLATE_GitIgnoreEdit";
@@ -261,7 +260,7 @@ partial class FormGitIgnore
     #endregion
 
     private SplitContainer splitContainer1;
-    private GitUI.Editor.FileViewer _NO_TRANSLATE_GitIgnoreEdit;
+    private GitUI.Editor.EditableFileViewer _NO_TRANSLATE_GitIgnoreEdit;
     private TextBox label1;
     private Button Save;
     private Button AddDefault;

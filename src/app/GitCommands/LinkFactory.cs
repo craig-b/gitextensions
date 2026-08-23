@@ -1,0 +1,177 @@
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using GitCommands;
+using GitCommands.Git;
+using GitCommands.RichText;
+using GitExtensions.Extensibility.Git;
+
+namespace ResourceManager;
+
+public interface ILinkFactory
+{
+    RichTextSegment CreateLink(string? caption, string uri);
+
+    RichTextSegment CreateTagLink(string tag);
+
+    RichTextSegment CreateBranchLink(string noPrefixBranch);
+
+    RichTextSegment CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false);
+
+    RichTextSegment CreateShowAllLink(string what);
+
+    void ExecuteLink(string? linkUri, Action<CommandEventArgs>? handleInternalLink = null, Action<string?>? showAll = null);
+}
+
+public sealed class LinkFactory : ILinkFactory
+{
+    private const string InternalScheme = "gitext";
+    private const string ShowAll = "showall";
+
+    public RichTextSegment CreateLink(string? caption, string uri)
+        => new(caption ?? "", LinkTarget: uri);
+
+    public RichTextSegment CreateTagLink(string tag)
+    {
+        if (tag != "…")
+        {
+            return CreateLink(tag, $"{InternalScheme}://gototag/" + tag);
+        }
+
+        return new RichTextSegment(tag);
+    }
+
+    public RichTextSegment CreateBranchLink(string noPrefixBranch)
+    {
+        if (noPrefixBranch != "…")
+        {
+            string linkTarget = DetachedHeadParser.IsDetachedHead(noPrefixBranch) ? "HEAD" : noPrefixBranch;
+            return CreateLink(noPrefixBranch, $"{InternalScheme}://gotobranch/{linkTarget}");
+        }
+
+        return new RichTextSegment(noPrefixBranch);
+    }
+
+    public RichTextSegment CreateCommitLink(ObjectId objectId, string? linkText = null, bool preserveGuidInLinkText = false)
+    {
+        if (linkText is null)
+        {
+            if (objectId == ObjectId.WorkTreeId)
+            {
+                linkText = TranslatedStrings.Workspace;
+            }
+            else if (objectId == ObjectId.IndexId)
+            {
+                linkText = TranslatedStrings.Index;
+            }
+            else if (preserveGuidInLinkText)
+            {
+                linkText = objectId.ToString();
+            }
+            else
+            {
+                linkText = objectId.ToShortString();
+            }
+        }
+
+        return CreateLink(linkText, $"{InternalScheme}://gotocommit/" + objectId);
+    }
+
+    public RichTextSegment CreateShowAllLink(string what)
+        => CreateLink($"[ {TranslatedStrings.ShowAll} ]", $"{InternalScheme}://{ShowAll}/{what}");
+
+    public void ExecuteLink(string? linkUri, Action<CommandEventArgs>? handleInternalLink = null, Action<string?>? showAll = null)
+    {
+        if (!TryParseLink(linkUri, out Uri? uri))
+        {
+            return;
+        }
+
+        if (ParseInternalScheme(uri, out CommandEventArgs? commandEventArgs))
+        {
+            if (commandEventArgs.Command == ShowAll)
+            {
+                if (showAll is null)
+                {
+                    throw new InvalidOperationException($"unexpected internal link: {linkUri}");
+                }
+
+                showAll(commandEventArgs.Data);
+                return;
+            }
+
+            if (handleInternalLink is null)
+            {
+                throw new InvalidOperationException($"unexpected internal link: {linkUri}");
+            }
+
+            handleInternalLink(commandEventArgs);
+            return;
+        }
+
+        // Link targets originate in commit-message content - repository history is not trusted
+        // input. Only well-known web/mail schemes may reach the shell; a file:// or custom-
+        // scheme URI in a message stays inert.
+        if (uri.Scheme is "http" or "https" or "mailto" or "ftp" or "ftps")
+        {
+            OsShellUtil.OpenUrlInDefaultBrowser(uri.AbsoluteUri);
+        }
+    }
+
+    private static bool ParseInternalScheme(Uri? uri, [NotNullWhen(returnValue: true)] out CommandEventArgs? commandEventArgs)
+    {
+        if (uri?.Scheme == InternalScheme)
+        {
+            commandEventArgs = new CommandEventArgs(uri.Host, uri.AbsolutePath.TrimStart('/'));
+            return true;
+        }
+
+        commandEventArgs = null;
+        return false;
+    }
+
+    private static bool TryParseLink(string? linkUri, [NotNullWhen(returnValue: true)] out Uri? uri)
+    {
+        if (string.IsNullOrWhiteSpace(linkUri))
+        {
+            uri = null;
+            return false;
+        }
+
+        string uriCandidate = linkUri;
+        while (true)
+        {
+            if (Uri.TryCreate(uriCandidate, UriKind.Absolute, out uri))
+            {
+                return true;
+            }
+
+            int idx = uriCandidate.IndexOf('#');
+            if (idx == -1)
+            {
+                break;
+            }
+
+            uriCandidate = uriCandidate[(idx + 1)..];
+        }
+
+        return false;
+    }
+
+    internal TestAccessor GetTestAccessor() => new(this);
+
+    internal readonly struct TestAccessor
+    {
+        private readonly LinkFactory _linkFactory;
+
+        public TestAccessor(LinkFactory linkFactory)
+        {
+            _linkFactory = linkFactory;
+        }
+
+        public readonly bool ParseInternalScheme(Uri uri, [NotNullWhen(returnValue: true)] out CommandEventArgs? commandEventArgs)
+            => LinkFactory.ParseInternalScheme(uri, out commandEventArgs);
+
+        public readonly bool TryParseLink(string? linkUri, [NotNullWhen(returnValue: true)] out Uri? uri)
+            => LinkFactory.TryParseLink(linkUri, out uri);
+    }
+}

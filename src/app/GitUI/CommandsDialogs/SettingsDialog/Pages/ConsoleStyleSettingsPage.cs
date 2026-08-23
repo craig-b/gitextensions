@@ -44,7 +44,7 @@ public partial class ConsoleStyleSettingsPage : SettingsPageWithHeader
         }
 
         RefreshThemeDropdown();
-        SetCurrentConsoleFont(AppSettings.ConEmuConsoleFont);
+        SetCurrentConsoleFont(AppFonts.ConEmuConsole);
 
         base.SettingsToPage();
     }
@@ -53,7 +53,7 @@ public partial class ConsoleStyleSettingsPage : SettingsPageWithHeader
     {
         AppSettings.ConsoleEmulatorName.Value = (cboConsoleEmulator.SelectedItem as IConsoleEmulator)?.Name ?? "";
         AppSettings.ConEmuStyle.Value = (string)_NO_TRANSLATE_cboStyle.SelectedItem!;
-        AppSettings.ConEmuConsoleFont = _consoleFont;
+        AppSettings.ConEmuConsoleFont = _consoleFont?.ToDescriptor();
 
         base.PageToSettings();
     }

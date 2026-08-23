@@ -27,7 +27,7 @@ public class GitImpactPlugin : GitPluginBase, IGitPluginForRepository
         }
 
         using FormImpact form = new(args.GitModule);
-        form.ShowDialog(args.OwnerForm);
+        form.ShowDialog(args.OwnerForm as IWin32Window);
 
         return false;
     }

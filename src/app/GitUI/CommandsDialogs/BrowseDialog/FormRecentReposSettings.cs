@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using GitCommands;
+using GitCommands.Dashboard;
 using GitCommands.UserRepositoryHistory;
 using GitExtUtils.GitUI.Theming;
 using Microsoft;
@@ -28,13 +29,15 @@ public partial class FormRecentReposSettings : GitExtensionsForm
 
     private void LoadSettings()
     {
-        SetShorteningStrategy(AppSettings.ShorteningRecentRepoPathStrategy);
-        hideTopRepositoriesFromRecentList.Checked = AppSettings.HideTopRepositoriesFromRecentList.Value;
-        sortTopRepos.Checked = AppSettings.SortTopRepos;
-        sortRecentRepos.Checked = AppSettings.SortRecentRepos;
-        comboMinWidthEdit.Value = AppSettings.RecentReposComboMinWidth;
-        SetNumericUpDownValue(_NO_TRANSLATE_maxRecentRepositories, AppSettings.MaxTopRepositories);
-        SetNumericUpDownValue(_NO_TRANSLATE_RecentRepositoriesHistorySize, AppSettings.RecentRepositoriesHistorySize);
+        RecentReposSettingsSnapshot snapshot = RecentReposSettingsSnapshot.Load();
+
+        SetShorteningStrategy(snapshot.ShorteningStrategy);
+        hideTopRepositoriesFromRecentList.Checked = snapshot.HideTopRepositoriesFromRecentList;
+        sortTopRepos.Checked = snapshot.SortTopRepos;
+        sortRecentRepos.Checked = snapshot.SortRecentRepos;
+        comboMinWidthEdit.Value = snapshot.RecentReposComboMinWidth;
+        SetNumericUpDownValue(_NO_TRANSLATE_maxRecentRepositories, snapshot.MaxTopRepositories);
+        SetNumericUpDownValue(_NO_TRANSLATE_RecentRepositoriesHistorySize, snapshot.RecentRepositoriesHistorySize);
 
         _previousValue = comboMinWidthEdit.Value;
 
@@ -68,16 +71,20 @@ public partial class FormRecentReposSettings : GitExtensionsForm
     {
         Validates.NotNull(_repositoryHistory);
 
-        AppSettings.ShorteningRecentRepoPathStrategy = GetShorteningStrategy();
-        AppSettings.HideTopRepositoriesFromRecentList.Value = hideTopRepositoriesFromRecentList.Checked;
-        AppSettings.SortTopRepos = sortTopRepos.Checked;
-        AppSettings.SortRecentRepos = sortRecentRepos.Checked;
-        AppSettings.MaxTopRepositories = (int)_NO_TRANSLATE_maxRecentRepositories.Value;
-        AppSettings.RecentReposComboMinWidth = (int)comboMinWidthEdit.Value;
-        AppSettings.RecentRepositoriesHistorySize = (int)_NO_TRANSLATE_RecentRepositoriesHistorySize.Value;
+        CurrentSnapshot().Save();
 
         ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.SaveRecentHistoryAsync(_repositoryHistory));
     }
+
+    private RecentReposSettingsSnapshot CurrentSnapshot()
+        => new(
+            GetShorteningStrategy(),
+            hideTopRepositoriesFromRecentList.Checked,
+            sortTopRepos.Checked,
+            sortRecentRepos.Checked,
+            (int)comboMinWidthEdit.Value,
+            (int)_NO_TRANSLATE_maxRecentRepositories.Value,
+            (int)_NO_TRANSLATE_RecentRepositoriesHistorySize.Value);
 
     private ShorteningRecentRepoPathStrategy GetShorteningStrategy()
     {
@@ -114,16 +121,9 @@ public partial class FormRecentReposSettings : GitExtensionsForm
             List<RecentRepoInfo> topRepos = [];
             List<RecentRepoInfo> recentRepos = [];
 
-            RecentRepoSplitter splitter = new()
-            {
-                MaxTopRepositories = (int)_NO_TRANSLATE_maxRecentRepositories.Value,
-                HideTopRepositoriesFromRecentList = hideTopRepositoriesFromRecentList.Checked,
-                ShorteningStrategy = GetShorteningStrategy(),
-                SortRecentRepos = sortRecentRepos.Checked,
-                SortTopRepos = sortTopRepos.Checked,
-                RecentReposComboMinWidth = (int)comboMinWidthEdit.Value,
-                MeasureFont = TopLB.Font,
-            };
+            // The preview renders the UNSAVED snapshot through the very splitter the real menus use.
+            RecentRepoSplitter splitter = new(CurrentSnapshot().ToSplitterOptions(
+                caption => TextRenderer.MeasureText(caption, TopLB.Font).Width));
 
             splitter.SplitRecentRepos(_repositoryHistory, topRepos, recentRepos);
 
@@ -190,20 +190,7 @@ public partial class FormRecentReposSettings : GitExtensionsForm
             return;
         }
 
-        if (comboMinWidthEdit.Value < _previousValue)
-        {
-            if (comboMinWidthEdit.Value < MinComboWidthAllowed)
-            {
-                comboMinWidthEdit.Value = 0;
-            }
-        }
-        else
-        {
-            if (comboMinWidthEdit.Value < MinComboWidthAllowed)
-            {
-                comboMinWidthEdit.Value = MinComboWidthAllowed;
-            }
-        }
+        comboMinWidthEdit.Value = ComboWidthRule.Snap((int)_previousValue, (int)comboMinWidthEdit.Value);
 
         _previousValue = comboMinWidthEdit.Value;
         SetComboWidth();
@@ -228,9 +215,8 @@ public partial class FormRecentReposSettings : GitExtensionsForm
 
             foreach (RecentRepoInfo repo in repos)
             {
-                anchorToTopReposToolStripMenuItem.Enabled = repo.Repo.Anchor != Repository.RepositoryAnchor.AnchoredInTop;
-                anchorToRecentReposToolStripMenuItem.Enabled = repo.Repo.Anchor != Repository.RepositoryAnchor.AnchoredInRecent;
-                removeAnchorToolStripMenuItem.Enabled = repo.Repo.Anchor != Repository.RepositoryAnchor.None;
+                (anchorToTopReposToolStripMenuItem.Enabled, anchorToRecentReposToolStripMenuItem.Enabled, removeAnchorToolStripMenuItem.Enabled) =
+                    AnchorCommandAvailability.For(repo.Repo.Anchor);
             }
         }
         else
@@ -347,13 +333,15 @@ public partial class FormRecentReposSettings : GitExtensionsForm
             return;
         }
 
-        ThreadHelper.JoinableTaskFactory.Run(async () =>
+        Validates.NotNull(_repositoryHistory);
+
+        // Like the anchor edits, removal is transactional: it mutates the in-memory list and is
+        // persisted by OK's SaveRecentHistoryAsync - Cancel used to keep anchor changes back but
+        // let removals through.
+        foreach (RecentRepoInfo repo in repos)
         {
-            foreach (RecentRepoInfo repo in repos)
-            {
-                _repositoryHistory = await RepositoryHistoryManager.Locals.RemoveRecentAsync(repo.Repo.Path);
-            }
-        });
+            _repositoryHistory.Remove(repo.Repo);
+        }
 
         RefreshRepos();
     }

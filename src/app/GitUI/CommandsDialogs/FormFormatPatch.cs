@@ -29,7 +29,7 @@ public partial class FormFormatPatch : GitModuleForm
 
     private void Browse_Click(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this);
+        string? userSelectedPath = FolderPicker.PickFolder(this);
 
         if (userSelectedPath is not null)
         {

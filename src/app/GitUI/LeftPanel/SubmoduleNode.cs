@@ -135,29 +135,10 @@ internal sealed class SubmoduleNode : Node
     private void ApplyStatus()
     {
         TreeViewNode.ToolTipText = DisplayText();
-        TreeViewNode.ImageKey = GetSubmoduleItemImage(Info?.Detailed);
+
+        // the portable decision table's keys match the image resource names
+        TreeViewNode.ImageKey = SubmoduleImageKeys.GetNodeImageKey(Info?.Detailed?.Status, Info?.Detailed?.IsDirty);
         TreeViewNode.SelectedImageKey = TreeViewNode.ImageKey;
-
-        return;
-
-        // NOTE: Copied and adapted from FormBrowse.GetSubmoduleItemImage
-        static string GetSubmoduleItemImage(DetailedSubmoduleInfo? details)
-        {
-            return (details?.Status, details?.IsDirty) switch
-            {
-                (SubmoduleStatus.FastForward, true) => nameof(Images.SubmoduleRevisionUpDirty),
-                (SubmoduleStatus.FastForward, false) => nameof(Images.SubmoduleRevisionUp),
-                (SubmoduleStatus.Rewind, true) => nameof(Images.SubmoduleRevisionDownDirty),
-                (SubmoduleStatus.Rewind, false) => nameof(Images.SubmoduleRevisionDown),
-                (SubmoduleStatus.NewerTime, true) => nameof(Images.SubmoduleRevisionSemiUpDirty),
-                (SubmoduleStatus.NewerTime, false) => nameof(Images.SubmoduleRevisionSemiUp),
-                (SubmoduleStatus.OlderTime, true) => nameof(Images.SubmoduleRevisionSemiDownDirty),
-                (SubmoduleStatus.OlderTime, false) => nameof(Images.SubmoduleRevisionSemiDown),
-                (_, true) => nameof(Images.SubmoduleDirty),
-                (_, false) => nameof(Images.FileStatusModified),
-                _ => nameof(Images.FolderSubmodule)
-            };
-        }
     }
 
     internal async Task SetStatusToolTipAsync(CancellationToken token)

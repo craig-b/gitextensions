@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Open;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
@@ -42,43 +43,14 @@ public partial class FormOpenDirectory : GitExtensionsForm
     }
 
     private static IReadOnlyList<string> GetDirectories(IGitModule? currentModule, IEnumerable<Repository> repositoryHistory)
-    {
-        List<string> directories = [];
+        => OpenRepositoryModel.CandidateDirectories(
+            AppSettings.DefaultCloneDestinationPath,
+            currentModule?.WorkingDir,
+            repositoryHistory.Select(r => r.Path),
+            AppSettings.RecentWorkingDir,
+            EnvironmentConfiguration.GetHomeDir());
 
-        if (!string.IsNullOrWhiteSpace(AppSettings.DefaultCloneDestinationPath))
-        {
-            directories.Add(AppSettings.DefaultCloneDestinationPath.EnsureTrailingPathSeparator());
-        }
-
-        if (!string.IsNullOrWhiteSpace(currentModule?.WorkingDir))
-        {
-            DirectoryInfo di = new(currentModule.WorkingDir);
-            if (di.Parent is not null)
-            {
-                directories.Add(di.Parent.FullName.EnsureTrailingPathSeparator());
-            }
-        }
-
-        directories.AddRange(repositoryHistory.Select(r => r.Path));
-
-        if (directories.Count == 0)
-        {
-            if (!string.IsNullOrWhiteSpace(AppSettings.RecentWorkingDir))
-            {
-                directories.Add(AppSettings.RecentWorkingDir.EnsureTrailingPathSeparator());
-            }
-
-            string homeDir = EnvironmentConfiguration.GetHomeDir();
-            if (!string.IsNullOrWhiteSpace(homeDir))
-            {
-                directories.Add(homeDir.EnsureTrailingPathSeparator());
-            }
-        }
-
-        return directories.Distinct().ToList();
-    }
-
-    public static IGitModule? OpenModule(IWin32Window owner, IGitExecutorProvider executorProvider, IGitModule? currentModule)
+    public static IGitModule? OpenModule(IWin32Window? owner, IGitExecutorProvider executorProvider, IGitModule? currentModule)
     {
         using FormOpenDirectory open = new(executorProvider, currentModule);
         open.ShowDialog(owner);
@@ -109,7 +81,7 @@ public partial class FormOpenDirectory : GitExtensionsForm
 
     private void folderBrowserButton_Click(object sender, EventArgs e)
     {
-        string? userSelectedPath = OsShellUtil.PickFolder(this, _NO_TRANSLATE_Directory.Text);
+        string? userSelectedPath = FolderPicker.PickFolder(this, _NO_TRANSLATE_Directory.Text);
         if (!string.IsNullOrEmpty(userSelectedPath))
         {
             _NO_TRANSLATE_Directory.Text = userSelectedPath;
@@ -119,52 +91,30 @@ public partial class FormOpenDirectory : GitExtensionsForm
 
     private void folderGoUpButton_Click(object sender, EventArgs e)
     {
-        try
+        if (OpenRepositoryModel.ParentOf(_NO_TRANSLATE_Directory.Text) is not string parentPath)
         {
-            DirectoryInfo currentDirectory = new(_NO_TRANSLATE_Directory.Text);
-            if (currentDirectory.Parent is null)
-            {
-                return;
-            }
+            return;
+        }
 
-            string parentPath = currentDirectory.Parent.FullName.TrimEnd('\\');
-            _NO_TRANSLATE_Directory.Text = parentPath;
-            _NO_TRANSLATE_Directory.Focus();
-            _NO_TRANSLATE_Directory.Select(_NO_TRANSLATE_Directory.Text.Length, 0);
-            SendKeys.Send(@"\");
-        }
-        catch
-        {
-            // no-op
-        }
+        _NO_TRANSLATE_Directory.Text = parentPath;
+        _NO_TRANSLATE_Directory.Focus();
+        _NO_TRANSLATE_Directory.Select(_NO_TRANSLATE_Directory.Text.Length, 0);
+        SendKeys.Send(Path.DirectorySeparatorChar.ToString());
     }
 
     private void _NO_TRANSLATE_Directory_TextChanged(object sender, EventArgs e)
     {
-        try
-        {
-            DirectoryInfo currentDirectory = new(_NO_TRANSLATE_Directory.Text);
-            folderGoUpButton.Enabled = currentDirectory.Exists && currentDirectory.Parent is not null;
-        }
-        catch
-        {
-            folderGoUpButton.Enabled = false;
-        }
+        folderGoUpButton.Enabled = OpenRepositoryModel.CanGoUp(_NO_TRANSLATE_Directory.Text, Directory.Exists);
     }
 
     private static IGitModule? OpenGitRepository(IGitExecutorProvider executorProvider, string path, ILocalRepositoryManager localRepositoryManager)
     {
-        if (!Directory.Exists(path))
+        if (OpenRepositoryModel.TryGetOpenablePath(path, Directory.Exists, GitModule.IsValidGitWorkingDir) is not string openablePath)
         {
             return null;
         }
 
-        GitModule chosenModule = new(executorProvider, path.EnsureTrailingPathSeparator());
-        if (!chosenModule.IsValidGitWorkingDir())
-        {
-            return null;
-        }
-
+        GitModule chosenModule = new(executorProvider, openablePath);
         ThreadHelper.JoinableTaskFactory.Run(() => localRepositoryManager.AddAsMostRecentAsync(chosenModule.WorkingDir));
         return chosenModule;
     }

@@ -7,6 +7,14 @@ namespace GitExtensions.Extensibility.Translations.Xliff;
 
 public static class TranslationUtil
 {
+    /// <summary>
+    ///  The WinForms special cases (ToolTip pairing, DataGridViewColumn, ComboBox/ListBox item
+    ///  lists), installed by the WinForms host before any translation walk - see
+    ///  <see cref="ITranslationSpecialItemHandler"/>. Null (a non-WinForms host) means only the
+    ///  generic walk runs.
+    /// </summary>
+    public static ITranslationSpecialItemHandler? SpecialItemHandler { get; set; }
+
     private const BindingFlags _propertyFlags
         = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static |
           BindingFlags.NonPublic | BindingFlags.SetProperty;
@@ -26,7 +34,13 @@ public static class TranslationUtil
         "Title"
     ];
 
-    private static bool IsTranslatableItemInComponent(PropertyInfo property, object item)
+    /// <summary>
+    ///  The default is-this-property-translatable test: a string property whose name is in the
+    ///  item's <see cref="LocalizablePropertiesAttribute"/> list, or the built-in name list
+    ///  (Text/Caption/Title/...). Public so the host's special-case predicates can compose with
+    ///  it.
+    /// </summary>
+    public static bool IsTranslatableItemInComponent(PropertyInfo property, object item)
     {
         string[] localizableItemNames = GetLocalizablePropertiesFromAttribute(item)
             ?? _translatableItemInComponentNames;
@@ -117,18 +131,10 @@ public static class TranslationUtil
             yield break;
         }
 
-        Func<PropertyInfo, bool> isTranslatable;
-        if (item is DataGridViewColumn c)
+        Func<PropertyInfo, bool> isTranslatable = property => IsTranslatableItemInComponent(property, item);
+        if (SpecialItemHandler?.GetTranslatablePropertyPredicate(item, isTranslatable) is Func<PropertyInfo, bool> specialPredicate)
         {
-            isTranslatable = property => IsTranslatableItemInDataGridViewColumn(property, c);
-        }
-        else if (item is ComboBox || item is ListBox)
-        {
-            isTranslatable = property => IsTranslatableItemInBox(property, item);
-        }
-        else
-        {
-            isTranslatable = property => IsTranslatableItemInComponent(property, item);
+            isTranslatable = specialPredicate;
         }
 
         foreach (PropertyInfo property in item.GetType().GetProperties(_fieldFlags).Where(isTranslatable))
@@ -141,28 +147,8 @@ public static class TranslationUtil
     {
         foreach ((string itemName, object itemObj) in items)
         {
-            if (itemObj is ToolTip tooltip)
+            if (SpecialItemHandler?.TryAddItems(category, translation, itemName, itemObj, items) is true)
             {
-                string toolTipTitle = tooltip.ToolTipTitle;
-
-                if (!string.IsNullOrEmpty(toolTipTitle))
-                {
-                    translation.AddTranslationItem(category, itemName, "ToolTipTitle", toolTipTitle);
-                }
-
-                foreach ((string itemNameForTooltip, object itemObjForTooltip) in items)
-                {
-                    if (itemObjForTooltip is Control control)
-                    {
-                        string? tooltipString = tooltip.GetToolTip(control);
-                        if (!string.IsNullOrEmpty(tooltipString))
-                        {
-                            // Will add an entry in the xlf file with id `NameOfControl.NameOfTooltipControl` ex: "PushToRemote.toolTip1"
-                            translation.AddTranslationItem(category, itemNameForTooltip, itemName, tooltipString);
-                        }
-                    }
-                }
-
                 continue;
             }
 
@@ -215,30 +201,8 @@ public static class TranslationUtil
                 continue;
             }
 
-            if (itemObj is ToolTip tooltip)
+            if (SpecialItemHandler?.TryTranslateItems(category, translation, itemName, itemObj, items) is true)
             {
-                static string? ProvideDefaultValue() => null;
-
-                string? toolTipTitle = translation.TranslateItem(category, itemName, "ToolTipTitle", ProvideDefaultValue);
-
-                if (!string.IsNullOrEmpty(toolTipTitle))
-                {
-                    tooltip.ToolTipTitle = toolTipTitle;
-                }
-
-                foreach ((string itemNameForTooltip, object itemObjForTooltip) in items)
-                {
-                    if (itemObjForTooltip is Control control)
-                    {
-                        string? tooltipString = translation.TranslateItem(category, itemNameForTooltip, itemName, ProvideDefaultValue);
-
-                        if (!string.IsNullOrEmpty(tooltipString))
-                        {
-                            tooltip.SetToolTip(control, tooltipString);
-                        }
-                    }
-                }
-
                 continue;
             }
 
@@ -320,25 +284,6 @@ public static class TranslationUtil
         }
 
         TranslateItemsFromList(category, translation, GetObjFields(obj, "$this"));
-    }
-
-    private static bool IsTranslatableItemInDataGridViewColumn(PropertyInfo propertyInfo, DataGridViewColumn viewCol)
-    {
-        return propertyInfo.Name.Equals("HeaderText", StringComparison.CurrentCulture) && viewCol.Visible;
-    }
-
-    private static bool IsTranslatableItemInBox(PropertyInfo property, object itemObj)
-    {
-        if (IsTranslatableItemInComponent(property, itemObj))
-        {
-            return true;
-        }
-
-        string[] localizableProperties = GetLocalizablePropertiesFromAttribute(itemObj) ?? ["Items"];
-
-        return localizableProperties.Contains(property.Name, StringComparer.Ordinal) &&
-               property.GetValue(itemObj, null) is IList items &&
-               items.Count != 0;
     }
 
     /// <summary>true if the specified <see cref="Assembly"/> may be translatable.</summary>

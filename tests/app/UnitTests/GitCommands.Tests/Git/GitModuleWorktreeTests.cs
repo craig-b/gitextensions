@@ -10,6 +10,14 @@ public sealed class GitModuleWorktreeTests
     private GitModule _gitModule = null!;
     private MockExecutable _executable = null!;
 
+    // GitModule.GetWorktrees() runs each worktree path through GetWindowsPath(...), which - with
+    // no WSL distro configured, as here - is ToNativePath(): a no-op off Windows, since the
+    // native separator there already is '/'. So git's raw (posix-shaped) "worktree ..." output
+    // survives unconverted off Windows, while on Windows it becomes a backslash path. Both are
+    // the correct, deterministic result for their own platform.
+    private static string ExpectedWorktreePath(string posixPath) =>
+        OperatingSystem.IsWindows() ? posixPath.Replace('/', '\\') : posixPath;
+
     [SetUp]
     public void SetUp()
     {
@@ -40,7 +48,7 @@ public sealed class GitModuleWorktreeTests
             IReadOnlyList<GitWorktree> worktrees = _gitModule.GetWorktrees();
 
             worktrees.Should().HaveCount(1);
-            worktrees[0].Path.Should().Be("C:\\repos\\main");
+            worktrees[0].Path.Should().Be(ExpectedWorktreePath("C:/repos/main"));
             worktrees[0].HeadType.Should().Be(GitWorktreeHeadType.Branch);
             worktrees[0].Sha1.Should().Be("abc1234abc1234abc1234abc1234abc1234abc12");
             worktrees[0].Branch.Should().Be("master");
@@ -106,10 +114,10 @@ public sealed class GitModuleWorktreeTests
 
             worktrees.Should().HaveCount(2);
 
-            worktrees[0].Path.Should().Be("C:\\repos\\main");
+            worktrees[0].Path.Should().Be(ExpectedWorktreePath("C:/repos/main"));
             worktrees[0].Branch.Should().Be("master");
 
-            worktrees[1].Path.Should().Be("C:\\repos\\feature");
+            worktrees[1].Path.Should().Be(ExpectedWorktreePath("C:/repos/feature"));
             worktrees[1].Branch.Should().Be("feature/my-feature");
         }
     }
@@ -128,7 +136,7 @@ public sealed class GitModuleWorktreeTests
             IReadOnlyList<GitWorktree> worktrees = _gitModule.GetWorktrees();
 
             worktrees.Should().HaveCount(1);
-            worktrees[0].Path.Should().Be("C:\\my repos\\work tree");
+            worktrees[0].Path.Should().Be(ExpectedWorktreePath("C:/my repos/work tree"));
             worktrees[0].Branch.Should().Be("main");
         }
     }

@@ -3,6 +3,7 @@ using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using GitUI.LeftPanel.Interfaces;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -28,7 +29,7 @@ internal sealed class RemoteBranchNode : BaseBranchLeafNode, IGitRefActions, ICa
     public bool Fetch()
     {
         RemoteBranchInfo remoteBranchInfo = GetRemoteBranchInfo();
-        UICommands.StartPullDialogAndPullImmediately(
+        ((GitUICommands)UICommands).StartPullDialogAndPullImmediately(
             out bool pullCompleted,
             TreeViewNode.TreeView,
             remoteBranch: remoteBranchInfo.BranchName,
@@ -51,23 +52,23 @@ internal sealed class RemoteBranchNode : BaseBranchLeafNode, IGitRefActions, ICa
 
     public bool CreateBranch()
     {
-        return UICommands.StartCreateBranchDialog(TreeViewNode.TreeView, FullPath);
+        return UICommands.Execute(new UICmd.CreateBranchFrom(FullPath), TreeViewNode.TreeView);
     }
 
     public bool Delete()
     {
         RemoteBranchInfo remoteBranchInfo = GetRemoteBranchInfo();
-        return UICommands.StartDeleteRemoteBranchDialog(TreeViewNode.TreeView, remoteBranchInfo.Remote + '/' + remoteBranchInfo.BranchName);
+        return UICommands.Execute(new UICmd.DeleteRemoteBranch(remoteBranchInfo.Remote + '/' + remoteBranchInfo.BranchName), TreeViewNode.TreeView);
     }
 
     public bool Checkout()
     {
-        return MessageBoxes.ConfirmBranchCheckout(ParentWindow(), FullPath) && UICommands.StartCheckoutRemoteBranch(TreeViewNode.TreeView, FullPath);
+        return MessageBoxes.ConfirmBranchCheckout(ParentWindow(), FullPath) && UICommands.Execute(new UICmd.CheckoutRemoteBranch(FullPath), TreeViewNode.TreeView);
     }
 
     public bool Merge()
     {
-        return UICommands.StartMergeBranchDialog(TreeViewNode.TreeView, FullPath);
+        return UICommands.Execute(new UICmd.MergeBranch(FullPath), TreeViewNode.TreeView);
     }
 
     internal override void OnDoubleClick()

@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:GitExtensions.Avalonia"
+        x:Class="GitExtensions.Avalonia.FileHistoryWindow"
+        Title="File History"
+        Width="1200" Height="850">
+    <Grid RowDefinitions="*,4,380">
+
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
+            <local:RevisionLogControl x:Name="LogControl" />
+        </ScrollViewer>
+
+        <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
+
+        <TabControl x:Name="Tabs" Grid.Row="2" SelectionChanged="OnTabChanged">
+            <TabItem x:Name="CommitInfoTab" Header="Commit">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="8" Margin="8">
+                        <SelectableTextBlock x:Name="CommitHeader" FontFamily="monospace" FontSize="13" />
+                        <SelectableTextBlock x:Name="CommitBody" FontSize="13" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem x:Name="DiffTab" Header="Diff">
+                <DockPanel>
+                    <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" Margin="8,0,0,0" />
+                    <ScrollViewer x:Name="DiffScroll" HorizontalScrollBarVisibility="Auto">
+                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                            <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
+                            <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+            <TabItem x:Name="ViewTab" Header="View">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <SelectableTextBlock x:Name="ViewText" FontFamily="monospace" FontSize="12.5" Margin="8,4" />
+                </ScrollViewer>
+            </TabItem>
+            <TabItem x:Name="BlameTab" Header="Blame">
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="8,4">
+                        <Button x:Name="BlamePreviousButton" Content="Blame previous revision" IsEnabled="False" Click="OnBlamePreviousClick" FontSize="12" />
+                        <SelectableTextBlock x:Name="BlameInfo" FontSize="12" Foreground="Gray" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ScrollViewer x:Name="BlameScroll" Grid.Row="1" HorizontalScrollBarVisibility="Auto">
+                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                            <SelectableTextBlock x:Name="BlameGutter" FontFamily="monospace" FontSize="12.5" Foreground="Black" Margin="0,0,10,0" PointerPressed="OnBlamePanePressed" />
+                            <SelectableTextBlock x:Name="BlameBody" FontFamily="monospace" FontSize="12.5" PointerPressed="OnBlamePanePressed" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

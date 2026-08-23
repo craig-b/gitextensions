@@ -29,23 +29,23 @@ public sealed class RepositoryHistoryUIServiceTests
 
         const string path = "";
         const string caption = "CAPTION";
-        Repository repository = new(path);
+        RepoMenuEntry entry = new(new Repository(path), Number: 1, caption, Tooltip: path, BranchName: null, IsPinned: false);
 
-        _service.GetTestAccessor().AddRecentRepositories(containerMenu, repository, caption, number: 1);
+        _service.GetTestAccessor().AddRepositoryEntry(containerMenu, entry);
 
         containerMenu.DropDownItems.Count.Should().Be(1);
     }
 
     [Test]
-    public void AddRecentRepositories_should_set_properties_correctly()
+    public void AddRepositoryEntry_should_set_properties_correctly()
     {
         using ToolStripMenuItem containerMenu = new();
 
         const string path = "";
         const string caption = "CAPTION";
-        Repository repository = new(path);
+        RepoMenuEntry entry = new(new Repository(path), Number: 1, caption, Tooltip: path, BranchName: null, IsPinned: false);
 
-        _service.GetTestAccessor().AddRecentRepositories(containerMenu, repository, caption, number: 1);
+        _service.GetTestAccessor().AddRepositoryEntry(containerMenu, entry);
 
         ToolStripMenuItem item = (ToolStripMenuItem)containerMenu.DropDownItems[0];
         item.Text.Should().Be($"&1: {caption}");
@@ -57,17 +57,16 @@ public sealed class RepositoryHistoryUIServiceTests
     [TestCase("")]
     [TestCase("master")]
     [TestCase("(no branch)")]
-    public void AddRecentRepositories_should_show_branch_correctly(string? branch)
+    public void AddRepositoryEntry_should_show_branch_correctly(string? branch)
     {
-        _branchNameCache.GetCachedBranchName(Arg.Any<string>()).Returns(string.IsNullOrWhiteSpace(branch) ? null : branch);
-
         using ToolStripMenuItem containerMenu = new();
 
         const string path = "somepath";
         const string caption = "CAPTION";
-        Repository repository = new(path);
+        RepoMenuEntry entry = new(new Repository(path), Number: 1, caption, Tooltip: path,
+            BranchName: string.IsNullOrWhiteSpace(branch) ? null : branch, IsPinned: false);
 
-        _service.GetTestAccessor().AddRecentRepositories(containerMenu, repository, caption, number: 1);
+        _service.GetTestAccessor().AddRepositoryEntry(containerMenu, entry);
 
         ToolStripMenuItem item = (ToolStripMenuItem)containerMenu.DropDownItems[0];
         if (string.IsNullOrWhiteSpace(branch))
@@ -87,9 +86,9 @@ public sealed class RepositoryHistoryUIServiceTests
 
         const string path = "";
         const string caption = "CAPTION";
-        Repository repository = new(path);
+        RepoMenuEntry entry = new(new Repository(path), Number: 1, caption, Tooltip: path, BranchName: null, IsPinned: false);
 
-        _service.GetTestAccessor().AddRecentRepositories(containerMenu, repository, caption, number: 1);
+        _service.GetTestAccessor().AddRepositoryEntry(containerMenu, entry);
 
         ToolStripMenuItem item = (ToolStripMenuItem)containerMenu.DropDownItems[0];
         item.PerformClick();

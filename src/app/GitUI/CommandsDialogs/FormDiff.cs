@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Compare;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -61,17 +62,8 @@ public partial class FormDiff : GitModuleForm
         // _mergeBase is not changed if first/second is changed
         // similar, _currentHead is not updated if changed in Browse
         _currentHead = new(() => Module.GetCurrentCheckout());
-        ObjectId firstMergeId = firstId.IsArtificial ? _currentHead.Value : firstId;
-        ObjectId secondMergeId = secondId.IsArtificial ? _currentHead.Value : secondId;
-        if (firstMergeId.IsZero || secondMergeId.IsZero || firstMergeId == secondMergeId)
-        {
-            _mergeBase = null;
-        }
-        else
-        {
-            ObjectId mergeBase = Module.GetMergeBase(firstMergeId, secondMergeId);
-            _mergeBase = mergeBase.IsZero ? null : new GitRevision(mergeBase);
-        }
+        ObjectId? mergeBase = CompareRevisions.ResolveMergeBase(firstId, secondId, () => _currentHead.Value, Module.GetMergeBase);
+        _mergeBase = mergeBase is ObjectId mergeBaseId ? new GitRevision(mergeBaseId) : null;
 
         ckCompareToMergeBase.Text = $"{_ckCompareToMergeBase} ({_mergeBase?.ObjectId.ToShortString()})";
         ckCompareToMergeBase.Enabled = _mergeBase is not null;
@@ -128,7 +120,7 @@ public partial class FormDiff : GitModuleForm
         // I.e., git difftool --gui --no-prompt --dir-diff -R HEAD fails, but
         // git difftool --gui --no-prompt --dir-diff HEAD succeeds
         // Thus, we disable comparing "from" working directory.
-        bool enableDifftoolDirDiff = _firstRevision?.ObjectId != ObjectId.WorkTreeId;
+        bool enableDifftoolDirDiff = _firstRevision is null || CompareRevisions.DirDiffAllowed(_firstRevision.ObjectId);
         btnCompareDirectoriesWithDiffTool.Enabled = enableDifftoolDirDiff;
 
         Validates.NotNull(_secondRevision);

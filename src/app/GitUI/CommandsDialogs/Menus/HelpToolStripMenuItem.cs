@@ -1,6 +1,7 @@
 ﻿using GitCommands;
 using GitExtUtils.GitUI.Theming;
 using GitUI.CommandsDialogs.BrowseDialog;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.Menus;
 
@@ -55,7 +56,7 @@ internal partial class HelpToolStripMenuItem : ToolStripMenuItemEx
 
     private void TsmiTelemetryEnabled_Click(object sender, EventArgs e)
     {
-        UICommands.StartGeneralSettingsDialog(OwnerForm);
+        UICommands.Execute(new UICmd.GeneralSettings(), OwnerForm);
     }
 
     private void UserManualToolStripMenuItemClick(object sender, EventArgs e)

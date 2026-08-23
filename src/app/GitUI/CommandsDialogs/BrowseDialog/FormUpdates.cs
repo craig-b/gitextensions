@@ -107,7 +107,10 @@ public partial class FormUpdates : GitExtensionsDialog
                     await this.SwitchToMainThreadAsync();
                     if (Visible)
                     {
-                        ExceptionUtils.ShowException(this, ex, string.Empty, true);
+                        if (!ExceptionUtils.IsIgnorable(ex))
+                        {
+                            MessageBoxes.ShowError(this, string.Join(Environment.NewLine + Environment.NewLine, string.Empty, ex.ToStringWithData()));
+                        }
                     }
                 });
             Done();

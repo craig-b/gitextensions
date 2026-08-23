@@ -7,6 +7,7 @@ using GitExtensions.Extensibility.Plugins;
 using GitExtensions.Extensibility.Settings;
 using GitExtensions.Plugins.AutoCompileSubmodules.Properties;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.Plugins.AutoCompileSubmodules;
 
@@ -100,7 +101,7 @@ public class AutoCompileSubModulesPlugin : GitPluginBase, IGitPluginForRepositor
             }
             else
             {
-                args.GitUICommands.StartCommandLineProcessDialog(args.OwnerForm, msbuildPath, solutionFile.FullName + " " + _msBuildArguments.ValueOrDefault(Settings));
+                args.GitUICommands.Execute(new UICmd.CommandLineProcess(msbuildPath, solutionFile.FullName + " " + _msBuildArguments.ValueOrDefault(Settings)), args.OwnerForm);
             }
         }
 

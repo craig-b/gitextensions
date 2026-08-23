@@ -15,8 +15,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         textBox.Text = string.Empty;
@@ -30,8 +29,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -47,8 +45,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -63,8 +60,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -81,8 +77,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         textBox.Text = value;
@@ -97,8 +92,7 @@ public sealed class PasswordSettingControlBindingTests
     {
         PasswordSetting setting = new(SettingName, DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
 

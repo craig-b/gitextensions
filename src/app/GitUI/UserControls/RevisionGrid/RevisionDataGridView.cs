@@ -12,6 +12,7 @@ using GitUI.Theming;
 using GitUI.UserControls.RevisionGrid.Columns;
 using GitUI.UserControls.RevisionGrid.Graph;
 using GitUIPluginInterfaces;
+using ResourceManager;
 
 namespace GitUI.UserControls.RevisionGrid;
 
@@ -1027,8 +1028,8 @@ public sealed partial class RevisionDataGridView : DataGridView
     [MemberNotNull(nameof(_monospaceFont))]
     private void InitFonts()
     {
-        _normalFont = AppSettings.Font;
+        _normalFont = AppFonts.App;
         _boldFont = new Font(_normalFont, FontStyle.Bold);
-        _monospaceFont = AppSettings.MonospaceFont;
+        _monospaceFont = AppFonts.Monospace;
     }
 }

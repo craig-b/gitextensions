@@ -25,9 +25,6 @@ public class ReferenceRepository : IDisposable
     public const string AuthorFullIdentity = $"{AuthorName} <{AuthorEmail}>";
     private readonly GitModuleTestHelper _moduleTestHelper;
 
-    // We don't expect any failures so that we won't be switching to the main thread or showing messages
-    public static Control DummyOwner { get; } = new();
-
     public GitModule Module => _moduleTestHelper.Module;
 
     public string? CommitHash { get; private set; }

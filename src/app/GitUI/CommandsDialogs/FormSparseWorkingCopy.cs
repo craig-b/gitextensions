@@ -4,6 +4,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Translations;
 using GitUI.Editor;
+using GitUI.HelperDialogs;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs;
@@ -15,7 +16,11 @@ public sealed partial class FormSparseWorkingCopy : GitModuleForm
     public FormSparseWorkingCopy(IGitUICommands commands)
         : base(commands)
     {
-        FormSparseWorkingCopyViewModel sparse = new(commands);
+        FormSparseWorkingCopyViewModel sparse = new(commands, refreshWorkingCopy: () =>
+        {
+            using FormRemoteProcess formRemoteProcess = new(commands, FormSparseWorkingCopyViewModel.RefreshWorkingCopyCommandName);
+            formRemoteProcess.ShowDialog(Form.ActiveForm);
+        });
         BindToViewModelGlobal(sparse);
         CreateView(sparse);
         InitializeComplete();
@@ -181,7 +186,7 @@ public sealed partial class FormSparseWorkingCopy : GitModuleForm
         sparse.PropertyChanged += delegate { label1.Visible = label2.Visible = sparse.IsSparseCheckoutEnabled; };
 
         // Text editor
-        FileViewer editor = new() { Dock = DockStyle.Fill, UICommandsSource = commandsSource, IsReadOnly = false };
+        FileViewer editor = new EditableFileViewer { Dock = DockStyle.Fill, UICommandsSource = commandsSource };
         editor.TextLoaded += (sender, args) => sparse.SetRulesTextAsOnDisk(editor.GetText());
         try
         {

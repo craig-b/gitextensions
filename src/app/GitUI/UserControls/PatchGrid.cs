@@ -10,6 +10,7 @@ using GitExtUtils.GitUI.Theming;
 using GitUIPluginInterfaces;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -400,7 +401,7 @@ public partial class PatchGrid : GitModuleControl
         if (patchFile?.ObjectId is { IsZeroOrArtificial: false } patchObjectId)
         {
             // Normal commit selected
-            UICommands.StartFormCommitDiff(patchObjectId);
+            UICommands.Execute(new UICmd.CommitDiff(patchObjectId), null);
             return;
         }
 
@@ -410,7 +411,7 @@ public partial class PatchGrid : GitModuleControl
             return;
         }
 
-        UICommands.StartViewPatchDialog(patchFile.FullName);
+        UICommands.Execute(new UICmd.ViewPatch(patchFile.FullName), null);
     }
 
     internal TestAccessor GetTestAccessor()

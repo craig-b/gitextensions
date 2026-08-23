@@ -1,57 +1,61 @@
-﻿using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages;
 
 public partial class AdvancedSettingsPage : SettingsPageWithHeader
 {
+    private readonly AdvancedPageModel _model = new();
+
     public AdvancedSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
     {
         InitializeComponent();
         InitializeComplete();
 
-        var autoNormaliseSymbols = new[]
-        {
-            new { Key = "_", Value = "_" },
-            new { Key = "-", Value = "-" },
-            new { Key = "(none)", Value = "" },
-        };
-        cboAutoNormaliseSymbol.DisplayMember = "Key";
-        cboAutoNormaliseSymbol.ValueMember = "Value";
-        cboAutoNormaliseSymbol.DataSource = autoNormaliseSymbols;
+        // the model owns the choice order and captions ("(none)" stores empty)
+        cboAutoNormaliseSymbol.DataSource = _model.AutoNormaliseSymbol.Choices.ToList();
         cboAutoNormaliseSymbol.SelectedIndex = 0;
     }
 
+    private IEnumerable<(BoolSettingsEntry Entry, Control Control)> EntryControls =>
+    [
+        (_model.AlwaysShowCheckoutDialog, chkAlwaysShowCheckoutDlg),
+        (_model.UseLastChosenLocalChangesAction, chkUseLocalChangesAction),
+        (_model.DontShowHelpImages, chkDontSHowHelpImages),
+        (_model.AlwaysShowAdvancedOptions, chkAlwaysShowAdvOpt),
+        (_model.CheckForUpdates, chkCheckForUpdates),
+        (_model.CheckForReleaseCandidates, chkCheckForRCVersions),
+        (_model.UseConsoleEmulator, chkConsoleEmulator),
+        (_model.AutoNormaliseBranchName, chkAutoNormaliseBranchName),
+        (_model.CommitAndPushForcedWhenAmend, chkCommitAndPushForcedWhenAmend),
+    ];
+
     protected override void SettingsToPage()
     {
-        chkAlwaysShowCheckoutDlg.Checked = AppSettings.AlwaysShowCheckoutBranchDlg;
-        chkUseLocalChangesAction.Checked = AppSettings.UseDefaultCheckoutBranchAction;
-        chkDontSHowHelpImages.Checked = AppSettings.DontShowHelpImages;
-        chkAlwaysShowAdvOpt.Checked = AppSettings.AlwaysShowAdvOpt;
-        chkCheckForUpdates.Checked = AppSettings.CheckForUpdates;
-        chkCheckForRCVersions.Checked = AppSettings.CheckForReleaseCandidates;
-        chkConsoleEmulator.Checked = AppSettings.UseConsoleEmulatorForCommands.Value;
-        chkAutoNormaliseBranchName.Checked = AppSettings.AutoNormaliseBranchName;
+        _model.Load();
+
+        foreach ((BoolSettingsEntry entry, Control control) in EntryControls)
+        {
+            SettingsPageBindings.SetChecked(control, entry.Value);
+        }
+
         cboAutoNormaliseSymbol.Enabled = chkAutoNormaliseBranchName.Checked;
-        cboAutoNormaliseSymbol.SelectedValue = AppSettings.AutoNormaliseSymbol;
-        chkCommitAndPushForcedWhenAmend.Checked = AppSettings.CommitAndPushForcedWhenAmend;
+        cboAutoNormaliseSymbol.SelectedIndex = _model.AutoNormaliseSymbol.SelectedIndex;
 
         base.SettingsToPage();
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.AlwaysShowCheckoutBranchDlg = chkAlwaysShowCheckoutDlg.Checked;
-        AppSettings.UseDefaultCheckoutBranchAction = chkUseLocalChangesAction.Checked;
-        AppSettings.DontShowHelpImages = chkDontSHowHelpImages.Checked;
-        AppSettings.AlwaysShowAdvOpt = chkAlwaysShowAdvOpt.Checked;
-        AppSettings.CheckForUpdates = chkCheckForUpdates.Checked;
-        AppSettings.CheckForReleaseCandidates = chkCheckForRCVersions.Checked;
-        AppSettings.UseConsoleEmulatorForCommands.Value = chkConsoleEmulator.Checked;
-        AppSettings.AutoNormaliseBranchName = chkAutoNormaliseBranchName.Checked;
-        AppSettings.AutoNormaliseSymbol = (string)cboAutoNormaliseSymbol.SelectedValue!;
-        AppSettings.CommitAndPushForcedWhenAmend = chkCommitAndPushForcedWhenAmend.Checked;
+        foreach ((BoolSettingsEntry entry, Control control) in EntryControls)
+        {
+            entry.Value = SettingsPageBindings.GetChecked(control);
+        }
+
+        _model.AutoNormaliseSymbol.SelectedIndex = cboAutoNormaliseSymbol.SelectedIndex;
+
+        _model.Save();
 
         base.PageToSettings();
     }

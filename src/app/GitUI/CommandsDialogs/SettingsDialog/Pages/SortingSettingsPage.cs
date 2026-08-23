@@ -1,7 +1,6 @@
-﻿using GitCommands;
-using GitCommands.Utils;
+using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtUtils.GitUI;
-using GitUIPluginInterfaces;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages;
@@ -16,24 +15,18 @@ public partial class SortingSettingsPage : SettingsPageWithHeader
         "The remotes matching the pattern will be shown before the others.\n" +
         "Separate the priorities with ';'.");
 
+    private readonly SortingPageModel _model = new();
+
     public SortingSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
     {
         InitializeComponent();
         InitializeComplete();
 
-        FillComboBoxWithEnumValues<RevisionSortOrder>(_NO_TRANSLATE_cmbRevisionsSortBy);
-        FillComboBoxWithEnumValues<GitRefsSortOrder>(_NO_TRANSLATE_cmbBranchesOrder);
-        FillComboBoxWithEnumValues<GitRefsSortBy>(_NO_TRANSLATE_cmbBranchesSortBy);
-    }
-
-    private static void FillComboBoxWithEnumValues<T>(ComboBox comboBox) where T : Enum
-    {
-        comboBox.DisplayMember = nameof(ComboBoxItem<>.Text);
-        comboBox.ValueMember = nameof(ComboBoxItem<>.Value);
-        comboBox.DataSource = EnumHelper.GetValues<T>()
-            .Select(e => new ComboBoxItem<T>(e.GetDescription(), e))
-            .ToArray();
+        // the model owns the choice captions (enum descriptions; these combos are not translated)
+        _NO_TRANSLATE_cmbRevisionsSortBy.DataSource = _model.RevisionsSortBy.Choices.ToList();
+        _NO_TRANSLATE_cmbBranchesSortBy.DataSource = _model.BranchesSortBy.Choices.ToList();
+        _NO_TRANSLATE_cmbBranchesOrder.DataSource = _model.BranchesOrder.Choices.ToList();
     }
 
     protected override void OnRuntimeLoad()
@@ -55,25 +48,27 @@ public partial class SortingSettingsPage : SettingsPageWithHeader
 
     protected override void SettingsToPage()
     {
-        _NO_TRANSLATE_cmbRevisionsSortBy.SelectedIndex = (int)AppSettings.RevisionSortOrder.Value;
-        _NO_TRANSLATE_cmbBranchesOrder.SelectedIndex = (int)AppSettings.RefsSortOrder;
-        _NO_TRANSLATE_cmbBranchesSortBy.SelectedIndex = (int)AppSettings.RefsSortBy;
-        txtPrioBranchNames.Text = AppSettings.PrioritizedBranchNames;
-        txtPrioRemoteNames.Text = AppSettings.PrioritizedRemoteNames;
+        _model.Load();
+
+        _NO_TRANSLATE_cmbRevisionsSortBy.SelectedIndex = _model.RevisionsSortBy.SelectedIndex;
+        _NO_TRANSLATE_cmbBranchesSortBy.SelectedIndex = _model.BranchesSortBy.SelectedIndex;
+        _NO_TRANSLATE_cmbBranchesOrder.SelectedIndex = _model.BranchesOrder.SelectedIndex;
+        txtPrioBranchNames.Text = _model.PrioritizedBranchNames.Value;
+        txtPrioRemoteNames.Text = _model.PrioritizedRemoteNames.Value;
 
         base.SettingsToPage();
     }
 
     protected override void PageToSettings()
     {
-        AppSettings.RevisionSortOrder.Value = (RevisionSortOrder)_NO_TRANSLATE_cmbRevisionsSortBy.SelectedIndex;
-        AppSettings.RevisionSortOrder.Save();
-        AppSettings.RefsSortOrder = (GitRefsSortOrder)_NO_TRANSLATE_cmbBranchesOrder.SelectedIndex;
-        AppSettings.RefsSortBy = (GitRefsSortBy)_NO_TRANSLATE_cmbBranchesSortBy.SelectedIndex;
-        AppSettings.PrioritizedBranchNames = txtPrioBranchNames.Text;
-        AppSettings.PrioritizedRemoteNames = txtPrioRemoteNames.Text;
+        _model.RevisionsSortBy.SelectedIndex = _NO_TRANSLATE_cmbRevisionsSortBy.SelectedIndex;
+        _model.BranchesSortBy.SelectedIndex = _NO_TRANSLATE_cmbBranchesSortBy.SelectedIndex;
+        _model.BranchesOrder.SelectedIndex = _NO_TRANSLATE_cmbBranchesOrder.SelectedIndex;
+        _model.PrioritizedBranchNames.Value = txtPrioBranchNames.Text;
+        _model.PrioritizedRemoteNames.Value = txtPrioRemoteNames.Text;
 
-        ResourceManager.TranslatedStrings.Reinitialize();
+        // the model reinitializes the portable TranslatedStrings; this view refreshes its own
+        _model.Save();
         TranslatedStrings.Reinitialize();
 
         base.PageToSettings();
@@ -85,16 +80,4 @@ public partial class SortingSettingsPage : SettingsPageWithHeader
         => OsShellUtil.OpenUrlInDefaultBrowser(UserManual.UserManual.UrlFor("settings", "sorting-sort-prioritized-branches"));
     private void PrioRemoteNamesHelp_Click(object sender, EventArgs e)
         => OsShellUtil.OpenUrlInDefaultBrowser(UserManual.UserManual.UrlFor("settings", "sorting-sort-prioritized-remotes"));
-
-    private sealed class ComboBoxItem<T>
-    {
-        public string Text { get; }
-        public T Value { get; }
-
-        public ComboBoxItem(string text, T value)
-        {
-            Text = text;
-            Value = value;
-        }
-    }
 }

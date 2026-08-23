@@ -14,10 +14,13 @@ public class GitExtSettingsCache : FileSettingsCache
     {
     }
 
+    /// <summary>The raw stored pairs; the host-selected serialization subclass reads and writes these.</summary>
+    private protected IDictionary<string, string> NameMap => _encodedNameMap;
+
     public static GitExtSettingsCache FromCache(string settingsFilePath)
     {
         Lazy<GitExtSettingsCache> createSettingsCache = new(
-            () => new GitExtSettingsCache(settingsFilePath, autoSave: true));
+            () => HostSettingsStore.CreateCache(settingsFilePath, autoSave: true));
 
         return FromCache(settingsFilePath, createSettingsCache);
     }
@@ -30,9 +33,17 @@ public class GitExtSettingsCache : FileSettingsCache
         }
         else
         {
-            return new GitExtSettingsCache(settingsFilePath, autoSave: false);
+            return HostSettingsStore.CreateCache(settingsFilePath, autoSave: false);
         }
     }
+
+    /// <summary>All stored pairs, e.g. for a one-shot import into another store.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> GetAllValues()
+        => LockedAction<IReadOnlyList<KeyValuePair<string, string>>>(() =>
+        {
+            EnsureSettingsAreUpToDate();
+            return [.. _encodedNameMap];
+        });
 
     protected override void ClearImpl()
     {

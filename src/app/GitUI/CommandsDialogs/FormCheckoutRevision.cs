@@ -6,6 +6,7 @@ using GitExtensions.Extensibility.Git;
 using GitUI.HelperDialogs;
 using GitUI.ScriptsEngine;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -54,7 +55,7 @@ public partial class FormCheckoutRevision : GitExtensionsDialog
             {
                 if (selectedObjectId != checkedOutObjectId)
                 {
-                    UICommands.UpdateSubmodules(this);
+                    UICommands.Execute(new UICmd.UpdateSubmodules(), this);
                 }
             }
 

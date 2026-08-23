@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using GitCommands;
+using GitCommands.Commit;
 using GitCommands.Config;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
@@ -25,6 +26,7 @@ using GitUIPluginInterfaces;
 using Microsoft;
 using Microsoft.VisualStudio.Threading;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -142,12 +144,7 @@ public sealed partial class FormCommit : GitModuleForm
     private readonly SplitterManager _splitterManager = new(new AppSettingsPath("CommitDialog"));
     private readonly Subject<string> _selectionFilterSubject = new();
     private readonly IFullPathResolver _fullPathResolver;
-    private readonly List<string> _formattedLines = [];
-
-    private const string _feat = "feat";
-
-    private static readonly string[] _headerCommitTypes = ["build", "chore", "ci", "docs", _feat, "fix", "perf", "refactor", "style", "test"];
-    private static readonly string[] _footerKeywords = ["BREAKING CHANGE", "Co-authored-by", "Reviewed-by"];
+    private readonly CommitMessageFormatter _messageFormatter;
 
     private bool _insertScopeParentheses;
     private CommitKind _commitKind;
@@ -167,12 +164,6 @@ public sealed partial class FormCommit : GitModuleForm
     private int _alreadyLoadedTemplatesCount = -1;
     private EventHandler? _branchNameLabelOnClick;
     private ToolStripMenuItem? _conventionalCommitItem;
-
-    /// <summary>
-    /// Regex to find message replace pattern: {{ group1 }}[ group2 ]
-    /// </summary>
-    [GeneratedRegex(@"\{\{(?<pattern>.*?)\}\}(?:\[(?<index>\d+)\])?", RegexOptions.ExplicitCapture)]
-    private static partial Regex ReplaceMessageRegex();
 
     private CommitKind CommitKind
     {
@@ -216,7 +207,8 @@ public sealed partial class FormCommit : GitModuleForm
 
         splitRight.Panel2MinSize = DpiUtil.Scale(100);
 
-        _commitMessageManager = new CommitMessageManager(this, Module.WorkingDirGitDir, Module.CommitEncoding, commitMessage);
+        _commitMessageManager = new CommitMessageManager(new ControlUserInteraction(this), Module.WorkingDirGitDir, Module.CommitEncoding, commitMessage);
+        _messageFormatter = new CommitMessageFormatter(new MessageDocumentAdapter(Message));
 
         Message.TextChanged += Message_TextChanged;
         Message.TextAssigned += Message_TextAssigned;
@@ -849,19 +841,14 @@ public sealed partial class FormCommit : GitModuleForm
             return;
         }
 
-        string pushTo;
-        if (string.IsNullOrEmpty(currentBranch.TrackingRemote) || string.IsNullOrEmpty(currentBranch.MergeWith))
+        BranchPushTarget pushTarget = BranchPushTarget.Resolve(currentBranch, Module.GetRemoteNames(), currentBranchName);
+        string pushTo = pushTarget.Kind switch
         {
-            string? defaultRemote = Module.GetRemoteNames().FirstOrDefault(r => r == "origin") ?? Module.GetRemoteNames().OrderBy(r => r).FirstOrDefault();
-
-            pushTo = defaultRemote is not null
-                ? $"{defaultRemote}/{currentBranchName} {_untrackedRemote.Text}"
-                : _statusBarBranchWithoutRemote.Text;
-        }
-        else
-        {
-            pushTo = $"{currentBranch.TrackingRemote}/{currentBranch.MergeWith}";
-        }
+            PushTargetKind.Tracked => pushTarget.Target!,
+            PushTargetKind.DefaultRemoteUntracked => $"{pushTarget.Target} {_untrackedRemote.Text}",
+            PushTargetKind.NoRemoteConfigured => _statusBarBranchWithoutRemote.Text,
+            _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(pushTarget.Kind), (int)pushTarget.Kind, typeof(PushTargetKind)),
+        };
 
         await this.SwitchToMainThreadAsync();
 
@@ -870,7 +857,7 @@ public sealed partial class FormCommit : GitModuleForm
 
         _branchNameLabelOnClick = (object? sender, EventArgs e) => this.InvokeAndForget(async () =>
         {
-            UICommands.StartRemotesDialog(this, null, currentBranchName);
+            UICommands.Execute(new UICmd.Remotes(null, currentBranchName), this);
             await TaskScheduler.Default;
             await UpdateBranchNameDisplayAsync();
         });
@@ -903,7 +890,7 @@ public sealed partial class FormCommit : GitModuleForm
 
             UpdateMergeHead();
 
-            Message.TextBoxFont = AppSettings.CommitFont;
+            Message.TextBoxFont = AppFonts.Commit;
         }
 
         void UpdateMergeHead()
@@ -1083,14 +1070,24 @@ public sealed partial class FormCommit : GitModuleForm
 
         bool ConfirmOrStageCommit()
         {
-            if (createAmendCommit)
+            foreach (CommitDialogGate gate in CommitDialogGates.EvaluateStagePhase(
+                isAmend: createAmendCommit,
+                dontConfirmAmend: AppSettings.DontConfirmAmend,
+                stagedIsEmpty: Staged.IsEmpty,
+                isMergeCommit: _isMergeCommit))
             {
-                return ConfirmAmendCommit();
-            }
+                bool proceed = gate switch
+                {
+                    CommitDialogGate.ConfirmAmend => ConfirmAmendCommit(),
+                    CommitDialogGate.ConfirmEmptyMergeCommit => ConfirmEmptyMergeCommit(),
+                    CommitDialogGate.ResolveNoStagedChanges => ConfirmAndStageAllUnstaged(),
+                    _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(gate), (int)gate, typeof(CommitDialogGate)),
+                };
 
-            if (Staged.IsEmpty)
-            {
-                return _isMergeCommit ? ConfirmEmptyMergeCommit() : ConfirmAndStageAllUnstaged();
+                if (!proceed)
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -1099,15 +1096,7 @@ public sealed partial class FormCommit : GitModuleForm
             {
                 // This is an amend commit.  Confirm the user understands the implications.  We don't want to prompt for an empty
                 // commit, because amend may be used just to change the commit message or timestamp.
-                if (!AppSettings.DontConfirmAmend)
-                {
-                    if (MessageBoxes.Show(this, _amendCommit.Text, _amendCommitCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
+                return MessageBoxes.Show(this, _amendCommit.Text, _amendCommitCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
             }
 
             bool ConfirmEmptyMergeCommit()
@@ -1171,24 +1160,46 @@ public sealed partial class FormCommit : GitModuleForm
 
         void DoCommit()
         {
-            if (Module.InTheMiddleOfConflictedMerge())
+            foreach (CommitDialogGate gate in CommitDialogGates.EvaluateCommitPhase(
+                inConflictedMerge: Module.InTheMiddleOfConflictedMerge(),
+                useFormCommitMessage: _useFormCommitMessage,
+                messageIsEmptyOrTemplate: string.IsNullOrEmpty(Message.Text) || Message.Text == _commitTemplate,
+                dontConfirmCommitIfNoBranch: AppSettings.DontConfirmCommitIfNoBranch,
+                isDetachedHead: Module.IsDetachedHead(),
+                inRebase: Module.InTheMiddleOfRebase()))
             {
-                MessageBoxes.Show(this, _mergeConflicts.Text, _mergeConflictsCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                switch (gate)
+                {
+                    case CommitDialogGate.BlockConflictedMerge:
+                        MessageBoxes.Show(this, _mergeConflicts.Text, _mergeConflictsCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+
+                    case CommitDialogGate.BlockEmptyMessage:
+                        MessageBoxes.Show(this, _enterCommitMessage.Text, _enterCommitMessageCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+                        return;
+
+                    case CommitDialogGate.ValidateMessage:
+                        if (!IsCommitMessageValid())
+                        {
+                            return;
+                        }
+
+                        break;
+
+                    case CommitDialogGate.ConfirmDetachedHead:
+                        if (!ConfirmDetachedHead())
+                        {
+                            return;
+                        }
+
+                        break;
+
+                    default:
+                        throw new System.ComponentModel.InvalidEnumArgumentException(nameof(gate), (int)gate, typeof(CommitDialogGate));
+                }
             }
 
-            if (_useFormCommitMessage && (string.IsNullOrEmpty(Message.Text) || Message.Text == _commitTemplate))
-            {
-                MessageBoxes.Show(this, _enterCommitMessage.Text, _enterCommitMessageCaption.Text, MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-                return;
-            }
-
-            if (_useFormCommitMessage && !IsCommitMessageValid())
-            {
-                return;
-            }
-
-            if (!AppSettings.DontConfirmCommitIfNoBranch && Module.IsDetachedHead() && !Module.InTheMiddleOfRebase())
+            bool ConfirmDetachedHead()
             {
                 TaskDialogPage page = new()
                 {
@@ -1210,24 +1221,26 @@ public sealed partial class FormCommit : GitModuleForm
                 TaskDialogButton result = TaskDialog.ShowDialog(Handle, page);
                 if (result == TaskDialogButton.Cancel)
                 {
-                    return;
+                    return false;
                 }
 
                 if (result == btnCheckout)
                 {
                     ObjectId[]? objectIds = _editedCommit is not null ? [_editedCommit.ObjectId] : null;
-                    if (!UICommands.StartCheckoutBranch(this, objectIds))
+                    if (!UICommands.Execute(new UICmd.CheckoutBranch(ContainObjectIds: objectIds), this))
                     {
-                        return;
+                        return false;
                     }
                 }
                 else if (result == btnCreate)
                 {
-                    if (!UICommands.StartCreateBranchDialog(this, _editedCommit?.ObjectId ?? default))
+                    if (!UICommands.Execute(new UICmd.CreateBranch(_editedCommit?.ObjectId ?? default), this))
                     {
-                        return;
+                        return false;
                     }
                 }
+
+                return true;
             }
 
             try
@@ -1282,7 +1295,7 @@ public sealed partial class FormCommit : GitModuleForm
                 {
                     if (push)
                     {
-                        UICommands.StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out pushCompleted);
+                        ((GitUICommands)UICommands).StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out pushCompleted);
                     }
                 }
                 finally
@@ -1330,74 +1343,24 @@ public sealed partial class FormCommit : GitModuleForm
 
             bool IsCommitMessageValid()
             {
-                if (AppSettings.CommitValidationMaxCntCharsFirstLine > 0)
+                foreach (CommitMessageViolation violation in CommitMessageValidator.Validate(Message.Text, CommitMessageValidationRules.FromSettings()))
                 {
-                    string firstLine = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.RemoveEmptyEntries)[0];
-                    if (firstLine.Length > AppSettings.CommitValidationMaxCntCharsFirstLine &&
-                        MessageBoxes.Show(this, _commitMsgFirstLineInvalid.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
+                    string warningText = violation.Kind switch
+                    {
+                        CommitMessageViolationKind.FirstLineTooLong => _commitMsgFirstLineInvalid.Text,
+                        CommitMessageViolationKind.LineTooLong => string.Format(_commitMsgLineInvalid.Text, violation.OffendingLine),
+                        CommitMessageViolationKind.SecondLineNotEmpty => _commitMsgSecondLineNotEmpty.Text,
+                        CommitMessageViolationKind.RegexNotMatched => _commitMsgRegExNotMatched.Text,
+                        _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(violation.Kind), (int)violation.Kind, typeof(CommitMessageViolationKind)),
+                    };
+
+                    if (MessageBoxes.Show(this, warningText, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
                     {
                         return false;
-                    }
-                }
-
-                if (AppSettings.CommitValidationMaxCntCharsPerLine > 0)
-                {
-                    string[] lines = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (string line in lines)
-                    {
-                        if (line.Length > AppSettings.CommitValidationMaxCntCharsPerLine &&
-                            MessageBoxes.Show(this, string.Format(_commitMsgLineInvalid.Text, line), _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                        {
-                            return false;
-                        }
-                    }
-                }
-
-                if (AppSettings.CommitValidationSecondLineMustBeEmpty)
-                {
-                    string[] lines = Message.Text.Split(Delimiters.NewLines, StringSplitOptions.None);
-                    if (lines.Length > 2 &&
-                        lines[1].Length != 0 &&
-                        MessageBoxes.Show(this, _commitMsgSecondLineNotEmpty.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                    {
-                        return false;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(AppSettings.CommitValidationRegEx))
-                {
-                    try
-                    {
-                        if (!Message.Text.StartsWith(CommitKind.Fixup.GetPrefix()) &&
-                            !Message.Text.StartsWith(CommitKind.Squash.GetPrefix()) &&
-                            !Regex.IsMatch(GetTextToValidate(Message.Text), AppSettings.CommitValidationRegEx) &&
-                            MessageBoxes.Show(this, _commitMsgRegExNotMatched.Text, _commitValidationCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Asterisk) == DialogResult.No)
-                        {
-                            return false;
-                        }
-                    }
-                    catch
-                    {
                     }
                 }
 
                 return true;
-            }
-
-            static string GetTextToValidate(string text)
-            {
-                if (!text.StartsWith(CommitKind.Amend.GetPrefix()) || !text.ContainsAny(Delimiters.LineFeedAndCarriageReturnSearchValues))
-                {
-                    return text;
-                }
-
-                string[] lines = text.Split(Delimiters.NewLines, StringSplitOptions.None);
-                if (lines.Length > 2 && lines[1].Length == 0)
-                {
-                    return string.Join(Environment.NewLine, lines.AsSpan(2));
-                }
-
-                return text;
             }
         }
     }
@@ -1422,44 +1385,12 @@ public sealed partial class FormCommit : GitModuleForm
     /// <param name="regexEnabled">regex replace is enabled</param>
     private void ReplaceMessage(string message, bool regexEnabled)
     {
-        try
+        if (regexEnabled)
         {
-            if (!regexEnabled)
-            {
-                return;
-            }
-
-            foreach (Match regexMatch in ReplaceMessageRegex().Matches(message))
-            {
-                string pattern = regexMatch.Groups["pattern"].Value;
-                int groupIndex = 1;
-
-                if (int.TryParse(regexMatch.Groups["index"].ValueSpan, out int parsedIndex))
-                {
-                    groupIndex = parsedIndex;
-                }
-
-                Regex regex = new(pattern);
-                string currentBranchName = Module.GetSelectedBranch();
-                MatchCollection matches = regex.Matches(currentBranchName);
-                string replaceText = "";
-
-                if (matches.Count > 0 && matches[0].Groups.Count > groupIndex)
-                {
-                    replaceText = matches[0].Groups[groupIndex].Value;
-                }
-
-                message = message.Replace(regexMatch.Groups[0].Value, replaceText);
-            }
+            message = CommitMessageTemplateExpander.Expand(message, () => Module.GetSelectedBranch());
         }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"ReplaceMessage with regex replace exception: {ex}");
-        }
-        finally
-        {
-            ReplaceMessage(message);
-        }
+
+        ReplaceMessage(message);
     }
 
     private void RescanChanges()
@@ -1650,52 +1581,7 @@ public sealed partial class FormCommit : GitModuleForm
                 _skipUpdate = true;
                 InitializedStaged();
                 List<GitItemStatus> stagedFiles = [.. Staged.GitItemStatuses];
-                List<GitItemStatus> unstagedFiles = [.. Unstaged.GitItemStatuses];
-                foreach (GitItemStatus item in allFiles)
-                {
-                    GitItemStatus item1 = item;
-                    if (stagedFiles.Exists(i => i.Name == item1.Name))
-                    {
-                        continue;
-                    }
-
-                    item.IsTracked = !item.IsNew || item.IsChanged || item.IsDeleted;
-                    int index = unstagedFiles.FindIndex(i => i.Name == item.Name);
-
-                    if (index >= 0)
-                    {
-                        unstagedFiles[index].IsNew = item.IsNew;
-                        unstagedFiles[index].IsDeleted = item.IsDeleted;
-                        unstagedFiles[index].IsTracked = item.IsTracked;
-                        unstagedFiles[index].IsChanged = item.IsChanged;
-
-                        // if this is a submodule, update the status, may be dirty
-                        Module.GetSubmoduleCurrentStatus([unstagedFiles[index]]);
-
-                        continue;
-                    }
-
-                    if (item.IsRenamed)
-                    {
-                        Validates.NotNull(item.OldName);
-
-                        GitItemStatus clone = new(item.OldName)
-                        {
-                            IsDeleted = true,
-                            IsTracked = true,
-                            Staged = StagedStatus.WorkTree
-                        };
-                        unstagedFiles.Add(clone);
-
-                        item.IsRenamed = false;
-                        item.IsNew = true;
-                        item.IsTracked = false;
-                        item.OldName = string.Empty;
-                    }
-
-                    item.Staged = StagedStatus.WorkTree;
-                    unstagedFiles.Add(item);
-                }
+                List<GitItemStatus> unstagedFiles = StagedListReconciler.ReconcileAfterUnstage(allFiles, stagedFiles, [.. Unstaged.GitItemStatuses], Module);
 
                 (GitRevision? headRev, GitRevision indexRev, GitRevision workTreeRev) = GetHeadRevisions();
                 Unstaged.SetDiffs(indexRev, workTreeRev, unstagedFiles);
@@ -1885,37 +1771,8 @@ public sealed partial class FormCommit : GitModuleForm
                 else
                 {
                     InitializedStaged();
-                    List<GitItemStatus> unstagedFiles = [.. Unstaged.GitItemStatuses];
                     _skipUpdate = true;
-                    HashSet<string?> names = [];
-                    foreach (GitItemStatus item in files)
-                    {
-                        names.Add(item.Name);
-                        names.Add(item.OldName);
-                    }
-
-                    HashSet<GitItemStatus> unstagedItems = [];
-
-                    foreach (GitItemStatus item in unstagedFiles)
-                    {
-                        if (names.Contains(item.Name))
-                        {
-                            unstagedItems.Add(item);
-                        }
-                    }
-
-                    // Dirty submodules need to be kept in unstaged, update the status
-                    unstagedFiles.RemoveAll(
-                        item =>
-                        {
-                            if ((!item.IsSubmodule || !item.IsDirty) && unstagedItems.Contains(item))
-                            {
-                                return true;
-                            }
-
-                            Module.GetSubmoduleCurrentStatus([item]);
-                            return false;
-                        });
+                    List<GitItemStatus> unstagedFiles = StagedListReconciler.ReconcileAfterStage([.. Unstaged.GitItemStatuses], files, Module);
                     (GitRevision? _, GitRevision indexRev, GitRevision workTreeRev) = GetHeadRevisions();
                     Unstaged.SetDiffs(indexRev, workTreeRev, unstagedFiles);
                     Unstaged.ClearSelected();
@@ -1976,7 +1833,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void SolveMergeConflictsClick(object sender, EventArgs e)
     {
-        if (UICommands.StartResolveConflictsDialog(this, false))
+        if (UICommands.Execute(new UICmd.ResolveConflicts(false), this))
         {
             Initialize();
         }
@@ -1984,41 +1841,31 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void CommitMessageToolStripMenuItemDropDownOpening(object sender, EventArgs e)
     {
-        string msg = AppSettings.LastCommitMessage;
-        int maxCount = AppSettings.CommitDialogNumberOfPreviousMessages;
         string authorPattern = string.Empty;
 
         if (ShowOnlyMyMessagesToolStripMenuItem.Checked)
         {
             string userName = Module.GetEffectiveSetting(SettingKeyString.UserName);
             string userEmail = Module.GetEffectiveSetting(SettingKeyString.UserEmail);
-            authorPattern = $"^{Regex.Escape(userName)} <{Regex.Escape(userEmail)}>$";
+            authorPattern = PreviousCommitMessagesProvider.BuildAuthorPattern(userName, userEmail);
         }
 
-        List<string> prevMessages = [.. Module.GetPreviousCommitMessages(maxCount, "HEAD", authorPattern)
-            .WhereNotNull()
-            .Select(message => message.TrimEnd('\n'))
-            .Where(message => !string.IsNullOrWhiteSpace(message))];
-
-        if (!string.IsNullOrWhiteSpace(msg) && !prevMessages.Contains(msg))
-        {
-            // If the list is already full
-            if (prevMessages.Count == maxCount)
-            {
-                // Remove the last item
-                prevMessages.RemoveAt(maxCount - 1);
-            }
-
-            // Insert the last commit message as the first entry
-            prevMessages.Insert(0, msg);
-        }
+        IReadOnlyList<PreviousCommitMessage> prevMessages = PreviousCommitMessagesProvider.GetMessages(
+            Module,
+            AppSettings.LastCommitMessage,
+            AppSettings.CommitDialogNumberOfPreviousMessages,
+            authorPattern);
 
         commitMessageToolStripMenuItem.DropDown.SuspendLayout();
         commitMessageToolStripMenuItem.DropDownItems.Clear();
 
-        foreach (string prevMsg in prevMessages)
+        foreach (PreviousCommitMessage prevMsg in prevMessages)
         {
-            AddCommitMessageToMenu(prevMsg);
+            commitMessageToolStripMenuItem.DropDownItems.Add(new ToolStripMenuItem
+            {
+                Tag = prevMsg.Message,
+                Text = prevMsg.Label
+            });
         }
 
         commitMessageToolStripMenuItem.DropDownItems.AddRange(
@@ -2028,30 +1875,6 @@ public sealed partial class FormCommit : GitModuleForm
             ShowOnlyMyMessagesToolStripMenuItem
         ]);
         commitMessageToolStripMenuItem.DropDown.ResumeLayout();
-
-        void AddCommitMessageToMenu(string commitMessage)
-        {
-            const int maxLabelLength = 72;
-
-            string label = commitMessage;
-            int newlineIndex = label.IndexOf('\n');
-
-            if (newlineIndex != -1)
-            {
-                label = label[..newlineIndex];
-            }
-
-            if (label.Length > maxLabelLength)
-            {
-                label = label.ShortenTo(maxLabelLength);
-            }
-
-            commitMessageToolStripMenuItem.DropDownItems.Add(new ToolStripMenuItem
-            {
-                Tag = commitMessage,
-                Text = label
-            });
-        }
     }
 
     private void CommitMessageToolStripMenuItemDropDownItemClicked(object sender, ToolStripItemClickedEventArgs e)
@@ -2077,70 +1900,17 @@ public sealed partial class FormCommit : GitModuleForm
             return;
         }
 
-        Dictionary<string, string> modules = stagedFiles
-            .Where(item => item.IsSubmodule
-                           && Directory.Exists(_fullPathResolver.Resolve(item.Name))
-                           && configFile.ConfigSections.FirstOrDefault(section => section.GetValue("path").Trim() == item.Name)?.SubSection is not null)
-            .Select(item => item.Name)
-            .ToDictionary(localPath =>
-            {
-                IConfigSection? submodule = configFile.ConfigSections.FirstOrDefault(section => section.GetValue("path").Trim() == localPath);
-                Validates.NotNull(submodule?.SubSection);
-                return submodule.SubSection.Trim();
-            });
+        string? message = SubmoduleUpdateMessageBuilder.Build(
+            Module,
+            configFile,
+            _fullPathResolver,
+            path => new GitModule(UICommands.GetRequiredService<IGitExecutorProvider>(), path),
+            stagedFiles);
 
-        if (modules.Count == 0)
+        if (message is not null)
         {
-            return;
+            ReplaceMessage(message);
         }
-
-        StringBuilder sb = new();
-        sb.AppendLine("Submodule" + (modules.Count == 1 ? " " : "s ") +
-            string.Join(", ", modules.Keys) + " updated");
-        sb.AppendLine();
-
-        foreach ((string path, string name) in modules)
-        {
-            GitArgumentBuilder args = new("diff")
-            {
-                "--no-ext-diff",
-                "--cached",
-                "-z",
-                "--",
-                name.QuoteNE()
-            };
-            string diff = Module.GitExecutable.GetOutput(args);
-            string[] lines = diff.Split(Delimiters.LineFeed, StringSplitOptions.RemoveEmptyEntries);
-            const string subprojectCommit = "Subproject commit ";
-            string from = lines.Single(s => s.StartsWith("-" + subprojectCommit))[(subprojectCommit.Length + 1)..];
-            string to = lines.Single(s => s.StartsWith("+" + subprojectCommit))[(subprojectCommit.Length + 1)..];
-            if (!string.IsNullOrEmpty(from) && !string.IsNullOrEmpty(to))
-            {
-                sb.AppendLine("Submodule " + path + ":");
-                GitModule module = new(UICommands.GetRequiredService<IGitExecutorProvider>(), _fullPathResolver.Resolve(name.EnsureTrailingPathSeparator()));
-                args = new GitArgumentBuilder("log")
-                {
-                    "--pretty=format:\"    %m %h - %s\"",
-                    "--no-merges",
-                    $"{from}...{to}".Quote()
-                };
-
-                string log = module.GitExecutable.GetOutput(args);
-
-                if (log.Length != 0)
-                {
-                    sb.AppendLine(log);
-                }
-                else
-                {
-                    sb.AppendLine("    * Revision changed to " + to[..7]);
-                }
-
-                sb.AppendLine();
-            }
-        }
-
-        ReplaceMessage(sb.ToString().TrimEnd());
     }
 
     private void SelectedDiffExtraDiffArgumentsChanged(object sender, EventArgs e)
@@ -2172,7 +1942,7 @@ public sealed partial class FormCommit : GitModuleForm
         foreach (FileStatusItem item in items)
         {
             GitRevision?[] revs = [item.SecondRevision, item.FirstRevision];
-            UICommands.OpenWithDifftool(this, revs, item.Item.Name, item.Item.OldName, RevisionDiffKind.DiffAB, item.Item.IsTracked, customTool: toolName);
+            UICommands.Execute(new UICmd.OpenWithDifftool(revs, item.Item.Name, item.Item.OldName, RevisionDiffKind.DiffAB, item.Item.IsTracked, CustomTool: toolName), this);
         }
     }
 
@@ -2193,13 +1963,13 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void ResetChanges(bool onlyWorkTree)
     {
-        BypassFormActivatedEventHandler(() => UICommands.StartResetChangesDialog(this, Unstaged.AllItems.Select(i => i.Item).ToList(), onlyWorkTree));
+        BypassFormActivatedEventHandler(() => UICommands.Execute(new UICmd.ResetChanges(Unstaged.AllItems.Select(i => i.Item).ToList(), onlyWorkTree), this));
         Initialize();
     }
 
     private void StashStagedClick(object sender, EventArgs e)
     {
-        BypassFormActivatedEventHandler(() => UICommands.StashStaged(owner: this));
+        BypassFormActivatedEventHandler(() => UICommands.Execute(new UICmd.StashStaged(), this));
         Initialize();
     }
 
@@ -2222,7 +1992,7 @@ public sealed partial class FormCommit : GitModuleForm
         if (CommitAndPush.Text == TranslatedStrings.ButtonPush)
         {
             bool pushForced = CommitAndPush.BackColor == OtherColors.AmendButtonForcedColor;
-            UICommands.StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out _);
+            ((GitUICommands)UICommands).StartPushDialog(owner: this, pushOnShow: true, forceWithLease: pushForced, out _);
             return;
         }
 
@@ -2265,7 +2035,7 @@ public sealed partial class FormCommit : GitModuleForm
     {
         commitTemplatesToolStripMenuItem.ShowDropDown();
         _conventionalCommitItem!.ShowDropDown();
-        _conventionalCommitItem.DropDownItems.Cast<ToolStripItem>().First(i => i.Text == _feat).Select();
+        _conventionalCommitItem.DropDownItems.Cast<ToolStripItem>().First(i => i.Text == ConventionalCommitMessage.FeatureKeyword).Select();
         _insertScopeParentheses = insertScope;
     }
 
@@ -2287,140 +2057,39 @@ public sealed partial class FormCommit : GitModuleForm
     }
 
     private void FormatAllText(int startLine)
+        => _messageFormatter.FormatAllText(startLine, CommitMessageFormattingRules.FromSettings());
+
+    /// <summary>
+    ///  The 1:1 bridge from the portable formatter's document interface to the spell-check
+    ///  editor; the highlight-to-color mapping is the only view decision.
+    /// </summary>
+    private sealed class MessageDocumentAdapter : ICommitMessageDocument
     {
-        int limit1 = AppSettings.CommitValidationMaxCntCharsFirstLine;
-        int limitX = AppSettings.CommitValidationMaxCntCharsPerLine;
-        bool empty2 = AppSettings.CommitValidationSecondLineMustBeEmpty;
-        bool commitValidationAutoWrap = AppSettings.CommitValidationAutoWrap;
-        bool commitValidationIndentAfterFirstLine = AppSettings.CommitValidationIndentAfterFirstLine;
+        private readonly EditNetSpell _editor;
 
-        int lineCount = Message.LineCount();
-
-        TrimFormattedLines();
-
-        for (int line = startLine; line < lineCount; line++)
+        public MessageDocumentAdapter(EditNetSpell editor)
         {
-            if (DidFormattedLineChange(line))
-            {
-                bool lineChanged = FormatLine(line);
-                SetFormattedLine(line);
-                if (lineChanged)
-                {
-                    FormatAllText(line);
-                }
-            }
+            _editor = editor;
         }
 
-        return;
+        public int LineCount() => _editor.LineCount();
 
-        void TrimFormattedLines()
-        {
-            if (_formattedLines.Count > lineCount)
+        public string Line(int line) => _editor.Line(line);
+
+        public int LineLength(int line) => _editor.LineLength(line);
+
+        public void ReplaceLine(int line, string withText) => _editor.ReplaceLine(line, withText);
+
+        public void EnsureEmptyLine(bool addBullet, int afterLine) => _editor.EnsureEmptyLine(addBullet, afterLine);
+
+        public void SetLineHighlight(int line, int offset, int length, CommitMessageHighlight highlight)
+            => _editor.ChangeTextColor(line, offset, length, highlight switch
             {
-                _formattedLines.RemoveRange(lineCount, _formattedLines.Count - lineCount);
-            }
-        }
-
-        bool DidFormattedLineChange(int lineNumber)
-        {
-            return _formattedLines.Count <= lineNumber ||
-                   !_formattedLines[lineNumber].Equals(Message.Line(lineNumber), StringComparison.OrdinalIgnoreCase);
-        }
-
-        bool FormatLine(int line)
-        {
-            bool changed = false;
-
-            if (limit1 > 0 && line == 0)
-            {
-                ColorTextAsNecessary(limit1, fullRefresh: false);
-            }
-
-            if (empty2 && line == 1)
-            {
-                // Ensure next line. Optionally add a bullet.
-                Message.EnsureEmptyLine(commitValidationIndentAfterFirstLine, 1);
-                Message.ChangeTextColor(2, 0, Message.LineLength(2), SystemColors.ControlText);
-                if (FormatLine(2))
-                {
-                    changed = true;
-                }
-            }
-
-            if (limitX > 0 && line >= (empty2 ? 2 : 1))
-            {
-                if (commitValidationAutoWrap && WrapIfNecessary())
-                {
-                    changed = true;
-                }
-
-                ColorTextAsNecessary(limitX, changed);
-            }
-
-            return changed;
-
-            void ColorTextAsNecessary(int lineLimit, bool fullRefresh)
-            {
-                int lineLength = Message.LineLength(line);
-                int offset = 0;
-                bool textAppended = false;
-                if (!fullRefresh && _formattedLines.Count > line)
-                {
-                    offset = _formattedLines[line].CommonPrefix(Message.Line(line)).Length;
-                    textAppended = offset > 0 && offset == _formattedLines[line].Length;
-                }
-
-                int len = Math.Min(lineLimit, lineLength) - offset;
-
-                if (!textAppended && len > 0)
-                {
-                    Message.ChangeTextColor(line, offset, len, SystemColors.WindowText);
-                }
-
-                if (lineLength > lineLimit)
-                {
-                    if (offset <= lineLimit || !textAppended)
-                    {
-                        offset = Math.Max(offset, lineLimit);
-                        len = lineLength - offset;
-                        if (len > 0)
-                        {
-                            Message.ChangeTextColor(line, offset, len, Color.Red.AdaptForeColor(Message.BackColor));
-                        }
-                    }
-                }
-            }
-
-            bool WrapIfNecessary()
-            {
-                if (Message.LineLength(line) > limitX)
-                {
-                    string oldText = Message.Line(line);
-                    string newText = WordWrapper.WrapSingleLine(oldText, limitX);
-                    if (!string.Equals(oldText, newText))
-                    {
-                        Message.ReplaceLine(line, newText);
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-        }
-
-        void SetFormattedLine(int lineNumber)
-        {
-            // line not formatted yet
-            if (_formattedLines.Count <= lineNumber)
-            {
-                DebugHelpers.Assert(_formattedLines.Count == lineNumber, $"{_formattedLines.Count}:{lineNumber}");
-                _formattedLines.Add(Message.Line(lineNumber));
-            }
-            else
-            {
-                _formattedLines[lineNumber] = Message.Line(lineNumber);
-            }
-        }
+                CommitMessageHighlight.Normal => SystemColors.WindowText,
+                CommitMessageHighlight.Reset => SystemColors.ControlText,
+                CommitMessageHighlight.Overlimit => Color.Red.AdaptForeColor(_editor.BackColor),
+                _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(highlight), (int)highlight, typeof(CommitMessageHighlight)),
+            });
     }
 
     private void Message_SelectionChanged(object sender, EventArgs e)
@@ -2550,7 +2219,7 @@ public sealed partial class FormCommit : GitModuleForm
                     return false;
                 }
 
-                ToolStripMenuItem toolStripItem = new(item.Name, item.Icon);
+                ToolStripMenuItem toolStripItem = new(item.Name, item.Icon as Image);
                 toolStripItem.Click += delegate
                 {
                     try
@@ -2588,7 +2257,7 @@ public sealed partial class FormCommit : GitModuleForm
             {
                 _conventionalCommitItem = new(_conventionalCommit.Text, Images.GitCommandLog);
 
-                foreach (string conventionKeyword in _headerCommitTypes)
+                foreach (string conventionKeyword in ConventionalCommitMessage.HeaderCommitTypes)
                 {
                     ToolStripMenuItem commitTypeMenuItem = new(conventionKeyword, null, (_, _) =>
                     {
@@ -2607,7 +2276,7 @@ public sealed partial class FormCommit : GitModuleForm
                         Message.Focus();
                     });
 
-                    if (commitTypeMenuItem.Text == _feat)
+                    if (commitTypeMenuItem.Text == ConventionalCommitMessage.FeatureKeyword)
                     {
                         string hotkey1 = GetShortcutKeyDisplayString(Command.ConventionalCommit_PrefixMessage);
                         string hotkey2 = GetShortcutKeyDisplayString(Command.ConventionalCommit_PrefixMessageWithScope);
@@ -2627,7 +2296,7 @@ public sealed partial class FormCommit : GitModuleForm
 
                 _conventionalCommitItem.DropDownItems.Add(new ToolStripSeparator());
 
-                foreach (string footerKeyword in _footerKeywords)
+                foreach (string footerKeyword in ConventionalCommitMessage.FooterKeywords)
                 {
                     AddFooter(footerKeyword, $"{footerKeyword}: ");
                 }
@@ -2671,59 +2340,12 @@ public sealed partial class FormCommit : GitModuleForm
     }
 
     private (string message, int selectionStart) PrefixOrReplaceKeyword(string keyword)
-    {
-        int currentPosition = Message.SelectionStart;
-        string scope = _insertScopeParentheses ? "()" : "";
-        int scopePosition = keyword.Length + 1;
-        int titlePosition = keyword.Length + (scope.Length / 2) + 2;
-
-        string currentTitle = string.IsNullOrWhiteSpace(Message.Text) ? string.Empty : Message.Line(0);
-
-        // Replacing current keyword
-        foreach (string key in _headerCommitTypes)
-        {
-            if (!currentTitle.StartsWith(key))
-            {
-                continue;
-            }
-
-            if (currentTitle.Length == key.Length)
-            {
-                return ($"{keyword}{scope}: ", _insertScopeParentheses ? scopePosition : titlePosition);
-            }
-
-            char nextChar = currentTitle[key.Length];
-            if (!_insertScopeParentheses)
-            {
-                if (nextChar == ':' || nextChar == '(' || nextChar == '!')
-                {
-                    return ReplaceKeyword(_ => titlePosition);
-                }
-            }
-            else
-            {
-                if (nextChar == ':' || nextChar == '!')
-                {
-                    return ($"{keyword}(){currentTitle[key.Length..]}", scopePosition);
-                }
-
-                if (nextChar == '(')
-                {
-                    return ReplaceKeyword(newTitle => 2 + Math.Max(newTitle.IndexOf(':'), newTitle.IndexOf('(')));
-                }
-            }
-
-            (string message, int selectionStart) ReplaceKeyword(Func<string, int> maxPosition)
-            {
-                string newTitle = $"{keyword}{currentTitle[key.Length..]}";
-                int newMessageLength = Message.Text.Length + newTitle.Length - currentTitle.Length;
-                return (newTitle, Math.Min(newMessageLength, Math.Max(maxPosition(newTitle), currentPosition + keyword.Length - key.Length)));
-            }
-        }
-
-        // Append current keyword
-        return ($"{keyword}{scope}: {currentTitle}", _insertScopeParentheses ? scopePosition : titlePosition + currentPosition);
-    }
+        => ConventionalCommitMessage.PrefixOrReplaceKeyword(
+            keyword,
+            Message.Text,
+            firstLine: string.IsNullOrWhiteSpace(Message.Text) ? string.Empty : Message.Line(0),
+            Message.SelectionStart,
+            _insertScopeParentheses);
 
     private void Amend_CheckedChanged(object sender, EventArgs e)
     {
@@ -2768,7 +2390,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void commitCommitter_Click(object sender, EventArgs e)
     {
-        UICommands.StartSettingsDialog(this, SettingsDialog.Pages.GitConfigSettingsPage.GetPageReference());
+        UICommands.Execute(new UICmd.OpenSettings(SettingsDialog.Pages.GitConfigSettingsPage.GetPageReference()), this);
     }
 
     private void toolAuthor_Leave(object sender, EventArgs e)
@@ -2778,7 +2400,7 @@ public sealed partial class FormCommit : GitModuleForm
 
     private void createBranchToolStripButton_Click(object sender, EventArgs e)
     {
-        bool branchCreated = UICommands.StartCreateBranchDialog(this);
+        bool branchCreated = UICommands.Execute(new UICmd.CreateBranch(), this);
         if (!branchCreated)
         {
             return;
@@ -2887,42 +2509,5 @@ public sealed partial class FormCommit : GitModuleForm
         internal Button ResetSoft => _formCommit.ResetSoft;
 
         internal void RescanChanges() => _formCommit.RescanChanges();
-
-        internal (string message, int selectionStart) PrefixOrReplaceKeyword(string keyword)
-            => _formCommit.PrefixOrReplaceKeyword(keyword);
-
-        internal bool IncludeFeatureParentheses { set => _formCommit._insertScopeParentheses = value; }
-
-        internal void ReplaceMessage(string message, bool regexEnabled) => _formCommit.ReplaceMessage(message, regexEnabled);
-
-        internal void SetMessageState(string text, int position)
-        {
-            _formCommit.Message.Text = text;
-            _formCommit.Message.SelectionStart = position;
-        }
     }
-}
-
-/// <summary>
-/// Indicates the kind of commit being prepared. Used for adjusting the behavior of FormCommit.
-/// </summary>
-public enum CommitKind
-{
-    Normal,
-    Fixup,
-    Squash,
-    Amend,
-}
-
-public static class CommitKindExtensions
-{
-    public static string GetPrefix(this CommitKind commitKind)
-        => commitKind switch
-        {
-            CommitKind.Fixup => "fixup!",
-            CommitKind.Squash => "squash!",
-            CommitKind.Amend => "amend!",
-            CommitKind.Normal => string.Empty,
-            _ => throw new System.ComponentModel.InvalidEnumArgumentException(nameof(commitKind), (int)commitKind, typeof(CommitKind)),
-        };
 }

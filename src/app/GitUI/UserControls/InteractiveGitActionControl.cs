@@ -5,6 +5,7 @@ using GitUI.CommandsDialogs;
 using GitUI.CommandsDialogs.BrowseDialog;
 using GitUI.HelperDialogs;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.UserControls;
 
@@ -177,7 +178,7 @@ public partial class InteractiveGitActionControl : GitModuleControl
 
     private void ResolveButton_Click(object sender, EventArgs e)
     {
-        Form?.UICommands.StartResolveConflictsDialog(this);
+        Form?.UICommands.Execute(new UICmd.ResolveConflicts(), this);
     }
 
     private void ContinueButton_Click(object sender, EventArgs e)
@@ -253,10 +254,10 @@ public partial class InteractiveGitActionControl : GitModuleControl
                 Form.UICommands.RepoChangedNotifier.Notify();
                 break;
             case GitAction.Rebase:
-                Form.UICommands.StartTheContinueRebaseDialog(Form);
+                Form.UICommands.Execute(new UICmd.ContinueRebase(), Form);
                 break;
             case GitAction.Patch:
-                Form.UICommands.StartApplyPatchDialog(Form);
+                Form.UICommands.Execute(new UICmd.ApplyPatch(), Form);
                 break;
         }
     }

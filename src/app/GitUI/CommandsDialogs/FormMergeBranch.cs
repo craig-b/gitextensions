@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitCommands.Git;
+using GitCommands.Merge;
 using GitCommands.Settings;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -28,7 +29,7 @@ public partial class FormMergeBranch : GitModuleForm
         helpImageDisplayUserControl1.Image2 = Properties.Images.HelpCommandMergeFastForward.AdaptLightness();
         InitializeComplete();
 
-        _commitMessageManager = new CommitMessageManager(this, Module.WorkingDirGitDir, Module.CommitEncoding);
+        _commitMessageManager = new CommitMessageManager(new ControlUserInteraction(this), Module.WorkingDirGitDir, Module.CommitEncoding);
 
         currentBranchLabel.Font = new Font(currentBranchLabel.Font, FontStyle.Bold);
         noCommit.Checked = AppSettings.DontCommitMerge;
@@ -100,15 +101,15 @@ public partial class FormMergeBranch : GitModuleForm
             mergeMessagePath = _commitMessageManager.MergeMessagePath;
         }
 
-        ArgumentString command = Commands.MergeBranch(Branches.GetSelectedText(),
-                                                        fastForward.Checked,
-                                                        squash.Checked,
-                                                        noCommit.Checked,
-                                                        _NO_TRANSLATE_mergeStrategy.Text,
-                                                        allowUnrelatedHistories.Checked,
-                                                        mergeMessagePath,
-                                                        Module.GetPathForGitExecution,
-                                                        addLogMessages.Checked ? (int)nbMessages.Value : (int?)null);
+        MergeBranchOptions options = new(
+            Branches.GetSelectedText(),
+            AllowFastForward: fastForward.Checked,
+            Squash: squash.Checked,
+            NoCommit: noCommit.Checked,
+            Strategy: _NO_TRANSLATE_mergeStrategy.Text,
+            AllowUnrelatedHistories: allowUnrelatedHistories.Checked,
+            LogMessageCount: addLogMessages.Checked ? (int)nbMessages.Value : null);
+        ArgumentString command = options.ToArguments(mergeMessagePath, Module.GetPathForGitExecution);
         success = FormProcess.ShowDialog(this, UICommands, arguments: command, Module.WorkingDir, input: null, useDialogSettings: true);
 
         bool wasConflict = MergeConflictHandler.HandleMergeConflicts(UICommands, this, !noCommit.Checked);

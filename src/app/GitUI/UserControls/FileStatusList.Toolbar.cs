@@ -1,8 +1,10 @@
 ﻿using GitCommands;
+using GitCommands.FileStatus;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Properties;
 using GitUIPluginInterfaces;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI;
 
@@ -19,11 +21,12 @@ partial class FileStatusList
     private void ApplyGroupBy()
     {
         bool flatList = btnAsTree.Image == _flatListImage;
-        DiffListSortService.Instance.DiffListSorting =
-            btnByPath.Checked ? flatList ? DiffListSortType.FilePathFlat : DiffListSortType.FilePath
-            : btnByExtension.Checked ? flatList ? DiffListSortType.FileExtensionFlat : DiffListSortType.FileExtension
-            : btnByStatus.Checked ? flatList ? DiffListSortType.FileStatusFlat : DiffListSortType.FileStatus
+        DiffListGrouping grouping =
+            btnByPath.Checked ? DiffListGrouping.FilePath
+            : btnByExtension.Checked ? DiffListGrouping.FileExtension
+            : btnByStatus.Checked ? DiffListGrouping.FileStatus
             : throw new InvalidOperationException("Exactly one group-by button must be checked");
+        DiffListSortService.Instance.DiffListSorting = DiffListSortLayout.Compose(grouping, flatList);
     }
 
     private void AsTree_ButtonClick(object sender, EventArgs e)
@@ -95,13 +98,13 @@ partial class FileStatusList
 
     private void EditGitIgnore_Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, localExcludes: false);
+        UICommands.Execute(new UICmd.EditGitIgnore(LocalExcludes: false), this);
         RequestRefresh();
     }
 
     private void EditLocallyIgnoredFiles_Click(object sender, EventArgs e)
     {
-        UICommands.StartEditGitIgnoreDialog(this, localExcludes: true);
+        UICommands.Execute(new UICmd.EditGitIgnore(LocalExcludes: true), this);
         RequestRefresh();
     }
 
@@ -182,16 +185,13 @@ partial class FileStatusList
     }
 
     private bool IsDiffStatusMatch(DiffBranchStatus diffStatus)
-    {
-        return diffStatus switch
-        {
-            DiffBranchStatus.UnequalChange => btnUnequalChange.Checked,
-            DiffBranchStatus.OnlyBChange => btnOnlyB.Checked,
-            DiffBranchStatus.OnlyAChange => btnOnlyA.Checked,
-            DiffBranchStatus.SameChange => btnSameChange.Checked,
-            _ => true
-        };
-    }
+        => DiffAbFilter.Matches(diffStatus, CurrentDiffAbFilter);
+
+    private DiffBranchStatusFilter CurrentDiffAbFilter
+        => (btnUnequalChange.Checked ? DiffBranchStatusFilter.UnequalChange : DiffBranchStatusFilter.None)
+            | (btnOnlyB.Checked ? DiffBranchStatusFilter.OnlyBChange : DiffBranchStatusFilter.None)
+            | (btnOnlyA.Checked ? DiffBranchStatusFilter.OnlyAChange : DiffBranchStatusFilter.None)
+            | (btnSameChange.Checked ? DiffBranchStatusFilter.SameChange : DiffBranchStatusFilter.None);
 
     private void RefreshOnFormFocus_Click(object sender, EventArgs e)
     {
@@ -204,7 +204,7 @@ partial class FileStatusList
 
         tsmiShowDiffForAllParents.Visible = _enableDisablingShowDiffForAllParents;
         tsmiShowDiffForAllParents.Checked = AppSettings.ShowDiffForAllParents;
-        tsmiShowDiffForAllParents.ToolTipText = TranslatedStrings.ShowDiffForAllParentsTooltip;
+        tsmiShowDiffForAllParents.ToolTipText = ResourceManager.TranslatedStrings.ShowDiffForAllParentsTooltip;
     }
 
     private void FindInFilesGitGrep_DropDownOpening(object sender, EventArgs e)
@@ -257,16 +257,22 @@ partial class FileStatusList
 
     private void UpdateToolbar()
     {
-        bool hasGroups = CanUseFindInCommitFilesGitGrep || (FileStatusListView.Nodes.Count > 0 && FileStatusListView.Nodes[0].Tag is GitRevision);
-        btnCollapseGroups.Visible = hasGroups;
-        sepRefresh.Visible = hasGroups && btnRefresh.Visible;
-        sepAsTree.Visible = hasGroups || btnRefresh.Visible;
-
         DiffListSortType sortType = DiffListSortService.Instance.DiffListSorting;
-        btnByPath.Checked = sortType is DiffListSortType.FilePath or DiffListSortType.FilePathFlat;
-        btnByExtension.Checked = sortType is DiffListSortType.FileExtension or DiffListSortType.FileExtensionFlat;
-        btnByStatus.Checked = sortType is DiffListSortType.FileStatus or DiffListSortType.FileStatusFlat;
-        bool flatList = sortType.ToString().EndsWith("Flat");
+        (DiffListGrouping sortGrouping, bool flatList) = DiffListSortLayout.Decompose(sortType);
+        FileStatusToolbarState toolbarState = FileStatusToolbarState.Compute(
+            canUseGrep: CanUseFindInCommitFilesGitGrep,
+            hasRevisionRootNode: FileStatusListView.Nodes.Count > 0 && FileStatusListView.Nodes[0].Tag is GitRevision,
+            refreshButtonVisible: btnRefresh.Visible,
+            flatList: flatList,
+            hasGrouping: _groupBy is not null,
+            hasDiffAbGroups: HasDiffABGroups());
+        btnCollapseGroups.Visible = toolbarState.ShowCollapseGroups;
+        sepRefresh.Visible = toolbarState.ShowRefreshSeparator;
+        sepAsTree.Visible = toolbarState.ShowAsTreeSeparator;
+
+        btnByPath.Checked = sortGrouping is DiffListGrouping.FilePath;
+        btnByExtension.Checked = sortGrouping is DiffListGrouping.FileExtension;
+        btnByStatus.Checked = sortGrouping is DiffListGrouping.FileStatus;
         btnAsTree.Image = flatList ? _flatListImage : _treeImage;
         tsmiGroupByFilePathTree.Checked = sortType == DiffListSortType.FilePath;
         tsmiGroupByFilePathFlat.Checked = sortType == DiffListSortType.FilePathFlat;
@@ -276,20 +282,18 @@ partial class FileStatusList
         tsmiGroupByFileStatusFlat.Checked = sortType == DiffListSortType.FileStatusFlat;
 
         tsmiDenseTree.Checked = AppSettings.FileStatusMergeSingleItemWithFolder.Value;
-        tsmiDenseTree.Enabled = !flatList;
+        tsmiDenseTree.Enabled = toolbarState.DenseTreeEnabled;
         tsmiShowGroupNodesInFlatList.Checked = AppSettings.FileStatusShowGroupNodesInFlatList.Value;
-        tsmiShowGroupNodesInFlatList.Enabled = _groupBy is not null && flatList;
+        tsmiShowGroupNodesInFlatList.Enabled = toolbarState.ShowGroupNodesEnabled;
 
-        bool filterByDiffStatus = HasDiffABGroups();
-        btnUnequalChange.Visible = filterByDiffStatus;
-        btnOnlyB.Visible = filterByDiffStatus;
-        btnOnlyA.Visible = filterByDiffStatus;
-        btnSameChange.Visible = filterByDiffStatus;
-        sepFilter.Visible = filterByDiffStatus;
+        btnUnequalChange.Visible = toolbarState.ShowDiffAbFilters;
+        btnOnlyB.Visible = toolbarState.ShowDiffAbFilters;
+        btnOnlyA.Visible = toolbarState.ShowDiffAbFilters;
+        btnSameChange.Visible = toolbarState.ShowDiffAbFilters;
+        sepFilter.Visible = toolbarState.ShowDiffAbFilters;
 
-        bool findInFilesGitGrepVisible = CanUseFindInCommitFilesGitGrep;
-        btnFindInFilesGitGrep.Visible = findInFilesGitGrepVisible;
-        sepOptions.Visible = findInFilesGitGrepVisible;
+        btnFindInFilesGitGrep.Visible = toolbarState.ShowGrepButton;
+        sepOptions.Visible = toolbarState.ShowGrepButton;
 
         for (int itemIndex = 0; itemIndex < FindUsingMenuItems.Length; ++itemIndex)
         {
@@ -332,25 +336,15 @@ partial class FileStatusList
         return;
 
         bool HasDiffABGroups()
-        {
-            foreach (FileStatusWithDescription diffGroup in GitItemStatusesWithDescription)
-            {
-                if (diffGroup.IconName is nameof(Images.DiffB) or nameof(Images.DiffA))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
+            => DiffAbFilter.IsApplicable(GitItemStatusesWithDescription.Select(group => group.IconName));
     }
 
     private void UpdateToolbar(IReadOnlyList<GitRevision> revisions)
     {
-        bool withArtificial = revisions.Any(revision => revision.IsArtificial);
-        btnRefresh.Enabled = withArtificial;
+        FileStatusRevisionToolbarState revisionState = FileStatusRevisionToolbarState.Compute(revisions);
+        btnRefresh.Enabled = revisionState.RefreshEnabled;
 
-        bool isWorktree = withArtificial && revisions.Any(revision => revision.ObjectId == ObjectId.WorkTreeId);
+        bool isWorktree = revisionState.WorktreeOptionsEnabled;
         tsmiShowSkipWorktreeFiles.Enabled = isWorktree;
         tsmiShowUntrackedFiles.Enabled = isWorktree;
     }

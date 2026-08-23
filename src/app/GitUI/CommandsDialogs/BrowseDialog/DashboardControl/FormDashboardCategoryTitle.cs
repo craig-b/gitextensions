@@ -1,3 +1,4 @@
+using GitCommands.Dashboard;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs.BrowseDialog.DashboardControl;
@@ -39,16 +40,15 @@ public partial class FormDashboardCategoryTitle : GitExtensionsForm
 
     private void OkButton_Click(object sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(txtCategoryName.Text))
+        switch (CategoryNameValidator.Validate(txtCategoryName.Text, _existingCategories))
         {
-            MessageBoxes.Show(this, _categoryNameRequiredText.Text, lblCategoryName.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
+            case CategoryNameValidation.Empty:
+                MessageBoxes.Show(this, _categoryNameRequiredText.Text, lblCategoryName.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
 
-        if (_existingCategories.Contains(txtCategoryName.Text, StringComparer.Ordinal))
-        {
-            MessageBoxes.Show(this, _categoryNameExistsText.Text, lblCategoryName.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
+            case CategoryNameValidation.Duplicate:
+                MessageBoxes.Show(this, _categoryNameExistsText.Text, lblCategoryName.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
         }
 
         Category = txtCategoryName.Text;

@@ -87,26 +87,21 @@ public static class SettingControlBindingsProvider
     /// </exception>
     public static ISettingControlBinding CreateControlBinding(ISetting setting)
     {
-        if (setting.CreateControlBinding() is { } customBinding)
-        {
-            return customBinding;
-        }
-
         return setting switch
         {
-            BoolSetting s => CreateControlBinding(s, s.CustomControl),
-            CredentialsSetting s => CreateControlBinding(s, s.CustomControl),
-            PasswordSetting s => CreateControlBinding(s, s.CustomControl),
-            StringSetting s => CreateControlBinding(s, s.CustomControl),
-            ChoiceSetting s => CreateControlBinding(s, s.CustomControl),
+            BoolSetting s => CreateControlBinding(s, control: null),
+            CredentialsSetting s => CreateControlBinding(s, control: null),
+            PasswordSetting s => CreateControlBinding(s, control: null),
+            StringSetting s => CreateControlBinding(s, control: null),
+            ChoiceSetting s => CreateControlBinding(s, control: null),
             PseudoSetting s => CreateControlBinding(s),
-            NumberSetting<int> s => CreateControlBinding(s, s.CustomControl),
-            NumberSetting<float> s => CreateControlBinding(s, s.CustomControl as TextBox),
-            NumberSetting<double> s => CreateControlBinding(s, s.CustomControl as TextBox),
-            NumberSetting<long> s => CreateControlBinding(s, s.CustomControl as TextBox),
+            NumberSetting<int> s => CreateControlBinding(s, control: null),
+            NumberSetting<float> s => CreateControlBinding(s, control: null),
+            NumberSetting<double> s => CreateControlBinding(s, control: null),
+            NumberSetting<long> s => CreateControlBinding(s, control: null),
             _ => throw new NotSupportedException($"""
                 No control binding registered for {setting.GetType().Name}.
-                Consider implementing ISetting.CreateControlBinding and provide your own control binding in your plugin.
+                Bind it explicitly with a typed CreateControlBinding overload, or add one for the new setting type.
                 """)
         };
     }

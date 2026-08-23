@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using GitCommands;
-using GitExtensions.Extensibility;
+using GitCommands.Editing;
 using GitExtensions.Extensibility.Git;
 using ResourceManager;
 
@@ -23,15 +23,14 @@ public partial class FormMailMap : GitModuleForm
     private readonly TranslationString _saveFileQuestionCaption =
         new("Save changes?");
 
-    public string MailMapFile = string.Empty;
-    private readonly IFullPathResolver _fullPathResolver;
+    private readonly RepoDotFileEditor _editor;
 
     public FormMailMap(IGitUICommands commands)
         : base(commands)
     {
         InitializeComponent();
         InitializeComplete();
-        _fullPathResolver = new FullPathResolver(() => Module.WorkingDir);
+        _editor = RepoDotFileEditor.ForWorkTreeFile(Module, ".mailmap");
     }
 
     protected override void OnRuntimeLoad(EventArgs e)
@@ -45,10 +44,9 @@ public partial class FormMailMap : GitModuleForm
     {
         try
         {
-            string? path = _fullPathResolver.Resolve(".mailmap");
-            if (File.Exists(path))
+            if (_editor.FileExists)
             {
-                _NO_TRANSLATE_MailMapText.ViewFileAsync(path);
+                _NO_TRANSLATE_MailMapText.ViewFileAsync(_editor.FilePath!);
             }
         }
         catch (Exception ex)
@@ -67,21 +65,7 @@ public partial class FormMailMap : GitModuleForm
     {
         try
         {
-            string? fileName = _fullPathResolver.Resolve(".mailmap");
-
-            FileInfoExtensions
-                .MakeFileTemporaryWritable(
-                    fileName!, // catch NRE below
-                    x =>
-                    {
-                        MailMapFile = _NO_TRANSLATE_MailMapText.GetText();
-                        if (!MailMapFile.EndsWith(Environment.NewLine))
-                        {
-                            MailMapFile += Environment.NewLine;
-                        }
-
-                        File.WriteAllBytes(x, GitModule.SystemEncoding.GetBytes(MailMapFile));
-                    });
+            _editor.Save(_NO_TRANSLATE_MailMapText.GetText());
 
             UICommands.RepoChangedNotifier.Notify();
 
@@ -128,7 +112,7 @@ public partial class FormMailMap : GitModuleForm
 
     private void FormMailMapLoad(object sender, EventArgs e)
     {
-        if (!Module.IsBareRepository())
+        if (_editor.IsSupported)
         {
             return;
         }
@@ -137,13 +121,7 @@ public partial class FormMailMap : GitModuleForm
         Close();
     }
 
-    private bool IsFileUpToDate()
-    {
-        return MailMapFile == _NO_TRANSLATE_MailMapText.GetText();
-    }
+    private bool IsFileUpToDate() => !_editor.HasUnsavedChanges(_NO_TRANSLATE_MailMapText.GetText());
 
-    private void MailMapFileLoaded(object? sender, EventArgs e)
-    {
-        MailMapFile = _NO_TRANSLATE_MailMapText.GetText();
-    }
+    private void MailMapFileLoaded(object? sender, EventArgs e) => _editor.NotifyContentLoaded(_NO_TRANSLATE_MailMapText.GetText());
 }

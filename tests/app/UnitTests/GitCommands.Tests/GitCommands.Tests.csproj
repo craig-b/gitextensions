@@ -26,6 +26,9 @@
     <EmbeddedResource Include="Settings\MockData\level1_repogit_GitExtensions.settings.xml" />
     <EmbeddedResource Include="Settings\MockData\level2_repodist_GitExtensions.settings.xml" />
     <EmbeddedResource Include="Settings\MockData\level3_roaming_GitExtensions.settings.xml" />
+    <None Include="Editor\Diff\*.diff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="Patches\testdata\big.patch">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

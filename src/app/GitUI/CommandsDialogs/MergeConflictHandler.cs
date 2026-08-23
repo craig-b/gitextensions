@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using GitExtensions.Extensibility.Git;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -19,7 +20,7 @@ public static class MergeConflictHandler
 
         if (offerUpdateSubmodules)
         {
-            commands.UpdateSubmodules(owner);
+            commands.Execute(new UICmd.UpdateSubmodules(), owner);
         }
 
         return false;
@@ -29,21 +30,21 @@ public static class MergeConflictHandler
     {
         if (commands.Module.InTheMiddleOfConflictedMerge())
         {
-            commands.StartResolveConflictsDialog(owner, offerCommit);
+            commands.Execute(new UICmd.ResolveConflicts(offerCommit), owner);
         }
 
         if (commands.Module.InTheMiddleOfPatch())
         {
             if (MessageBoxes.MiddleOfPatchApply(owner))
             {
-                commands.StartApplyPatchDialog(owner);
+                commands.Execute(new UICmd.ApplyPatch(), owner);
             }
         }
         else if (commands.Module.InTheMiddleOfRebase())
         {
             if (MessageBoxes.MiddleOfRebase(owner))
             {
-                commands.StartTheContinueRebaseDialog(owner);
+                commands.Execute(new UICmd.ContinueRebase(), owner);
             }
         }
     }

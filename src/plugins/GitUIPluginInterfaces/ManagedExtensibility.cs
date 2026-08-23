@@ -16,6 +16,16 @@ public static class ManagedExtensibility
     public static string? UserPluginsPath { get; private set; }
 
     /// <summary>
+    /// Gets a root path where the plugins bundled with the app are located.
+    /// </summary>
+    /// <remarks>
+    /// On the WinForms host this is the "Plugins" folder beside <c>Application.ExecutablePath</c>;
+    /// supplied by the host via <see cref="Initialise"/> because this project cannot reference
+    /// <c>System.Windows.Forms</c>.
+    /// </remarks>
+    public static string? DefaultPluginsPath { get; private set; }
+
+    /// <summary>
     /// Sets a root path to a folder where user plugins are located.
     /// </summary>
     /// <param name="userPluginsPath">A root path to a folder where user plugins are located.</param>
@@ -46,7 +56,7 @@ public static class ManagedExtensibility
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        string defaultPluginsPath = Path.Join(new FileInfo(Application.ExecutablePath).Directory!.FullName, "Plugins");
+        string? defaultPluginsPath = DefaultPluginsPath;
         string? userPluginsPath = UserPluginsPath;
 
         // The plugins that are bundled up with the app must follow this naming convention: GitExtensions.Plugins.*.dll
@@ -105,10 +115,11 @@ public static class ManagedExtensibility
         }
     }
 
-    public static void Initialise(IReadOnlyCollection<Assembly>? assemblies = null, string? userPluginsPath = null)
+    public static void Initialise(IReadOnlyCollection<Assembly>? assemblies = null, string? userPluginsPath = null, string? defaultPluginsPath = null)
     {
         AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
         SetUserPluginsPath(userPluginsPath);
+        DefaultPluginsPath = defaultPluginsPath;
 
         DiscoveredParts? parts = null;
         if (assemblies is not null && assemblies.Count > 0)

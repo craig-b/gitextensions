@@ -9,6 +9,7 @@ using GitExtensions.Extensibility.Settings;
 using GitExtensions.Plugins.BackgroundFetch.Properties;
 using GitExtUtils;
 using Microsoft;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.Plugins.BackgroundFetch;
 
@@ -197,7 +198,7 @@ public class BackgroundFetchPlugin : GitPluginBase, IGitPluginForRepository
 
     public override bool Execute(GitUIEventArgs args)
     {
-        args.GitUICommands.StartSettingsDialog(this);
+        args.GitUICommands.Execute(new UICmd.OpenPluginSettings(this), null);
         return false;
     }
 }

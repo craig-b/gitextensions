@@ -22,7 +22,9 @@
     <PackageVersion Include="StrongOf" Version="1.2.4" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <PackageVersion Include="System.ComponentModel.Composition" Version="6.0.0" />    <!-- Required by GitExtensions.PluginManager -->
+    <PackageVersion Include="System.Configuration.ConfigurationManager" Version="10.0.0" />    <!-- In-box for net10.0-windows; the portability probe must reference it explicitly -->
     <PackageVersion Include="System.IO.Abstractions" Version="22.0.12" />
+    <PackageVersion Include="System.IO.Packaging" Version="8.0.1" />    <!-- In-box for net10.0-windows (WindowsBase); the portability probe test host must reference it explicitly for System.IO.FileFormatException -->
     <PackageVersion Include="System.Reactive.Interfaces" Version="5.0.0" />
     <PackageVersion Include="System.Reactive.Linq" Version="5.0.0" />
     <PackageVersion Include="System.Reactive" Version="5.0.0" />
@@ -37,6 +39,11 @@
     <PackageVersion Include="WiX" Version="3.14.1" />
 
     <!-- Test infra -->
+    <PackageVersion Include="Avalonia" Version="11.3.20" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.3.20" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.20" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.20" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.20" />
     <PackageVersion Include="AwesomeAssertions" Version="9.4.0" />
     <PackageVersion Include="NUnit.Analyzers" Version="4.7.0" PrivateAssets="all" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="4.13.0" />

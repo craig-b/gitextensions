@@ -1,0 +1,204 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PORTABILITY PROBE — produces no shipping artefact.
+
+    Its only job is to fail the build when code that should be platform-neutral acquires a
+    Windows-only dependency. It SOURCE-INCLUDES the portable layers rather than referencing their
+    projects, because those projects target net10.0-windows with UseWindowsForms=true.
+
+    HOW TO READ THIS FILE
+      - The Include list is the SCOPE: which projects are claimed portable. It only ever WIDENS.
+      - The Remove list is the DEBT: files not yet portable. It only ever SHRINKS.
+      - Adding a Windows-only dependency to a file not on the Remove list breaks the build.
+
+    SCOPE (see cross-platform-plan.md, M0/M1) — all four layers below GitUI are now probed:
+      1. GitExtensions.Extensibility   : 117 of 117 files —  0 debt (ZERO — the straggler sweep
+                                          moved UIExtensions' WinForms half to Extensibility.WinForms)
+      2. GitExtUtils                   :  42 of  68 files — 26 debt (all M1.7 Stage-3 render/
+                                          interop; ClipboardUtil moved to Extensibility.WinForms)
+      3. GitCommands                   : 247 of 248 files —  0 debt (artefact only; M6 moved the
+                                          commit-info renderers + TranslatedStrings cascade here;
+                                          the §19.2 spike moved the RevisionGraph model — 12 files,
+                                          laning/topology, zero WinForms — into RevisionGrid/Graph;
+                                          the grid row weave followed into RevisionGrid/)
+      4. GitUIPluginInterfaces         :  20 of  21 files —  0 debt (artefact only)
+
+    M4.4 moved the 17 pure diff-highlight files (GitUI/Editor/Diff minus the one real control,
+    DiffViewerLineNumberControl) into GitCommands/Editor/Diff, and AppColorExtension
+    (GetThemeColor, now fed by a host-installed ThemeSettings) into GitExtUtils — both keep their
+    original GitUI.* namespaces. The existing GitCommands/GitExtUtils globs pick all of them up:
+    no Remove entries, no new debt.
+
+    An earlier probe of all four projects at once needed 185 of 402 files excluded. After M1.4
+    (fonts), M1.5 (application paths), M1.7's splits, the UserNotification seam, M1.8's binding
+    split and M3's UI command bus, the same scope needs 30 — of which 28 have a DIRECT Windows
+    dependency and 2 are compilation artefacts, see below. No pure-cascade exclusions remain
+    (M7 cleared the last two).
+
+    Notes on maintaining the Remove list:
+      - Derive it from files with a DIRECT error, never by iteratively excluding everything the
+        compiler complains about. The latter over-excludes badly: excluding a type drags its
+        consumers down with it, and one hub file can cascade through dozens (GitVersion alone
+        would have taken AppSettings and ~40 dependants with it).
+      - csc reports in two phases: declaration errors first, and while any exist it reports NO
+        method-body errors at all. A file whose only Windows use is inside a method body
+        (PatchManager's Application.ProductName) shows zero errors until every declaration-level
+        error in the whole compilation is resolved. So iterate to a fixpoint; a single pass
+        under-reports, and cross-check candidates by building with no exclusions at all.
+      - "artefact" entries are not debt: assembly-attribute files duplicate CommonAssemblyInfo.cs
+        (injected by Directory.Build.props) when several projects merge into one compilation.
+        They stay excluded for as long as the probe exists.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!-- Diagnostics only: we want compiler errors about portability, not style noise. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableStyleCopAnalyzers>false</EnableStyleCopAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1416;NU1701</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!--
+    System.Configuration.ConfigurationManager and both Composition packages are in the box for
+    net10.0-windows but must be explicit references on plain net10.0; all three compile and run
+    cross-platform. The rest are packages the probed projects reference directly.
+  -->
+  <ItemGroup>
+    <PackageReference Include="AdysTech.CredentialManager" />
+    <PackageReference Include="StrongOf" />
+    <PackageReference Include="Ben.Demystifier" />
+    <PackageReference Include="JetBrains.Annotations" />
+    <PackageReference Include="SmartFormat" />
+    <PackageReference Include="System.IO.Abstractions" />
+    <PackageReference Include="System.Reactive.Linq" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+    <PackageReference Include="System.ComponentModel.Composition" />
+    <PackageReference Include="Microsoft.VisualStudio.Composition" />
+  </ItemGroup>
+
+  <!--
+    System.Drawing.Primitives (Color, Point, Rectangle, Size, KnownColor) IS cross-platform and in
+    the box; UseWindowsForms=false merely drops the implicit global using, so restore it.
+
+    Note what this deliberately does NOT do: reference System.Drawing.Common. That leaves Font,
+    Image, Bitmap, Brush, Graphics and Icon unresolved — exactly the boundary we want the compiler
+    to police. See cross-platform-plan.md section 8.
+  -->
+  <ItemGroup>
+    <Using Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ===== SCOPE (widens) ===== -->
+    <ProbeSource Include="$(RepoRoot)src\app\GitExtensions.Extensibility\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\app\GitExtUtils\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\app\GitCommands\**\*.cs" />
+    <ProbeSource Include="$(RepoRoot)src\plugins\GitUIPluginInterfaces\**\*.cs" />
+
+    <ProbeSource Remove="$(RepoRoot)**\obj\**" />
+    <ProbeSource Remove="$(RepoRoot)**\bin\**" />
+
+    <!-- ===== DEBT: Extensibility, 4 of 116 files (shrinks) ===== -->
+
+    <!-- M3 DONE: the Start* family left IGitUICommands for the UI command bus (intents in
+         Git\UICommands, one handler per intent in GitUI); owners, plugin icons and the commit
+         template icon became object? host payloads; MessageBoxes and the hoster context-menu
+         hook moved to GitExtensions.Extensibility.WinForms. IGitUICommands, GitUIEventArgs,
+         GitUIPostActionEventArgs and the plugin interfaces are portable. -->
+
+    <!-- M1.8 DONE: the WinForms-typed binding half (ISettingControlBinding, SettingControlBinding,
+         PseudoSetting, CredentialsControl) moved to GitExtensions.Extensibility.WinForms; the
+         setting models lost their never-assigned CustomControl properties and are portable. -->
+
+    <!-- M1.4 residue DONE (straggler sweep 2026-08-19): UIExtensions' WinForms half
+         (GetNullableChecked/SetNullableChecked/IsFixedWidth) moved to Extensibility.WinForms'
+         UIWinFormsExtensions, same namespace; the portable FormatBodyAndNotes is the sole
+         UIExtensions now. Extensibility debt: ZERO. -->
+
+    <!-- M7 DONE (2026-08-19): TranslationUtil, TranslationUtils and GitPluginBase came off this
+         list. The translation walk itself was ~90% portable (fields, string properties by name,
+         Item{N} lists); the five WinForms special cases (ToolTip pairing, DataGridViewColumn,
+         ComboBox/ListBox items) moved verbatim to
+         Extensibility.WinForms\Translations\WinFormsTranslationSpecialCases behind the
+         TranslationUtil.SpecialItemHandler host seam, installed by
+         GitExtensionsControlInitialiser's static ctor (plus TranslationApp and the round-trip
+         test explicitly). CI's "Verify localisation" step is the byte-identical English.xlf
+         oracle. The explicit-declaration variant of M7 was deliberately retired - see the plan. -->
+
+
+
+
+    <!-- ===== DEBT: GitExtUtils, 28 of 67 files (shrinks) ===== -->
+
+    <!-- Stage 3 split (was M1.7): Control and widget extension methods -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ComboBoxExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlDpiExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlHotkeyExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlTagExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlThreadingExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ControlUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\DpiUtil.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\HighDpiMouseCursors.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ImageListExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\IMenuItemBackgroundFilter.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ListViewExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\PropertyGridExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\TableLayoutPanelExtensions.cs" />
+
+    <!-- Stage 3 split (was M1.7): ToolStrip helpers and renderers -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExProfessionalRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExSystemRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripExtensions.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\ToolStripUtil.cs" />
+
+    <!-- Stage 3 split (was M1.7): the theming RENDER layer. The colour model beside it is
+         portable: see ColorHelper, Theme, ThemeId, HslColor, AppColor -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BmpTransformation.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\BrushScope.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\LightnessCorrection.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\TabControlPaintContext.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\TabControlRenderer.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\ThemeFix.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Theming\ThemeWinFormsExtensions.cs" />
+
+    <!-- Win32 interop: belongs in the WinForms half by definition -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\COMBOBOXINFO.cs" />
+    <ProbeSource Remove="$(RepoRoot)src\app\GitExtUtils\GitUI\Interops\User32\GetComboBoxInfo.cs" />
+
+    <!-- Straggler sweep 2026-08-19: ClipboardUtil moved to Extensibility.WinForms (clipboard is
+         inherently host UI; no portable-layer consumers existed, so no seam was needed).
+         M4.4: OtherColors' Application.IsDarkModeEnabled became the portable HostColorMode.IsDark
+         flag, installed by ThemeModule.Load right after Application.SetColorMode. -->
+
+
+    <!-- ===== DEBT: GitCommands, 0 of 198 files (M3 cleared GitTagController) ===== -->
+
+    <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
+    <ProbeSource Remove="$(RepoRoot)src\app\GitCommands\Properties\AssemblyInfo.cs" />
+
+
+    <!-- ===== DEBT: GitUIPluginInterfaces, 0 of 21 files (M3 cleared IGitPluginForCommit) ===== -->
+
+    <!-- artefact: duplicates CommonAssemblyInfo.cs in a single compilation -->
+    <ProbeSource Remove="$(RepoRoot)src\plugins\GitUIPluginInterfaces\Properties\AssemblyInfo.cs" />
+
+    <Compile Include="@(ProbeSource)" />
+
+    <!-- Grants PortabilityProbe.Tests (eng/portability/PortabilityProbe.Tests.csproj) access to
+         internals compiled into this assembly, mirroring each probed project's own
+         InternalsVisibleTo grant to its normal test assembly. See the file for why this isn't
+         done via the SDK's <InternalsVisibleTo> item. -->
+    <Compile Include="$(MSBuildThisFileDirectory)PortabilityProbe.InternalsVisibleTo.cs" />
+  </ItemGroup>
+
+</Project>

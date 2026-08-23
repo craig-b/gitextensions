@@ -1,0 +1,13 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GitExtensions.Avalonia.App"
+             RequestedThemeVariant="Light">
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- Every window - the main window and all code-built dialogs - gets the app icon. -->
+        <Style Selector="Window">
+            <Setter Property="Icon" Value="avares://GitExtensions.Avalonia/Assets/git-extensions-logo.png" />
+        </Style>
+    </Application.Styles>
+</Application>

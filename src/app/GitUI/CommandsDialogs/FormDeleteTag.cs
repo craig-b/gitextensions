@@ -53,7 +53,7 @@ public partial class FormDeleteTag : GitModuleForm
 
     private void RemoveRemoteTag(string tagName)
     {
-        string pushCmd = string.Format("push \"{0}\" :refs/tags/{1}", remotesComboboxControl1.SelectedRemote, tagName);
+        GitExtensions.Extensibility.ArgumentString pushCmd = GitCommands.Git.Commands.DeleteRemoteTag(remotesComboboxControl1.SelectedRemote ?? "", tagName);
 
         bool success = ScriptsRunner.RunEventScripts(ScriptEvent.BeforePush, this);
         if (!success)

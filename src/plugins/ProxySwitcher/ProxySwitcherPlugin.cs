@@ -34,7 +34,7 @@ public class ProxySwitcherPlugin : GitPluginBase
     public override bool Execute(GitUIEventArgs args)
     {
         using ProxySwitcherForm form = new(this, Settings, args);
-        form.ShowDialog(args.OwnerForm);
+        form.ShowDialog(args.OwnerForm as IWin32Window);
 
         return false;
     }

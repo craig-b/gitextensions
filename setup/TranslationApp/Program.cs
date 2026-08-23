@@ -5,6 +5,7 @@ using GitExtensions.Extensibility.Translations.Xliff;
 using GitUI;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using ResourceManager;
 
 namespace TranslationApp;
 
@@ -16,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // The extraction walk needs the WinForms special cases installed before ANY ITranslate
+        // is processed - including non-form types, which may be instantiated before the first
+        // form would install this via GitExtensionsControlInitialiser.
+        GitExtensions.Extensibility.WinForms.Translations.WinFormsTranslationSpecialCases.Install();
+
         // This form created for obtain UI synchronization context only
         using (new Form())
         {
@@ -38,7 +44,7 @@ internal static class Program
         // Set the flag that will stop this from happening.
         GitModuleForm.IsUnitTestActive = true;
 
-        AppSettings.Font = SystemFonts.MessageBoxFont!;
+        AppSettings.Font = SystemFonts.MessageBoxFont!.ToDescriptor();
 
         IDictionary<string, List<TranslationItemWithCategory>> neutralItems = TranslationHelpers.LoadNeutralItems();
         string filename = Path.Combine(Translator.GetTranslationDir(), "English.xlf");

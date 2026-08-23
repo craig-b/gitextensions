@@ -386,9 +386,9 @@ public sealed partial class RepoObjectsTree : GitModuleControl
 
     private void CreateBranches()
     {
-        TreeNode rootNode = new(TranslatedStrings.Branches)
+        TreeNode rootNode = new(ResourceManager.TranslatedStrings.Branches)
         {
-            Name = TranslatedStrings.Branches,
+            Name = ResourceManager.TranslatedStrings.Branches,
             ImageKey = nameof(Images.BranchLocalRoot),
             SelectedImageKey = nameof(Images.BranchLocalRoot)
         };
@@ -471,7 +471,7 @@ public sealed partial class RepoObjectsTree : GitModuleControl
         treeMain.Nodes.AddRange([.. nodeList.OrderBy(treeNode => treeToPositionIndex[(Tree)treeNode.Tag!])]);
         treeMain.EndUpdate();
 
-        treeMain.Font = AppSettings.Font;
+        treeMain.Font = AppFonts.App;
         _rootNodes.Add(tree);
 
         tree.Attached();

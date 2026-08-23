@@ -24,23 +24,16 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _buttonViewDetails = new("View details");
 
     private readonly TranslationString _containedInCurrentCommitText = new("'{0}' is contained in the currently selected commit");
-    private readonly TranslationString _containedInBranchesText = new("Contained in branches:");
-    private readonly TranslationString _containedInNoBranchText = new("Contained in no branch");
-    private readonly TranslationString _containedInTagsText = new("Contained in tags:");
-    private readonly TranslationString _containedInNoTagText = new("Contained in no tag");
     private readonly TranslationString _invisibleCommitText = new("'{0}' is not currently visible");
     private readonly TranslationString _addUpstreamRemote = new("Add upstream remote");
     private readonly TranslationString _viewPullRequest = new("View pull requests");
     private readonly TranslationString _createPullRequest = new("Create pull request");
     private readonly TranslationString _forkCloneRepo = new("Fork or clone a repository");
-    private readonly TranslationString _branchText = new("Branch");
-    private readonly TranslationString _branchesText = new("Branches");
     private readonly TranslationString _remotesText = new("Remotes");
     private readonly TranslationString _tagsText = new("Tags");
     private readonly TranslationString _stashesText = new("Stashes");
     private readonly TranslationString _submodulesText = new("Submodules");
     private readonly TranslationString _worktreesText = new("Worktrees");
-    private readonly TranslationString _bodyNotLoaded = new("\n\nFull message text is not present in older commits.\nSelect this commit to populate the full message.");
     private readonly TranslationString _searchingFor = new("Searching for: ");
     private readonly TranslationString _loadingDataText = new("Loading data...");
     private readonly TranslationString _uninterestingDiffOmitted = new("Uninteresting diff hunks are omitted.");
@@ -50,7 +43,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _tag = new("Tag");
     private readonly TranslationString _remote = new("Remote");
     private readonly TranslationString _openWithGitExtensions = new("&Open with Git Extensions");
-    private readonly TranslationString _contScrollToNextFileOnlyWithAlt = new("Enable automatic continuous scroll (without ALT button)");
     private readonly TranslationString _noRevision = new("No revision");
 
     private readonly TranslationString _authored = new("authored");
@@ -83,23 +75,6 @@ internal sealed class TranslatedStrings : Translate
     private readonly TranslationString _sortOrder = new("&Sort order");
 
     private readonly TranslationString _diffSelectedWithRememberedFile = new("&Diff with \"{0}\"");
-    private readonly TranslationString _diffWithParent = new("Diff with A ");
-    private readonly TranslationString _diffBaseWith = new("Diff BASE with");
-    private readonly TranslationString _diffRange = new("Range diff");
-    private readonly TranslationString _combinedDiff = new("Combined diff");
-
-    private readonly TranslationString _showDiffForAllParentsText = new("Show file differences for all parents in browse dialog");
-    private readonly TranslationString _showDiffForAllParentsTooltip = new(@"Show all differences between the selected commits, not limiting to only one difference.
-
-- For a single selected commit, show the difference with its parent commit.
-- For a single selected merge commit, show the difference with all parents.
-- For two selected commits with a common ancestor (BASE), show the difference
-between the commits as well as the difference from BASE to the selected commits.
-See documentation for more details about icons and range diffs.
-- For multiple selected commits (up to four), show the difference for
-all the first selected with the last selected commit.
-- For more than four selected commits, show the difference from the first to
-the last selected commit.");
 
     private readonly TranslationString _stageSelectedLines = new("Stage selected line(s)");
     private readonly TranslationString _unstageSelectedLines = new("Unstage selected line(s)");
@@ -125,19 +100,11 @@ the last selected commit.");
 
     private readonly TranslationString _settingsTypeToFind = new("Type to find");
 
-    // FormRevisionFilter
-    private readonly TranslationString _since = new("Since");
-    private readonly TranslationString _until = new("Until");
+    // FormRevisionFilter (the summary captions moved to the portable TranslatedStrings with FilterInfo)
     private readonly TranslationString _author = new("Author");
     private readonly TranslationString _committer = new("Committer");
     private readonly TranslationString _message = new("Message");
-    private readonly TranslationString _diffContent = new("Diff contains");
-    private readonly TranslationString _pathFilter = new("Path filter");
-    private readonly TranslationString _showOnlyFirstParent = new("Show only first parent");
-    private readonly TranslationString _showReflog = new("Show reflog");
     private readonly TranslationString _showReflogTooltip = new("Show all reflog references");
-    private readonly TranslationString _showCurrentBranchOnly = new("Show current branch only");
-    private readonly TranslationString _simplifyByDecoration = new("Simplify by decoration");
 
     private readonly TranslationString _stashDropConfirmTitle = new("Drop Stash Confirmation");
     private readonly TranslationString _cannotBeUndone = new("This action cannot be undone.");
@@ -229,10 +196,6 @@ Copy error details to clipboard?");
     public static string ButtonViewDetails => _instance.Value._buttonViewDetails.Text;
 
     public static string ContainedInCurrentCommit => _instance.Value._containedInCurrentCommitText.Text;
-    public static string ContainedInBranches => _instance.Value._containedInBranchesText.Text;
-    public static string ContainedInNoBranch => _instance.Value._containedInNoBranchText.Text;
-    public static string ContainedInTags => _instance.Value._containedInTagsText.Text;
-    public static string ContainedInNoTag => _instance.Value._containedInNoTagText.Text;
     public static string InvisibleCommit => _instance.Value._invisibleCommitText.Text;
 
     public static string CreatePullRequest => _instance.Value._createPullRequest.Text;
@@ -240,15 +203,12 @@ Copy error details to clipboard?");
     public static string ViewPullRequest => _instance.Value._viewPullRequest.Text;
     public static string AddUpstreamRemote => _instance.Value._addUpstreamRemote.Text;
 
-    public static string Branch => _instance.Value._branchText.Text;
-    public static string Branches => _instance.Value._branchesText.Text;
     public static string Remotes => _instance.Value._remotesText.Text;
     public static string Tags => _instance.Value._tagsText.Text;
     public static string Stashes => _instance.Value._stashesText.Text;
     public static string Submodules => _instance.Value._submodulesText.Text;
     public static string Worktrees => _instance.Value._worktreesText.Text;
 
-    public static string BodyNotLoaded => _instance.Value._bodyNotLoaded.Text;
     public static string SearchingFor => _instance.Value._searchingFor.Text;
 
     public static string LoadingData => _instance.Value._loadingDataText.Text;
@@ -259,7 +219,6 @@ Copy error details to clipboard?");
     public static string Remote => _instance.Value._remote.Text;
     public static string OpenWithGitExtensions => _instance.Value._openWithGitExtensions.Text;
     public static string FilterFileInGrid => _instance.Value._filterFileInGrid.Text;
-    public static string ContScrollToNextFileOnlyWithAlt => _instance.Value._contScrollToNextFileOnlyWithAlt.Text;
     public static string NoRevision => _instance.Value._noRevision.Text;
 
     public static string OpenReport => _instance.Value._openReport.Text;
@@ -301,13 +260,6 @@ Copy error details to clipboard?");
     public static string SortOrder => _instance.Value._sortOrder.Text;
 
     public static string DiffSelectedWithRememberedFile => _instance.Value._diffSelectedWithRememberedFile.Text;
-    public static string DiffWithParent => _instance.Value._diffWithParent.Text;
-    public static string DiffBaseWith => _instance.Value._diffBaseWith.Text;
-    public static string DiffRange => _instance.Value._diffRange.Text;
-    public static string CombinedDiff => _instance.Value._combinedDiff.Text;
-    public static string ShowDiffForAllParentsText => _instance.Value._showDiffForAllParentsText.Text;
-    public static string ShowDiffForAllParentsTooltip => _instance.Value._showDiffForAllParentsTooltip.Text;
-
     public static string StageSelectedLines => _instance.Value._stageSelectedLines.Text;
     public static string UnstageSelectedLines => _instance.Value._unstageSelectedLines.Text;
     public static string ResetSelectedLines => _instance.Value._resetSelectedLines.Text;
@@ -329,18 +281,10 @@ Copy error details to clipboard?");
 
     public static string SettingsTypeToFind => _instance.Value._settingsTypeToFind.Text;
 
-    public static string Since = _instance.Value._since.Text;
-    public static string Until = _instance.Value._until.Text;
     public static string Author = _instance.Value._author.Text;
     public static string Committer = _instance.Value._committer.Text;
     public static string Message = _instance.Value._message.Text;
-    public static string DiffContent = _instance.Value._diffContent.Text;
-    public static string PathFilter = _instance.Value._pathFilter.Text;
-    public static string ShowOnlyFirstParent = _instance.Value._showOnlyFirstParent.Text;
-    public static string ShowReflog = _instance.Value._showReflog.Text;
     public static string ShowReflogTooltip = _instance.Value._showReflogTooltip.Text;
-    public static string ShowCurrentBranchOnly = _instance.Value._showCurrentBranchOnly.Text;
-    public static string SimplifyByDecoration = _instance.Value._simplifyByDecoration.Text;
 
     #region Scripts
 

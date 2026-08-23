@@ -1,7 +1,7 @@
 ﻿using GitCommands;
+using GitCommands.Blame;
 using GitCommands.Git;
 using GitExtensions.Extensibility.Git;
-using GitUI.UserControls;
 using GitUIPluginInterfaces;
 
 namespace GitUITests.UserControls;

@@ -1,19 +1,21 @@
 ﻿using System.Diagnostics;
 using GitCommands;
+using GitCommands.LeftPanel;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
 [DebuggerDisplay("(Tag) FullPath = {FullPath}, Hash = {ObjectId}, Visible: {Visible}")]
 internal sealed class StashNode : BaseRevisionNode
 {
-    public StashNode(Tree tree, in ObjectId objectId, string reflogSelector, string subject, bool visible)
-        : base(tree, reflogSelector.RemovePrefix("refs/"), visible)
+    public StashNode(Tree tree, StashTreeNode stash, bool visible)
+        : base(tree, stash.FullPath, visible)
     {
-        ObjectId = objectId;
-        DisplayName = $"{reflogSelector.RemovePrefix(GitRefName.RefsStashPrefix)}: {subject}";
-        ReflogSelector = reflogSelector;
+        ObjectId = stash.ObjectId;
+        DisplayName = stash.DisplayName;
+        ReflogSelector = stash.ReflogSelector;
     }
 
     public string DisplayName { get; }
@@ -37,17 +39,17 @@ internal sealed class StashNode : BaseRevisionNode
 
     internal bool OpenStash(IWin32Window owner)
     {
-        return UICommands.StartStashDialog(owner, manageStashes: true, ReflogSelector);
+        return UICommands.Execute(new UICmd.Stash(true, ReflogSelector), owner);
     }
 
     public void ApplyStash(IWin32Window owner)
     {
-        UICommands.StashApply(owner, ReflogSelector);
+        UICommands.Execute(new UICmd.StashApply(ReflogSelector), owner);
     }
 
     public void PopStash(IWin32Window owner)
     {
-        UICommands.StashPop(owner, ReflogSelector);
+        UICommands.Execute(new UICmd.StashPop(ReflogSelector), owner);
     }
 
     public void DropStash(IWin32Window owner)
@@ -85,7 +87,7 @@ internal sealed class StashNode : BaseRevisionNode
 
             if (result == TaskDialogButton.Yes)
             {
-                UICommands.StashDrop(owner, ReflogSelector);
+                UICommands.Execute(new UICmd.StashDrop(ReflogSelector), owner);
             }
         }
     }

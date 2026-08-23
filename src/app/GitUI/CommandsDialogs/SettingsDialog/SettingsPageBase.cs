@@ -144,7 +144,7 @@ public abstract partial class SettingsPageBase : TranslatedControl, ISettingsPag
     protected void AddSettingBinding(ISetting<string> setting, ComboBox comboBox)
     {
         StringComboBoxAdapter adapter = new(setting, comboBox);
-        AddControlBinding(SettingControlBindingsProvider.CreateControlBinding(adapter));
+        AddControlBinding(SettingControlBindingsProvider.CreateControlBinding(adapter, comboBox));
     }
 
     /// <summary>
@@ -200,6 +200,5 @@ public class StringComboBoxAdapter : ChoiceSetting
     public StringComboBoxAdapter(ISetting<string> setting, ComboBox comboBox)
         : base(setting.FullPath, [.. comboBox.Items.Cast<string>()], setting.Default)
     {
-        CustomControl = comboBox;
     }
 }

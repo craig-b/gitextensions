@@ -1,0 +1,309 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PORTABILITY PROBE TEST HOST — runs the platform-neutral layers' unit tests on Linux.
+
+    Sibling of PortabilityProbe.csproj: where that project source-includes the four portable
+    layers to prove they still compile off Windows, this project source-includes those layers'
+    unit tests (plus the test infrastructure they share) to prove the tests still PASS off
+    Windows. It is a ProjectReference away from a normal test project, not a normal test project
+    itself, for the same reason as the probe: the real test projects target net10.0-windows with
+    UseWindowsForms=true and cannot build here.
+
+    HOW TO READ THIS FILE
+      - The TestSource Include list is the SCOPE: which test suites (plus shared test
+        infrastructure) are claimed portable. It only ever WIDENS.
+      - The TestSource Remove list is the DEBT: test files that don't compile or don't pass off
+        Windows here, each annotated with why. It only ever SHRINKS.
+      - Unlike the probe's debt list, entries here fall into three different categories - see the
+        annotation on each: the test assumes Windows, the test caught a genuine product
+        portability bug (PORTABILITY-BUG), or the test needs infrastructure this host doesn't
+        (yet) provide.
+
+    SCOPE: the two portable-layer unit test suites, plus the shared test infrastructure both use.
+      1. GitExtensions.Extensibility.Tests :  4 of  5 files —  1 artefact
+      2. GitCommands.Tests                 : 104 of 108 files — 4 debt (1 artefact, 3 WINDOWS-ONLY)
+      3. CommonTestUtils (shared infra)    : 21 of 25 files —  4 debt (1 artefact, 3 WINDOWS-ONLY)
+
+      M4.4: the seven Editor/Diff test files (LinesMatcherTests, DiffLineNumAnalyzerTests,
+      DiffHighlightServiceTests and the four AnsiEscapeUtilities* files) moved here from
+      GitUI.Tests along with the code under test, freed of their vestigial ICSharpCode/ThemeModule
+      couplings (a TextEditorControl used as a plain string holder; ThemeModule.Load() replaced by
+      installing ThemeSettings.Default, which is value-identical to the DefaultLight palette the
+      expectations encode). They ride the existing GitCommands.Tests glob; their .diff test data is
+      declared below.
+
+      History: this list used to be dominated by two genuine product PORTABILITY-BUGs, both since
+      fixed: AppSettings' static constructor touching the Windows registry unconditionally
+      (commit 89e02fc6e) and AppSettings.SaveSettings' named Mutex using an invalid name off
+      Windows (commit b238048dc). Re-including the ~30 files those had forced out unmasked a
+      further batch of WINDOWS-ONLY failures - hardcoded Windows path/separator/executable-name/
+      CRLF literals, mostly. Rather than exclude those too, they were fixed in the test SOURCES
+      (tests/**, not product code): literals that are byte-identical to their replacement
+      expression on Windows were replaced outright (e.g. "\r\n" -> Environment.NewLine,
+      "path\\sub" -> Path.Combine/Path.DirectorySeparatorChar forms, "ping.exe" -> an
+      OS-conditional that still yields "ping.exe" on Windows); genuinely Windows-semantic cases
+      (drive letters, UNC \\wsl$\ syntax, notepad.exe/short-command-line OS behaviour) were scoped
+      with [Platform(Include = "Win")] instead, the same way NormalizePath/NormalizeWslPath
+      already were in this file - still executed on Windows, unchanged. The remaining 6 files
+      below are ones where no such translation exists (see each annotation) and 1 artefact.
+
+    Notes on maintaining the Remove list, same fixpoint caveat as the probe's:
+      - csc's two-phase reporting (declarations, then method bodies) still applies. Derive
+        removals from DIRECT errors, and re-check after every change - a file can look clean until
+        every declaration-level error elsewhere in the compilation is gone.
+      - This project's assembly is compiled standalone (PortabilityProbe.Tests), separate from
+        PortabilityProbe.csproj's merged assembly, but references it as a single ProjectReference.
+        Internal-member access across that boundary needs an explicit grant - see
+        PortabilityProbe.InternalsVisibleTo.cs next to PortabilityProbe.csproj.
+      - GitCommands.Tests, GitExtensions.Extensibility.Tests, and CommonTestUtils each carry their
+        own Properties/AssemblyInfo.cs declaring assembly-level attributes ([TestAppSettings],
+        [Category("UnitTests")], and GitCommands.Tests additionally [Epilogue] and
+        [ConfigureJoinableTaskFactory]). Merged into one assembly those three files' attributes
+        collide (duplicate [assembly: ...] of a non-repeatable attribute is a compile error), so
+        all three are removed below as "artefact", and PortabilityProbeTestHost.cs supplies the
+        single surviving copy - swapping ConfigureJoinableTaskFactory (System.Windows.Forms-bound)
+        for a portable equivalent. See that file's header comment for the full story.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!-- Diagnostics only: we want test failures, not style noise. Mirrors PortabilityProbe.csproj. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableStyleCopAnalyzers>false</EnableStyleCopAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RunAnalyzers>false</RunAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1416;NU1701</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- eng/Tests.props derives IsUnitTestProject from the project name ending in ".Tests", which
+         this one does, so eng/Tests.targets already wires up Microsoft.NET.Test.Sdk, NUnit,
+         NUnit3TestAdapter, NUnit.Analyzers, AwesomeAssertions, NSubstitute, Verify.NUnit, and
+         NUnit.ConsoleRunner automatically - no need to reference them again here. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The merged portable-layer assembly under test. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)PortabilityProbe.csproj" />
+  </ItemGroup>
+
+  <!--
+    Root Directory.Build.props unconditionally adds a Compile item for CommonAssemblyInfo.cs
+    (every project gets it, regardless of EnableDefaultCompileItems). That file carries
+    [assembly: SupportedOSPlatform("windows7.0")] under NET6_0_OR_GREATER - meant for the real
+    net10.0-windows-targeted projects. Left in place here, the NUnit engine honours that attribute
+    literally and skips the WHOLE assembly at discovery time with _SKIPREASON "Only supported on
+    windows7.0", regardless of target framework (visible with the NUnit adapter's
+    DumpXmlTestDiscovery runsettings option). A bare test host has no need for the
+    AssemblyTitle/Company/Version metadata that file also carries, so just drop it here.
+  -->
+  <ItemGroup>
+    <Compile Remove="$(RepoRoot)CommonAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <!--
+    Packages the real test projects reference directly, on top of what eng/Tests.targets grants
+    IsTestProject automatically (see above). Central package versions - no hardcoded versions.
+  -->
+  <ItemGroup>
+    <PackageReference Include="LibGit2Sharp" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.Common" />
+    <PackageReference Include="JetBrains.Annotations" />
+    <PackageReference Include="System.IO.Abstractions" />
+    <PackageReference Include="System.IO.Abstractions.TestingHelpers" />
+    <!-- System.IO.FileFormatException (RepositoryHistoryMigratorTests, RepositoryCategoryXmlSerialiserTests)
+         is in-box for net10.0-windows via WindowsBase; explicit off that TFM. -->
+    <PackageReference Include="System.IO.Packaging" />
+  </ItemGroup>
+
+  <!--
+    tests/Directory.Build.props (not on this project's ancestor path - this project lives under
+    eng/, not tests/) is what normally supplies the implicit `using AwesomeAssertions;`. Restore
+    it explicitly. System.Drawing restores the same implicit using UseWindowsForms=true would have
+    given us, for parity with PortabilityProbe.csproj - Color/Point/Rectangle/Size are
+    cross-platform and in the box; Font/Image/Bitmap/Brush/Graphics/Icon deliberately stay
+    unresolved.
+  -->
+  <ItemGroup>
+    <Using Include="AwesomeAssertions" />
+    <Using Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ===== SCOPE (widens) ===== -->
+    <TestSource Include="$(RepoRoot)tests\app\UnitTests\GitExtensions.Extensibility.Tests\**\*.cs" />
+    <TestSource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\**\*.cs" />
+    <TestSource Include="$(RepoRoot)tests\CommonTestUtils\**\*.cs" />
+
+    <TestSource Remove="$(RepoRoot)**\obj\**" />
+    <TestSource Remove="$(RepoRoot)**\bin\**" />
+
+    <!-- artefact: assembly-attribute files collide once GitCommands.Tests, GitExtensions.Extensibility.Tests
+         and CommonTestUtils compile into one assembly; PortabilityProbeTestHost.cs supplies the
+         single surviving copy of their attributes. See the file header above. -->
+    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Properties\AssemblyInfo.cs" />
+    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitExtensions.Extensibility.Tests\Properties\AssemblyInfo.cs" />
+    <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\Properties\AssemblyInfo.cs" />
+
+    <!-- ===== DEBT: CommonTestUtils, 21 of 25 files included / 4 debt (shrinks) ===== -->
+
+    <!-- WINDOWS-ONLY: sets up the ambient JoinableTaskContext via a System.Windows.Forms.Form (for
+         the STA branch) and subscribes System.Windows.Forms.Application.ThreadException; neither
+         type is available with UseWindowsForms=false. PortabilityProbeTestHost.cs supplies a
+         portable replacement covering the non-STA branch, which is all the included tests need. -->
+    <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\ConfigureJoinableTaskFactoryAttribute.cs" />
+
+    <!-- WINDOWS-ONLY: System.Windows.Forms.Application.DoEvents(); a WinForms message-pump helper
+         with no cross-platform equivalent. Nothing in the included test suites calls it (it exists
+         to pump STA UI tests, which this host doesn't run - see AsyncLoaderTests.cs below). -->
+    <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\WinFormsTestHelper.cs" />
+
+    <!-- WINDOWS-ONLY: `new Semaphore(1, 1, "GitExtensionsTestAssemblySerializer")` - a NAMED
+         semaphore, used to serialize AppSettings file access across concurrently-running test
+         PROCESSES. .NET's named-synchronization-primitive support is Windows-only; on Linux this
+         throws PlatformNotSupportedException the moment the attribute is instantiated (confirmed
+         at runtime: "The named version of this synchronization primitive is not supported on this
+         platform"), which aborts the whole test host. PortabilityProbeTestHost.cs supplies a
+         behaviourally-equivalent replacement scoped to this host's single test process (which is
+         all a single `dotnet test` invocation ever needs - there is no second process to
+         coordinate with here), using an unnamed/process-local semaphore instead. -->
+    <TestSource Remove="$(RepoRoot)tests\CommonTestUtils\TestAppSettingsAttribute.cs" />
+
+    <!-- ===== DEBT: GitCommands.Tests, 85 of 89 files included / 4 debt (shrinks) ===== -->
+
+    <!-- M3 DONE: GitTagControllerTest came off this list - GitTagController is portable (runs
+         through the UI command bus with an object? owner) and the test no longer touches
+         IWin32Window. M1.8 DONE: BuildServerSettingsTests came off with the setting-binding
+         split. -->
+
+    <!-- WINDOWS-ONLY: uses ResourceManager.LocalizationHelpers; ResourceManager targets
+         net10.0-windows/UseWindowsForms=true (it isn't one of the four probed portable layers) and
+         can't be referenced from this host. -->
+    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Git\Commands\GitCommandHelpersTest.cs" />
+
+    <!-- WINDOWS-ONLY: compares AppPaths' portable defaults against System.Windows.Forms.Application
+         for byte-identical parity with the pre-M1.5 formula. Already runtime-gated with
+         [Platform(Include = "Win")] (skipped on Windows only... i.e. everywhere but Windows), but
+         still needs UseWindowsForms=true to compile. -->
+    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Settings\AppPathsTests.cs" />
+
+    <!-- WINDOWS-ONLY: the whole class is [Apartment(ApartmentState.STA)] - an actual Windows/COM
+         STA thread, which PortabilityProbeTestHost.cs's ambient-JoinableTaskContext replacement
+         deliberately does not support (see its header comment). -->
+    <TestSource Remove="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\AsyncLoaderTests.cs" />
+
+    <!-- Both PORTABILITY-BUGs that used to dominate this list (AppSettings' static constructor
+         touching the registry unconditionally, and SaveSettings' invalid Mutex name) are fixed in
+         product code - see commits 89e02fc6e and b238048dc, and the SCOPE note at the top of this
+         file. Re-including the files those had forced out unmasked a further batch of
+         WINDOWS-ONLY test-authoring issues, which were fixed in the test sources themselves
+         (Environment.NewLine/Path.Combine/Path.DirectorySeparatorChar substitutions, OS-conditional
+         executable names, and [Platform(Include = "Win")] scoping for genuinely Windows-semantic
+         cases) rather than excluded - see each file's diff for the reasoning at each call site.
+         Nothing remains excluded here for that reason; the six entries above (GitTagControllerTest,
+         BuildServerSettingsTests, GitCommandHelpersTest, AppPathsTests, AsyncLoaderTests, plus the
+         Properties/AssemblyInfo.cs artefact) are unrelated debt out of scope for this pass. -->
+
+    <Compile Include="@(TestSource)" />
+
+    <Compile Include="$(MSBuildThisFileDirectory)PortabilityProbeTestHost.cs" />
+  </ItemGroup>
+
+  <!--
+    Embedded test data GitCommands.Tests's csproj declares, with explicit LogicalName so the
+    manifest resource name tests load by string matches what the real project would produce
+    (default scheme: RootNamespace.Dir.SubDir.FileName - GitCommands.Tests's RootNamespace is
+    "GitCommandsTests", see tests/app/UnitTests/Directory.Build.props). The test .cs files keep
+    their original `namespace GitCommandsTests[.Xyz];` declarations verbatim (they're
+    source-included unmodified), and tests build the resource name from `GetType().Namespace`, so
+    this reproduces the exact string they ask for regardless of where this project lives.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\ExternalLinks\MockData\level1_repogit_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.ExternalLinks.MockData.level1_repogit_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\ExternalLinks\MockData\level2_repodist_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.ExternalLinks.MockData.level2_repodist_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\ExternalLinks\MockData\level3_roaming_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.ExternalLinks.MockData.level3_roaming_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Helpers\MockData\MacLines.bin">
+      <LogicalName>GitCommandsTests.Helpers.MockData.MacLines.bin</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Helpers\MockData\UnixLines.bin">
+      <LogicalName>GitCommandsTests.Helpers.MockData.UnixLines.bin</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Helpers\MockData\WindowsLines.bin">
+      <LogicalName>GitCommandsTests.Helpers.MockData.WindowsLines.bin</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\MockData\Too_long_lines.txt">
+      <LogicalName>GitCommandsTests.MockData.Too_long_lines.txt</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\MockData\Too_many_lines.txt">
+      <LogicalName>GitCommandsTests.MockData.Too_many_lines.txt</LogicalName>
+    </EmbeddedResource>
+    <!-- Only consumed today by the excluded BuildServerSettingsTests; kept for parity with the
+         real project's csproj and in case another Settings test grows a dependency on it. -->
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Settings\MockData\level1_repogit_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.Settings.MockData.level1_repogit_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Settings\MockData\level2_repodist_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.Settings.MockData.level2_repodist_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Settings\MockData\level3_roaming_GitExtensions.settings.xml">
+      <LogicalName>GitCommandsTests.Settings.MockData.level3_roaming_GitExtensions.settings.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\UserRepositoryHistory\Legacy\MockData\CategorisedRepositories01.xml">
+      <LogicalName>GitCommandsTests.UserRepositoryHistory.Legacy.MockData.CategorisedRepositories01.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\UserRepositoryHistory\Legacy\MockData\CategorisedRepositories02.xml">
+      <LogicalName>GitCommandsTests.UserRepositoryHistory.Legacy.MockData.CategorisedRepositories02.xml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!--
+    Copied test data GitCommands.Tests's csproj declares with CopyToOutputDirectory. Tests locate
+    these via TestContext.CurrentContext.TestDirectory (the output directory) joined with the same
+    relative path used here (e.g. "Patches/testdata/<file>"), so the Link metadata below must
+    reproduce that relative layout regardless of where this project's own sources live.
+  -->
+  <ItemGroup>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\big.patch" Link="Patches\testdata\big.patch">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\bigBin.patch" Link="Patches\testdata\bigBin.patch">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\rebase.diff" Link="Patches\testdata\rebase.diff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\color.diff" Link="Patches\testdata\color.diff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\color-binary.diff" Link="Patches\testdata\color-binary.diff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Patches\testdata\color-prefix.diff" Link="Patches\testdata\color-prefix.diff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\TestData\RevisionReader\**\*" Link="TestData\RevisionReader\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\TestData\README.blame" Link="TestData\README.blame">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- M4.4: the Editor/Diff tests locate their sample diffs via
+         TestContext.CurrentContext.TestDirectory + "Editor/Diff", so Link must reproduce that
+         layout (mirrors the None glob in GitCommands.Tests.csproj). -->
+    <None Include="$(RepoRoot)tests\app\UnitTests\GitCommands.Tests\Editor\Diff\*.diff" Link="Editor\Diff\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -4,6 +4,7 @@ using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI;
 using GitUI.CommandsDialogs;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -344,7 +345,7 @@ public class FormBrowseTests
     private static void RunFormTest(Action<FormBrowse> testDriver, GitUICommands commands)
     {
         UITest.RunForm(
-            showForm: () => commands.StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => commands.Execute(new UICmd.Browse(), null).Should().BeTrue(),
             (FormBrowse form) =>
             {
                 testDriver(form);
@@ -365,7 +366,7 @@ public class FormBrowseTests
     private void RunFormTest(Func<FormBrowse, Task> testDriverAsync, GitUICommands? commands = null)
     {
         UITest.RunForm(
-            showForm: () => (commands ?? _commands).StartBrowseDialog(owner: null).Should().BeTrue(),
+            showForm: () => (commands ?? _commands).Execute(new UICmd.Browse(), null).Should().BeTrue(),
             testDriverAsync);
     }
 

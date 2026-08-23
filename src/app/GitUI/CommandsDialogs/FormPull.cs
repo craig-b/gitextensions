@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using GitCommands;
 using GitCommands.Config;
 using GitCommands.Git;
+using GitCommands.Pull;
 using GitCommands.Remotes;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility;
@@ -15,6 +16,7 @@ using GitUI.Infrastructure;
 using GitUI.Properties;
 using GitUI.ScriptsEngine;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -123,9 +125,6 @@ public sealed partial class FormPull : GitExtensionsDialog
 
     private List<IGitRef>? _heads;
     private bool _bInternalUpdate;
-
-    [GeneratedRegex(@"Your configuration specifies to .* the ref '.*'[\r]?\nfrom the remote, but no such ref was fetched.", RegexOptions.ExplicitCapture)]
-    private static partial Regex IsRefRemoved { get; }
 
     public bool ErrorOccurred { get; private set; }
 
@@ -303,7 +302,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 return;
             }
 
-            UICommands.StartCommitDialog(this);
+            UICommands.Execute(new UICmd.Commit(), this);
         });
     }
 
@@ -410,7 +409,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if (result == btnCheckout)
             {
-                if (!UICommands.StartCheckoutBranch(owner))
+                if (!UICommands.Execute(new UICmd.CheckoutBranch(), owner))
                 {
                     return DialogResult.Cancel;
                 }
@@ -458,7 +457,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 {
                     if (!InitModules())
                     {
-                        UICommands.UpdateSubmodules(owner);
+                        UICommands.Execute(new UICmd.UpdateSubmodules(), owner);
                     }
                 }
                 else
@@ -530,7 +529,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 // indeterminate, ask the user what they'd like to do.
                 if (AppSettings.UpdateSubmodulesOnCheckout ?? AppSettings.DontConfirmUpdateSubmodulesOnCheckout ?? AskIfSubmodulesShouldBeInitialized())
                 {
-                    UICommands.StartUpdateSubmodulesDialog(this);
+                    UICommands.Execute(new UICmd.UpdateSubmodulesDialog(), this);
                 }
 
                 return true;
@@ -558,7 +557,7 @@ public sealed partial class FormPull : GitExtensionsDialog
             // Rebase failed -> special 'rebase' merge conflict
             if (Rebase.Checked && Module.InTheMiddleOfRebase())
             {
-                return UICommands.StartTheContinueRebaseDialog(owner);
+                return UICommands.Execute(new UICmd.ContinueRebase(), owner);
             }
             else if (Module.InTheMiddleOfAction())
             {
@@ -601,7 +600,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if ((bool)messageBoxResult)
             {
-                UICommands.StashPop(owner);
+                UICommands.Execute(new UICmd.StashPop(), owner);
             }
         }
 
@@ -668,7 +667,7 @@ public sealed partial class FormPull : GitExtensionsDialog
         if (!Fetch.Checked && AutoStash.Checked && !Module.IsBareRepository() &&
             Module.GitStatus(UntrackedFilesMode.No, IgnoreSubmodulesMode.All).Count > 0)
         {
-            UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInAutoStash);
+            UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInAutoStash), owner);
             return true;
         }
 
@@ -707,7 +706,7 @@ public sealed partial class FormPull : GitExtensionsDialog
             }
 
             // auto pull only if current branch was rejected
-            if (IsRefRemoved.IsMatch(form.GetOutputString()))
+            if (PullRejectionAnalyzer.IsRefRemoved(form.GetOutputString()))
             {
                 TaskDialogPage page = new()
                 {
@@ -724,8 +723,7 @@ public sealed partial class FormPull : GitExtensionsDialog
                 if (result == TaskDialogButton.Yes)
                 {
                     string remote = _NO_TRANSLATE_Remotes.Text;
-                    string pruneCmd = "remote prune " + remote;
-                    using FormRemoteProcess formPrune = new(UICommands, pruneCmd)
+                    using FormRemoteProcess formPrune = new(UICommands, Commands.RemotePrune(remote))
                     {
                         Remote = remote,
                         Text = string.Format(_pruneFromCaption.Text, remote)
@@ -740,41 +738,21 @@ public sealed partial class FormPull : GitExtensionsDialog
 
     private bool CalculateLocalBranch(string remote, out string? curLocalBranch, out string? curRemoteBranch)
     {
-        if (IsPullAll())
-        {
-            curLocalBranch = null;
-            curRemoteBranch = null;
-            return true;
-        }
+        string configuredBranchRemote = Module.GetSetting(string.Format(SettingKeyString.BranchRemote, localBranch.Text));
+        PullRefspec refspec = PullPreflight.ResolveRefspec(
+            IsPullAll(),
+            _branch,
+            DetachedHeadParser.IsDetachedHead(_branch),
+            localBranch.Text,
+            Branches.Text,
+            remote,
+            configuredBranchRemote,
+            Fetch.Checked);
 
-        curRemoteBranch = Branches.Text;
+        curLocalBranch = refspec.LocalBranch;
+        curRemoteBranch = refspec.RemoteBranch;
 
-        if (DetachedHeadParser.IsDetachedHead(_branch))
-        {
-            curLocalBranch = null;
-            return true;
-        }
-
-        Lazy<string> currentBranchRemote = new(() => Module.GetSetting(string.Format(SettingKeyString.BranchRemote, localBranch.Text)));
-
-        if (_branch == localBranch.Text)
-        {
-            if (remote == currentBranchRemote.Value || string.IsNullOrEmpty(currentBranchRemote.Value))
-            {
-                curLocalBranch = string.IsNullOrEmpty(Branches.Text) ? null : _branch;
-            }
-            else
-            {
-                curLocalBranch = localBranch.Text;
-            }
-        }
-        else
-        {
-            curLocalBranch = localBranch.Text;
-        }
-
-        if (string.IsNullOrEmpty(Branches.Text) && !string.IsNullOrEmpty(curLocalBranch)
-            && remote != currentBranchRemote.Value && !Fetch.Checked)
+        if (refspec.Prompt is PullRefspecPrompt.ConfirmPullFromDerivedBranch)
         {
             TaskDialogPage page = new()
             {
@@ -798,23 +776,15 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if (result == btnPullFrom)
             {
-                curRemoteBranch = curLocalBranch;
+                curRemoteBranch = refspec.AcceptPrompt().RemoteBranch;
                 return true;
             }
 
             return false;
         }
 
-        if (string.IsNullOrEmpty(Branches.Text) && !string.IsNullOrEmpty(curLocalBranch) && Fetch.Checked)
+        if (refspec.Prompt is PullRefspecPrompt.ConfirmFetchFromDerivedBranch)
         {
-            // if local branch eq to current branch and remote branch is not specified
-            // then run fetch with no refspec
-            if (_branch == curLocalBranch)
-            {
-                curLocalBranch = null;
-                return true;
-            }
-
             TaskDialogPage page = new()
             {
                 Text = string.Format(_noRemoteBranchForFetchMainInstruction.Text, remote),
@@ -837,7 +807,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
             if (result == btnPullFrom)
             {
-                curRemoteBranch = curLocalBranch;
+                curRemoteBranch = refspec.AcceptPrompt().RemoteBranch;
                 return true;
             }
         }
@@ -952,7 +922,7 @@ public sealed partial class FormPull : GitExtensionsDialog
 
     private void StashClick(object sender, EventArgs e)
     {
-        UICommands.StartStashDialog(this);
+        UICommands.Execute(new UICmd.Stash(), this);
     }
 
     private void PullFromRemoteCheckedChanged(object sender, EventArgs e)
@@ -1009,12 +979,12 @@ public sealed partial class FormPull : GitExtensionsDialog
     {
         if (IsPullAll())
         {
-            UICommands.StartRemotesDialog(this);
+            UICommands.Execute(new UICmd.Remotes(), this);
         }
         else
         {
             string selectedRemote = _NO_TRANSLATE_Remotes.Text;
-            UICommands.StartRemotesDialog(this, selectedRemote);
+            UICommands.Execute(new UICmd.Remotes(selectedRemote), this);
         }
 
         _bInternalUpdate = true;

@@ -8,6 +8,7 @@ using GitUI.Infrastructure;
 using GitUI.ScriptsEngine;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -147,7 +148,7 @@ public sealed partial class FormDeleteRemoteBranch : GitExtensionsDialog
                 ScriptsRunner.RunEventScripts(ScriptEvent.AfterPush, this);
                 if (DeleteLocalTrackingBranch.Checked)
                 {
-                    UICommands.StartDeleteBranchDialog(this, GetTrackingReferenceOfRemoteRefs(selectedBranches));
+                    UICommands.Execute(new UICmd.DeleteBranches([.. GetTrackingReferenceOfRemoteRefs(selectedBranches)]), this);
                 }
             }
         }

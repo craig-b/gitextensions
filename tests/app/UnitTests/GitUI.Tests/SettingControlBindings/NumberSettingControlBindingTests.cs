@@ -16,8 +16,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         textBox.Text = string.Empty;
@@ -31,8 +30,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -48,8 +46,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -64,8 +61,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -82,8 +78,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns(storedValue.ToString());
@@ -99,8 +94,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         textBox.Text = value.ToString();
@@ -115,8 +109,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        SettingControlBindingsProvider.CreateControlBinding(setting);
+        SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
 
         textBox.Text = invalidText;
 
@@ -130,8 +123,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         textBox.Text = invalidText;
@@ -146,8 +138,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new() { BackColor = Color.Red, ForeColor = Color.WhiteSmoke };
-        setting.CustomControl = textBox;
-        SettingControlBindingsProvider.CreateControlBinding(setting);
+        SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
 
         textBox.Text = value.ToString();
 
@@ -161,8 +152,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new() { BackColor = Color.Red, ForeColor = Color.WhiteSmoke };
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns(DefaultValue.ToString());
@@ -179,8 +169,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using TextBox textBox = new();
-        setting.CustomControl = textBox;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, textBox);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
 
@@ -195,8 +184,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -212,8 +200,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -230,8 +217,7 @@ public sealed class NumberSettingControlBindingTests
         const int StoredValue = 99;
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns(StoredValue.ToString());
@@ -246,8 +232,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
 
         numericUpDown.ResetText();
@@ -261,8 +246,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         settingsSource.GetValue(SettingName).Returns((string?)null);
@@ -279,8 +263,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(SettingLevel.Effective);
         // Store a different value so the effective-level comparison does not skip the write.
@@ -299,8 +282,7 @@ public sealed class NumberSettingControlBindingTests
     {
         NumberSetting<int> setting = new(SettingName, defaultValue: DefaultValue);
         using NumericUpDown numericUpDown = new() { Minimum = 0, Maximum = int.MaxValue };
-        setting.CustomControl = numericUpDown;
-        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting);
+        ISettingControlBinding binding = SettingControlBindingsProvider.CreateControlBinding(setting, numericUpDown);
         SettingsSource settingsSource = Substitute.For<SettingsSource>();
         settingsSource.SettingLevel.Returns(settingLevel);
         settingsSource.GetValue(SettingName).Returns((string?)null);

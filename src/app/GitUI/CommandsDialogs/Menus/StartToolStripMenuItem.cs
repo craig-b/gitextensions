@@ -4,6 +4,7 @@ using GitExtUtils;
 using GitUI.CommandsDialogs.BrowseDialog;
 using ResourceManager;
 using ResourceManager.Hotkey;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs.Menus;
 
@@ -55,7 +56,7 @@ internal partial class StartToolStripMenuItem : ToolStripMenuItemEx
 
     private void CloneToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartCloneDialog(OwnerForm, string.Empty, false, GitModuleChanged);
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.Clone(string.Empty), OwnerForm, (_, args) => GitModuleChanged?.Invoke(this, args));
     }
 
     private void ExitToolStripMenuItemClick(object sender, EventArgs e)
@@ -65,16 +66,12 @@ internal partial class StartToolStripMenuItem : ToolStripMenuItemEx
 
     private void InitNewRepositoryToolStripMenuItemClick(object sender, EventArgs e)
     {
-        UICommands.StartInitializeDialog(OwnerForm, gitModuleChanged: GitModuleChanged);
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.InitializeRepository(), OwnerForm, (_, args) => GitModuleChanged?.Invoke(this, args));
     }
 
     private void OpenToolStripMenuItemClick(object sender, EventArgs e)
     {
-        IGitModule? module = FormOpenDirectory.OpenModule(OwnerForm!, UICommands.GetRequiredService<IGitExecutorProvider>(), UICommands.Module);
-        if (module is not null)
-        {
-            GitModuleChanged?.Invoke(OwnerForm, new GitModuleEventArgs(module));
-        }
+        UICommands.ExecuteWithRepositoryAcquired(new UICmd.OpenRepository(), OwnerForm, (_, args) => GitModuleChanged?.Invoke(OwnerForm, args));
     }
 
     private void repositoryHistoryUIService_GitModuleChanged(object? sender, GitModuleEventArgs e)

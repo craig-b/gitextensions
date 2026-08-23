@@ -7,6 +7,7 @@ using GitExtUtils;
 using GitUI;
 using GitUI.CommandsDialogs;
 using NSubstitute;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.UITests.CommandsDialogs;
 
@@ -105,7 +106,7 @@ public class FormRemotesTests
     {
         AppSettings.AlwaysShowAdvOpt = true;
 
-        IGitBranchNameNormaliser branchNameNormaliser = _commands.GetRequiredService<IGitBranchNameNormaliser>();
+        IGitBranchNameNormaliser branchNameNormaliser = ((IServiceProvider)_commands).GetRequiredService<IGitBranchNameNormaliser>();
         branchNameNormaliser.Normalise("invalid branch prefix/", Arg.Any<GitBranchNameOptions>()).Returns("invalid-branch-prefix/");
 
         RunFormTest(
@@ -138,7 +139,7 @@ public class FormRemotesTests
         UITest.RunForm(
             () =>
             {
-                _commands.StartRemotesDialog(owner: null, preselectRemote: preselectRemote, preselectLocal: preselectLocal);
+                _commands.Execute(new UICmd.Remotes(preselectRemote, preselectLocal), null);
             },
             testDriverAsync);
     }

@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:GitExtensions.Avalonia"
+        x:Class="GitExtensions.Avalonia.CommitWindow"
+        Title="Commit"
+        Width="1250" Height="850">
+    <Grid ColumnDefinitions="380,4,*" RowDefinitions="*,Auto">
+
+        <Grid Grid.Column="0" Grid.Row="0" RowDefinitions="Auto,*,Auto,Auto,*,Auto" Margin="4">
+            <TextBlock Grid.Row="0" Text="Unstaged" FontWeight="Bold" Margin="2,2,2,4" />
+            <TreeView x:Name="UnstagedTree" Grid.Row="1" SelectionMode="Multiple" SelectionChanged="OnUnstagedSelectionChanged">
+                <TreeView.Styles>
+                    <Style Selector="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="True" />
+                    </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="local:StatusNode" ItemsSource="{Binding Children}">
+                        <TextBlock Text="{Binding Text}" />
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="0,6">
+                <Button x:Name="StageButton" Content="Stage ↓" Click="OnStageClick" />
+                <Button x:Name="StageAllButton" Content="Stage all ↓" Click="OnStageAllClick" />
+                <Button x:Name="UnstageButton" Content="Unstage ↑" Click="OnUnstageClick" />
+                <Button x:Name="UnstageAllButton" Content="Unstage all ↑" Click="OnUnstageAllClick" />
+            </StackPanel>
+            <TextBlock Grid.Row="3" Text="Staged" FontWeight="Bold" Margin="2,2,2,4" />
+            <TreeView x:Name="StagedTree" Grid.Row="4" SelectionMode="Multiple" SelectionChanged="OnStagedSelectionChanged">
+                <TreeView.Styles>
+                    <Style Selector="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="True" />
+                    </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="local:StatusNode" ItemsSource="{Binding Children}">
+                        <TextBlock Text="{Binding Text}" />
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+            <TextBlock x:Name="StatusSummary" Grid.Row="5" Margin="2,6,2,2" FontSize="12" Foreground="Gray" />
+        </Grid>
+
+        <GridSplitter Grid.Column="1" Grid.RowSpan="2" Background="#40808080" ResizeDirection="Columns" />
+
+        <Grid Grid.Column="2" Grid.Row="0" RowDefinitions="*,4,220" Margin="4">
+            <DockPanel Grid.Row="0">
+                <ContentControl x:Name="DiffViewBarHost" DockPanel.Dock="Top" />
+                <ScrollViewer x:Name="DiffScroll" HorizontalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Horizontal">
+                        <SelectableTextBlock x:Name="DiffGutter" FontFamily="monospace" FontSize="12.5" Foreground="Gray" Margin="0,0,10,0" />
+                        <SelectableTextBlock x:Name="DiffText" FontFamily="monospace" FontSize="12.5" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+
+            <GridSplitter Grid.Row="1" Background="#40808080" ResizeDirection="Rows" />
+
+            <Grid Grid.Row="2" RowDefinitions="*,Auto">
+                <local:MessageEditor x:Name="MessageBox" Grid.Row="0" Watermark="Commit message" />
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                    <Button x:Name="CommitButton" Content="Commit" FontWeight="Bold" Click="OnCommitClick" />
+                    <ComboBox x:Name="ConventionalPrefixCombo" PlaceholderText="type:" SelectionChanged="OnConventionalPrefixSelected" ToolTip.Tip="Conventional Commits prefix" />
+                    <CheckBox x:Name="AmendCheckBox" Content="Amend last commit" />
+                    <CheckBox x:Name="ResetAuthorCheckBox" Content="Reset author" IsEnabled="{Binding IsChecked, ElementName=AmendCheckBox}" />
+                    <TextBlock x:Name="BranchInfo" VerticalAlignment="Center" FontSize="12" Foreground="Gray" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <TextBlock x:Name="ResultOutput" Grid.Column="2" Grid.Row="1" Margin="8,4" FontFamily="monospace" FontSize="12" Foreground="Gray" />
+    </Grid>
+</Window>

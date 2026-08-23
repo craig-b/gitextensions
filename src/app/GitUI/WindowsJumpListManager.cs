@@ -325,6 +325,10 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
                 // looks like a regression in Windows 10.0.16299 (1709)
                 ex is IOException ||
 
+                // observed under Wine: the taskbar COM interfaces exist but their methods throw
+                // (e.g. ICustomDestinationList.SetAppID) - treat as "jump lists unavailable"
+                ex is NotImplementedException ||
+
                 // observed during integration tests: A valid active Window is needed to update the Taskbar.
                 ex is InvalidOperationException)
         {

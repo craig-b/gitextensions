@@ -28,10 +28,10 @@ public class RefsFormatterTests
     [Test]
     public void RefsNull()
     {
-        _refsFormatter.FormatBranches(branches: null, showAsLinks: true, limit: true)
+        _refsFormatter.FormatBranches(branches: null, showAsLinks: true, limit: true).ToXhtml()
             .Should().Be(string.Empty);
 
-        _refsFormatter.FormatTags(tags: null!, showAsLinks: true, limit: true)
+        _refsFormatter.FormatTags(tags: null!, showAsLinks: true, limit: true).ToXhtml()
             .Should().Be(string.Empty);
     }
 
@@ -40,11 +40,11 @@ public class RefsFormatterTests
     {
         IReadOnlyList<string> refs = new List<string>();
 
-        _refsFormatter.FormatBranches(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInNoBranch);
+        _refsFormatter.FormatBranches(refs, showAsLinks, limit).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInNoBranch);
 
-        _refsFormatter.FormatTags(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInNoTag);
+        _refsFormatter.FormatTags(refs, showAsLinks, limit).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInNoTag);
     }
 
     [Test]
@@ -55,13 +55,13 @@ public class RefsFormatterTests
         IEnumerable<string> formattedBranches = refs.Select(r => FormatRef(r, "branch", showAsLinks));
         IEnumerable<string> formattedTags = refs.Select(r => FormatRef(r, "tag", showAsLinks));
 
-        _refsFormatter.FormatBranches(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInBranches
+        _refsFormatter.FormatBranches(refs, showAsLinks, limit).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInBranches
                          + Environment.NewLine
                          + formattedBranches.Join(Environment.NewLine));
 
-        _refsFormatter.FormatTags(refs, showAsLinks, limit)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInTags
+        _refsFormatter.FormatTags(refs, showAsLinks, limit).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInTags
                          + Environment.NewLine
                          + formattedTags.Join(Environment.NewLine));
     }
@@ -72,14 +72,14 @@ public class RefsFormatterTests
         IEnumerable<string> formattedBranches = _refs.Take(10).Select(r => FormatRef(r, "branch", showAsLinks));
         IEnumerable<string> formattedTags = _refs.Take(10).Select(r => FormatRef(r, "tag", showAsLinks));
 
-        _refsFormatter.FormatBranches(_refs, showAsLinks, limit: true)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInBranches
+        _refsFormatter.FormatBranches(_refs, showAsLinks, limit: true).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInBranches
                          + Environment.NewLine
                          + formattedBranches.Join(Environment.NewLine)
                          + GetShowAllLink("branches"));
 
-        _refsFormatter.FormatTags(_refs, showAsLinks, limit: true)
-            .Should().Be(GitUI.TranslatedStrings.ContainedInTags
+        _refsFormatter.FormatTags(_refs, showAsLinks, limit: true).ToXhtml()
+            .Should().Be(TranslatedStrings.ContainedInTags
                          + Environment.NewLine
                          + formattedTags.Join(Environment.NewLine)
                          + GetShowAllLink("tags"));

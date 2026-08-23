@@ -1,5 +1,6 @@
 using System.Text;
 using BugReporter.Serialization;
+using GitExtensions.Extensibility;
 using GitUI;
 using Microsoft.VisualStudio.Threading;
 
@@ -13,6 +14,13 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // See GitExtensions.Program: AppSettings is platform-neutral and needs the host to supply
+        // these before anything touches it.
+        AppPaths.ProductVersion = Application.ProductVersion;
+        AppPaths.ProductName = Application.ProductName ?? string.Empty;
+        AppPaths.ApplicationExecutablePath = Application.ExecutablePath;
+        AppPaths.GetUserAppDataPath = static () => Application.UserAppDataPath;
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -22,6 +30,12 @@ internal static class Program
             // Store the shared JoinableTaskContext
             ThreadHelper.JoinableTaskContext = new JoinableTaskContext();
         }
+
+        // See GitExtensions.Program: TaskManager is platform-neutral and needs the host to supply this.
+        TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
+
+        // See GitExtensions.Program: engine errors raised outside any UI flow go to a message box.
+        UserNotification.ShowError = static (text, caption) => GitExtensions.Extensibility.MessageBoxes.ShowError(owner: null, text, caption);
 
         // If an error happens before we had a chance to init the environment information
         // the call to GetInformation() from BugReporter.ShowNBug() will fail.

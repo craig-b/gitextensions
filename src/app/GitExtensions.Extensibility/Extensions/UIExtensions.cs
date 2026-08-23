@@ -1,49 +1,14 @@
-using System.Text;
+﻿using System.Text;
 
 namespace GitExtensions.Extensibility.Extensions;
 
+/// <summary>
+///  Platform-neutral text helpers. The WinForms-typed control helpers that shared this class
+///  moved to Extensibility.WinForms' UIWinFormsExtensions (same namespace), clearing the last
+///  Extensibility probe debt.
+/// </summary>
 public static class UIExtensions
 {
-    public static bool? GetNullableChecked(this CheckBox chx)
-    {
-        if (chx.CheckState == CheckState.Indeterminate)
-        {
-            return null;
-        }
-        else
-        {
-            return chx.Checked;
-        }
-    }
-
-    public static void SetNullableChecked(this CheckBox chx, bool? @checked)
-    {
-        if (@checked.HasValue)
-        {
-            chx.CheckState = @checked.Value ? CheckState.Checked : CheckState.Unchecked;
-        }
-        else
-        {
-            chx.CheckState = CheckState.Indeterminate;
-        }
-    }
-
-    public static bool IsFixedWidth(this Font ft, Graphics g)
-    {
-        ReadOnlySpan<char> charSizes = ['i', 'a', 'Z', '%', '#', 'a', 'B', 'l', 'm', ',', '.'];
-        float charWidth = g.MeasureString("I", ft).Width;
-
-        foreach (char c in charSizes)
-        {
-            if (Math.Abs(g.MeasureString(c.ToString(), ft).Width - charWidth) > float.Epsilon)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /// <summary>
     /// bodyOrSubject
     /// Notes:

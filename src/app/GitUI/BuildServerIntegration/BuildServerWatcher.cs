@@ -15,6 +15,7 @@ using GitExtensions.Extensibility.Git;
 using GitExtensions.Extensibility.Settings;
 using GitExtUtils.GitUI;
 using GitUI.CommandsDialogs;
+using GitUI.CommandsDialogs.SettingsDialog;
 using GitUI.CommandsDialogs.SettingsDialog.Pages;
 using GitUI.HelperDialogs;
 using GitUI.UserControls;
@@ -23,6 +24,7 @@ using GitUI.UserControls.RevisionGrid.Columns;
 using GitUIPluginInterfaces;
 using GitUIPluginInterfaces.BuildServerIntegration;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.BuildServerIntegration;
 
@@ -399,7 +401,7 @@ public sealed class BuildServerWatcher : IBuildServerWatcher, IDisposable
                         ThreadHelper.JoinableTaskFactory.Run(async () =>
                             {
                                 await _revisionGrid.SwitchToMainThreadAsync();
-                                _revisionGrid.UICommands.StartSettingsDialog(typeof(BuildServerIntegrationSettingsPage));
+                                _revisionGrid.UICommands.Execute(new UICmd.OpenSettings(new SettingsPageReferenceByType(typeof(BuildServerIntegrationSettingsPage))), null);
                             });
                     },
                     objectId => _revisionGridInfo.GetRevision(objectId) is not null);

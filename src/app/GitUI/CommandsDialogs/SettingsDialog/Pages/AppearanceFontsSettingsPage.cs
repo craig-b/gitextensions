@@ -1,5 +1,6 @@
 ﻿using GitCommands;
 using Microsoft;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages;
 
@@ -19,10 +20,10 @@ public partial class AppearanceFontsSettingsPage : SettingsPageWithHeader
 
     protected override void SettingsToPage()
     {
-        SetCurrentApplicationFont(AppSettings.Font);
-        SetCurrentDiffFont(AppSettings.FixedWidthFont);
-        SetCurrentCommitFont(AppSettings.CommitFont);
-        SetCurrentMonospaceFont(AppSettings.MonospaceFont);
+        SetCurrentApplicationFont(AppFonts.App);
+        SetCurrentDiffFont(AppFonts.FixedWidth);
+        SetCurrentCommitFont(AppFonts.Commit);
+        SetCurrentMonospaceFont(AppFonts.Monospace);
 
         ShowEolMarkerAsGlyph.Checked = AppSettings.ShowEolMarkerAsGlyph;
 
@@ -36,10 +37,10 @@ public partial class AppearanceFontsSettingsPage : SettingsPageWithHeader
         Validates.NotNull(_commitFont);
         Validates.NotNull(_monospaceFont);
 
-        AppSettings.FixedWidthFont = _diffFont;
-        AppSettings.Font = _applicationFont;
-        AppSettings.CommitFont = _commitFont;
-        AppSettings.MonospaceFont = _monospaceFont;
+        AppSettings.FixedWidthFont = _diffFont.ToDescriptor();
+        AppSettings.Font = _applicationFont.ToDescriptor();
+        AppSettings.CommitFont = _commitFont.ToDescriptor();
+        AppSettings.MonospaceFont = _monospaceFont.ToDescriptor();
 
         AppSettings.ShowEolMarkerAsGlyph = ShowEolMarkerAsGlyph.Checked;
 

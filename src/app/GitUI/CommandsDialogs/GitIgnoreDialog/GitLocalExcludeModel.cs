@@ -23,18 +23,12 @@ public class GitLocalExcludeModel : Translate, IGitIgnoreDialogModel
     private readonly TranslationString _saveFileQuestion =
         new("Save changes to .git/info/exclude?");
 
-    private readonly IGitModule _module;
-
     public GitLocalExcludeModel(IGitModule module)
     {
-        _module = module;
-
         Translator.Translate(this, AppSettings.CurrentTranslation);
     }
 
     public string FormCaption => _editLocalExcludeTitle.Text;
-
-    public string ExcludeFile => Path.Join(_module.ResolveGitInternalPath("info"), "exclude");
 
     public string FileOnlyInWorkingDirSupported => _localExcludeOnlyInWorkingDirSupported.Text;
 

@@ -6,6 +6,13 @@ namespace ResourceManager;
 
 internal sealed class GitExtensionsControlInitialiser
 {
+    static GitExtensionsControlInitialiser()
+    {
+        // Every WinForms control/form translation runs through this initialiser, so this is the
+        // choke point for installing the WinForms special cases of the translation walk (M7).
+        GitExtensions.Extensibility.WinForms.Translations.WinFormsTranslationSpecialCases.Install();
+    }
+
     private static bool? _isDesignMode;
     private readonly ITranslate _translate = null!;
 
@@ -67,7 +74,7 @@ internal sealed class GitExtensionsControlInitialiser
 
         _initialiseCompleteCalled = true;
 
-        ((Control)_translate).Font = AppSettings.Font;
+        ((Control)_translate).Font = AppFonts.App;
         Translator.Translate(_translate, AppSettings.CurrentTranslation);
     }
 

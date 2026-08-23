@@ -1,9 +1,11 @@
 using GitCommands;
+using GitCommands.Branch;
 using GitCommands.Git;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.CommandsDialogs;
 
@@ -19,7 +21,7 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
 
     private readonly IEnumerable<string> _defaultBranches;
     private string? _currentBranch;
-    private HashSet<string>? _mergedBranches;
+    private IReadOnlySet<string>? _mergedBranches;
 
     public FormDeleteBranch(IGitUICommands commands, IEnumerable<string> defaultBranches)
         : base(commands, enablePositionRestore: false)
@@ -45,18 +47,9 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
         }
         else
         {
-            _mergedBranches = [];
-            foreach (string branch in Module.GetMergedBranches())
-            {
-                if (branch.StartsWith("* "))
-                {
-                    _currentBranch = branch.Trim('*', ' ');
-                }
-                else
-                {
-                    _mergedBranches.Add(branch.Trim());
-                }
-            }
+            MergedBranchScan scan = MergedBranchScan.Parse(Module.GetMergedBranches());
+            _currentBranch = scan.CurrentBranch;
+            _mergedBranches = scan.MergedBranches;
         }
 
         if (_defaultBranches is not null)
@@ -91,9 +84,8 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
         {
             Validates.NotNull(_mergedBranches);
 
-            // always treat branches as unmerged if there is no current branch (HEAD is detached)
-            bool hasUnmergedBranches = _currentBranch is null || DetachedHeadParser.IsDetachedHead(_currentBranch)
-                || selectedBranches.Any(branch => !_mergedBranches.Contains(branch.Name));
+            bool hasUnmergedBranches = DeleteBranchPreflight.ShouldConfirmUnmerged(
+                dontConfirmSetting: false, _currentBranch, selectedBranches, _mergedBranches);
             if (hasUnmergedBranches)
             {
                 TaskDialogPage page = new()
@@ -116,7 +108,7 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
         }
 
         IGitCommand cmd = Commands.DeleteBranch(selectedBranches, force: true);
-        bool success = UICommands.StartCommandLineProcessDialog(Owner, cmd);
+        bool success = UICommands.Execute(new UICmd.GitCommandLineProcess(cmd), Owner);
         if (success)
         {
             Close();
@@ -153,7 +145,7 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
         // so they no longer block branch deletion.
         if (classification.HasDeletedWorktrees)
         {
-            UICommands.StartCommandLineProcessDialog(Owner, command: null, "worktree prune");
+            UICommands.Execute(new UICmd.CommandLineProcess(Command: null, "worktree prune"), Owner);
         }
 
         HashSet<string> excludedBranches = [];
@@ -210,7 +202,7 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
 
                 if (anyDeleted)
                 {
-                    UICommands.StartCommandLineProcessDialog(Owner, command: null, "worktree prune");
+                    UICommands.Execute(new UICmd.CommandLineProcess(Command: null, "worktree prune"), Owner);
                 }
             }
             else
@@ -236,58 +228,5 @@ public sealed partial class FormDeleteBranch : GitExtensionsDialog
         IReadOnlyList<IGitRef> selectedBranches,
         IReadOnlyList<GitWorktree> worktrees,
         string currentWorkingDir)
-    {
-        bool hasDeletedWorktrees = false;
-        List<(IGitRef Branch, GitWorktree Worktree)> mainWorktreeBranches = [];
-        List<(IGitRef Branch, GitWorktree Worktree)> linkedWorktreeBranches = [];
-
-        for (int i = 0; i < worktrees.Count; i++)
-        {
-            GitWorktree worktree = worktrees[i];
-            if (worktree.Branch is null)
-            {
-                continue;
-            }
-
-            if (worktree.IsDeleted)
-            {
-                if (selectedBranches.Any(b => b.Name == worktree.Branch))
-                {
-                    hasDeletedWorktrees = true;
-                }
-
-                continue;
-            }
-
-            string worktreeDir = Path.GetFullPath(worktree.Path).TrimEnd(Path.DirectorySeparatorChar);
-            if (string.Equals(worktreeDir, currentWorkingDir, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (IGitRef branch in selectedBranches)
-            {
-                if (branch.Name == worktree.Branch)
-                {
-                    if (i == 0)
-                    {
-                        mainWorktreeBranches.Add((branch, worktree));
-                    }
-                    else
-                    {
-                        linkedWorktreeBranches.Add((branch, worktree));
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        return new(hasDeletedWorktrees, mainWorktreeBranches, linkedWorktreeBranches);
-    }
-
-    internal readonly record struct WorktreeBranchClassification(
-        bool HasDeletedWorktrees,
-        IReadOnlyList<(IGitRef Branch, GitWorktree Worktree)> MainWorktreeBranches,
-        IReadOnlyList<(IGitRef Branch, GitWorktree Worktree)> LinkedWorktreeBranches);
+        => WorktreeBranchClassification.Classify(selectedBranches, worktrees, currentWorkingDir);
 }

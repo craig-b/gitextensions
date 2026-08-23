@@ -90,31 +90,6 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
                     return;
                 }
 
-                // Default items include:
-                //  1. filter
-                //  2. separator
-                //  3. favourite items
-                //      ... recent items
-                //  4. "Open repo..."
-                //  5. "Close repo..."
-                //  6. separator
-                //  7. "Configure menu"
-                const int defaultItemCount = 7;
-                if (button.DropDown.Items.Count <= defaultItemCount)
-                {
-                    return;
-                }
-
-                if (string.IsNullOrWhiteSpace(filterTextbox.Text))
-                {
-                    foreach (ToolStripItem item in button.DropDown.Items)
-                    {
-                        item.Visible = true;
-                    }
-
-                    return;
-                }
-
                 foreach (ToolStripItem item in button.DropDown.Items)
                 {
                     if (item is ToolStripSeparator || item.Tag == _excludeFromFilterMarker)
@@ -122,7 +97,7 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
                         continue;
                     }
 
-                    item.Visible = item.Text?.Contains(filterTextbox.Text, StringComparison.CurrentCultureIgnoreCase) is true;
+                    item.Visible = MenuFilter.IsVisible(item.Text, filterTextbox.Text);
                 }
             };
 
@@ -230,25 +205,20 @@ internal sealed class WorkingDirectoryToolStripSplitButton : ToolStripSplitButto
                 return;
             }
 
+            // Rendering the caption only READS the history - promoting the repository in the MRU
+            // is an explicit step of the repository switch (FormBrowse), not a side effect here.
             IList<Repository> recentRepositoryHistory = ThreadHelper.JoinableTaskFactory.Run(
-                () => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(path));
+                RepositoryHistoryManager.Locals.LoadRecentHistoryAsync);
 
-            List<RecentRepoInfo> pinnedRepos = [];
-            using Graphics graphics = graphicsForm.CreateGraphics();
-            RecentRepoSplitter splitter = new()
-            {
-                MeasureFont = button.Font,
-            };
-
-            splitter.SplitRecentRepos(recentRepositoryHistory, pinnedRepos, pinnedRepos);
-
-            RecentRepoInfo? ri = pinnedRepos.Find(e => e.Repo.Path.Equals(path, StringComparison.InvariantCultureIgnoreCase));
-
-            button.Text = PathUtil.GetDisplayPath(ri?.Caption ?? path);
+            button.Text = WorkingDirCaption.Compute(
+                path,
+                recentRepositoryHistory,
+                RecentRepoSplitterOptions.FromAppSettings(caption => TextRenderer.MeasureText(caption, button.Font).Width));
 
             if (AppSettings.RecentReposComboMinWidth > 0)
             {
                 button.AutoSize = false;
+                using Graphics graphics = graphicsForm.CreateGraphics();
                 float captionWidth = graphics.MeasureString(button.Text, button.Font).Width;
                 captionWidth = captionWidth + button.DropDownButtonWidth + 5;
                 button.Width = Math.Max(AppSettings.RecentReposComboMinWidth, (int)captionWidth);

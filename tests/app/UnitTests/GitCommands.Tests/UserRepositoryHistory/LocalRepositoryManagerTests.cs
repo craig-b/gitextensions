@@ -36,7 +36,11 @@ public class LocalRepositoryManagerTests
     [Test]
     public async Task AddAsMostRecentAsync_should_add_new_path_as_top_entry()
     {
-        const string repoToAdd = "path to add\\";
+        // AddAsMostRecentAsync normalises the incoming path with ToNativePath().EnsureTrailingPathSeparator();
+        // a hardcoded trailing '\' is only already in that normalised form on Windows (where '\'
+        // is the native separator), so the seeded history entry below wouldn't be recognised as
+        // the same path off Windows. Path.DirectorySeparatorChar keeps it idempotent on every OS.
+        string repoToAdd = $"path to add{Path.DirectorySeparatorChar}";
         List<Repository> history =
         [
             new Repository("path1\\"),
@@ -55,7 +59,11 @@ public class LocalRepositoryManagerTests
     [Test]
     public async Task AddAsMostRecentAsync_should_move_existing_path_as_top_entry()
     {
-        const string repoToAdd = "path to add\\";
+        // AddAsMostRecentAsync normalises the incoming path with ToNativePath().EnsureTrailingPathSeparator();
+        // a hardcoded trailing '\' is only already in that normalised form on Windows (where '\'
+        // is the native separator), so the seeded history entry below wouldn't be recognised as
+        // the same path off Windows. Path.DirectorySeparatorChar keeps it idempotent on every OS.
+        string repoToAdd = $"path to add{Path.DirectorySeparatorChar}";
         List<Repository> history =
         [
             new Repository("path1\\"),
@@ -75,7 +83,11 @@ public class LocalRepositoryManagerTests
     [Test]
     public async Task AddAsMostRecentAsync_should_move_only_first_existing_path_as_top_entry()
     {
-        const string repoToAdd = "path to add\\";
+        // AddAsMostRecentAsync normalises the incoming path with ToNativePath().EnsureTrailingPathSeparator();
+        // a hardcoded trailing '\' is only already in that normalised form on Windows (where '\'
+        // is the native separator), so the seeded history entry below wouldn't be recognised as
+        // the same path off Windows. Path.DirectorySeparatorChar keeps it idempotent on every OS.
+        string repoToAdd = $"path to add{Path.DirectorySeparatorChar}";
         List<Repository> history =
         [
             new Repository("path1\\"),
@@ -97,7 +109,11 @@ public class LocalRepositoryManagerTests
     [Test]
     public async Task AddAsMostRecentAsync_should_not_move_if_path_already_as_top_entry()
     {
-        const string repoToAdd = "path to add\\";
+        // AddAsMostRecentAsync normalises the incoming path with ToNativePath().EnsureTrailingPathSeparator();
+        // a hardcoded trailing '\' is only already in that normalised form on Windows (where '\'
+        // is the native separator), so the seeded history entry below wouldn't be recognised as
+        // the same path off Windows. Path.DirectorySeparatorChar keeps it idempotent on every OS.
+        string repoToAdd = $"path to add{Path.DirectorySeparatorChar}";
         List<Repository> history =
         [
             new Repository(repoToAdd),

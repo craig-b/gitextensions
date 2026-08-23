@@ -1,7 +1,9 @@
 ﻿using GitCommands;
+using GitCommands.LeftPanel;
 using GitUI.UserControls.RevisionGrid;
 using GitUIPluginInterfaces;
 using Microsoft.VisualStudio.Threading;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -35,12 +37,12 @@ internal sealed class StashTree : BaseRevisionTree
         Nodes nodes = new(this);
         Dictionary<string, BaseRevisionNode> pathToNodes = [];
 
-        foreach (GitRevision stash in stashes)
+        foreach (StashTreeNode stash in StashTreeBuilder.Build(stashes))
         {
             token.ThrowIfCancellationRequested();
 
             // Visibility is set after the grid is loaded
-            StashNode node = new(this, stash.ObjectId, stash.ReflogSelector!, stash.Subject, visible: false);
+            StashNode node = new(this, stash, visible: false);
             Node? parent = node.CreateRootNode(pathToNodes, (tree, parentPath) => new BasePathNode(tree, parentPath));
 
             if (parent is not null)
@@ -62,16 +64,16 @@ internal sealed class StashTree : BaseRevisionTree
 
     public void StashAll(IWin32Window owner)
     {
-        UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInManualStash);
+        UICommands.Execute(new UICmd.StashSave(AppSettings.IncludeUntrackedFilesInManualStash), owner);
     }
 
     public void StashStaged(IWin32Window owner)
     {
-        UICommands.StashStaged(owner);
+        UICommands.Execute(new UICmd.StashStaged(), owner);
     }
 
     public void OpenStash(IWin32Window owner)
     {
-        UICommands.StartStashDialog(owner, manageStashes: true);
+        UICommands.Execute(new UICmd.Stash(true), owner);
     }
 }

@@ -25,7 +25,7 @@ public sealed class ExecutableExtensionsTests
         string userAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         string settingPath = Path.Combine(userAppDataPath, "GitExtensions\\GitExtensions\\GitExtensions.settings");
         DistributedSettings settingContainer = new(lowerPriority: null, GitExtSettingsCache.FromCache(settingPath), SettingLevel.Unknown);
-        _appPath = settingContainer.GetString("gitcommand", "git.exe");
+        _appPath = settingContainer.GetString("gitcommand", OperatingSystem.IsWindows() ? "git.exe" : "git");
 
         // Execute process in GitExtension working directory, so that git will return success exit-code
         // git always return non-zero exit code when run git reset outside of git repository
@@ -114,6 +114,11 @@ public sealed class ExecutableExtensionsTests
         });
     }
 
+    // short.MaxValue (~32767 chars) is Windows' actual CreateProcess command-line length limit;
+    // Win32Exception is the real OS rejection, not a value the product chooses. Linux's ARG_MAX
+    // is far larger, so a command line this size launches fine there - this is a genuinely
+    // Windows-semantic OS behaviour, not a portable expectation to translate.
+    [Platform(Include = "Win")]
     [TestCase(32766 - 8, 32766 - 8, int.MaxValue)]
     [TestCase(32766 - 9, 1, int.MaxValue)]
     public void RunBatchCommand_throw_when_cmd_exceed_max_length(int arg1Len, int arg2Len,

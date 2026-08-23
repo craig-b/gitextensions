@@ -8,7 +8,7 @@ internal partial class OutputHistoryControl : GitExtensionsControl
     internal OutputHistoryControl()
     {
         InitializeComponent();
-        TextBox.Font = AppSettings.FixedWidthFont;
+        TextBox.Font = AppFonts.FixedWidth;
         InitializeComplete();
     }
 }

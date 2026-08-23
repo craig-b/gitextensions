@@ -6,6 +6,7 @@ using GitExtUtils;
 using GitExtUtils.GitUI;
 using GitUI;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitExtensions.Plugins.FindLargeFiles;
 
@@ -220,7 +221,7 @@ public sealed partial class FindLargeFilesForm : GitExtensionsFormBase
     {
         if (MessageBoxes.Show(this, _areYouSureToDelete.Text, _deleteCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
         {
-            _commands.StartBatchFileProcessDialog(GenerateCommand(_gitObjects));
+            _commands.Execute(new UICmd.BatchFileProcess(GenerateCommand(_gitObjects)), null);
         }
 
         Close();

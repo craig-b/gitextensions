@@ -106,7 +106,7 @@ public sealed partial class FormSettings : GitModuleForm, ISettingsPageHost
 
         settingsTreeView.SuspendLayout();
 
-        IServiceProvider serviceProvider = UICommands;
+        IServiceProvider serviceProvider = (IServiceProvider)UICommands;
 
         ChecklistSettingsPage checklistSettingsPage = SettingsPageBase.Create<ChecklistSettingsPage>(this, serviceProvider);
 
@@ -170,7 +170,7 @@ public sealed partial class FormSettings : GitModuleForm, ISettingsPageHost
         {
             IOrderedEnumerable<(IGitPlugin plugin, PluginSettingsPage page)> pluginEntries = PluginRegistry.Plugins
                 .Where(p => p.HasSettings)
-                .Select(plugin => (Plugin: plugin, Page: PluginSettingsPage.CreateSettingsPageFromPlugin(this, plugin, UICommands)))
+                .Select(plugin => (Plugin: plugin, Page: PluginSettingsPage.CreateSettingsPageFromPlugin(this, plugin, (IServiceProvider)UICommands)))
                 .OrderBy(entry => entry.Page.GetTitle(), StringComparer.CurrentCultureIgnoreCase);
 
             foreach ((IGitPlugin plugin, PluginSettingsPage page) entry in pluginEntries)

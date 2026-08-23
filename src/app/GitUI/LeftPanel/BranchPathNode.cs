@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -18,12 +19,12 @@ internal sealed class BranchPathNode : BasePathNode
     public void DeleteAll()
     {
         IEnumerable<string> branches = Nodes.DepthEnumerator<LocalBranchNode>().Select(branch => branch.FullPath);
-        UICommands.StartDeleteBranchDialog(ParentWindow(), branches);
+        UICommands.Execute(new UICmd.DeleteBranches([.. branches]), ParentWindow());
     }
 
     public void CreateBranch()
     {
         string newBranchNamePrefix = FullPath + PathSeparator;
-        UICommands.StartCreateBranchDialog(ParentWindow(), objectId: default, newBranchNamePrefix);
+        UICommands.Execute(new UICmd.CreateBranch(ObjectId: default, newBranchNamePrefix), ParentWindow());
     }
 }

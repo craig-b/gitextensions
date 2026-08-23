@@ -28,12 +28,14 @@ public class Theme : IThemeSerializationData
     public ThemeId Id { get; }
 
     /// <summary>
-    /// Get the Windows SystemColorMode for this theme, based on the background color.
+    /// Whether this theme is a dark theme, judged by the luminosity of its panel background.
     /// </summary>
-    public SystemColorMode SystemColorMode
-        => new HslColor(GetColor(AppColor.PanelBackground)).L < 0.5
-            ? SystemColorMode.Dark
-            : SystemColorMode.Classic;
+    /// <remarks>
+    /// Deliberately a bool rather than the WinForms <c>SystemColorMode</c> enum this used to return:
+    /// the decision is platform-neutral, only the enum is not. <c>ThemeWinFormsExtensions</c> maps it.
+    /// </remarks>
+    public bool IsDark
+        => new HslColor(GetColor(AppColor.PanelBackground)).L < 0.5;
 
     /// <summary>
     /// Get GitExtensions app-specific color value as defined by this instance. If not defined,

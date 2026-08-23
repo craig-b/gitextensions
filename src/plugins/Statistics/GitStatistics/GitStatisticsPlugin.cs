@@ -43,14 +43,16 @@ public class GitStatisticsPlugin : GitPluginBase, IGitPluginForRepository
 
         bool countSubmodule = !_ignoreSubmodules.ValueOrDefault(Settings);
 
-        FormGitStatistics formStatistics = new(args.GitUICommands.GetRequiredService<IGitExecutorProvider>(), args.GitModule, _codeFiles.ValueOrDefault(Settings), countSubmodule)
+        // TODO(M3): the plugin contract no longer exposes the container; this cast works only
+        // in-process against the WinForms host and should become a typed API when one exists.
+        FormGitStatistics formStatistics = new(((IServiceProvider)args.GitUICommands).GetRequiredService<IGitExecutorProvider>(), args.GitModule, _codeFiles.ValueOrDefault(Settings), countSubmodule)
         {
             DirectoriesToIgnore = _ignoreDirectories.ValueOrDefault(Settings).Replace("/", "\\")
         };
 
         using (formStatistics)
         {
-            formStatistics.ShowDialog(args.OwnerForm);
+            formStatistics.ShowDialog(args.OwnerForm as IWin32Window);
         }
 
         return false;

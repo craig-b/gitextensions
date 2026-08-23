@@ -6,7 +6,7 @@ public class GitUIEventArgs : CancelEventArgs
 {
     private readonly IFilteredGitRefsProvider _getRefs;
 
-    public GitUIEventArgs(IWin32Window? ownerForm, IGitUICommands gitUICommands, Lazy<IReadOnlyList<IGitRef>>? getRefs = null)
+    public GitUIEventArgs(object? ownerForm, IGitUICommands gitUICommands, Lazy<IReadOnlyList<IGitRef>>? getRefs = null)
         : base(cancel: false)
     {
         OwnerForm = ownerForm;
@@ -23,7 +23,10 @@ public class GitUIEventArgs : CancelEventArgs
 
     public IGitUICommands GitUICommands { get; }
 
-    public IWin32Window? OwnerForm { get; }
+    /// <summary>
+    ///  The host-specific owner window for dialogs raised by this event (an <c>IWin32Window</c> in the WinForms host).
+    /// </summary>
+    public object? OwnerForm { get; }
 
     public IGitModule GitModule => GitUICommands.Module;
 

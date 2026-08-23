@@ -102,7 +102,9 @@ public class GitExtensionsFormBase : Form, ITranslate
             return [];
         }
 
-        return commands.GetRequiredService<IHotkeySettingsLoader>().LoadHotkeys(hotkeySettingsName);
+        // Host-side service access: the public contract no longer exposes IServiceProvider (M3.3),
+        // but the host implementation still does.
+        return ((IServiceProvider)commands).GetRequiredService<IHotkeySettingsLoader>().LoadHotkeys(hotkeySettingsName);
     }
 
     /// <summary>Overridden: Checks if a hotkey wants to handle the key before letting the message propagate</summary>

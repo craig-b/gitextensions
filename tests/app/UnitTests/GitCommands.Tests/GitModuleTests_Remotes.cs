@@ -137,9 +137,25 @@ partial class GitModuleTests
             remotes[3].PushUrls[0].Should().Be("https://github.com/gitextensions/push.git");
 
             remotes[4].Name.Should().Be("with-space");
-            remotes[4].FetchUrl.Should().Be("c:/Bare Repo");
             remotes[4].PushUrls.Count.Should().Be(1);
-            remotes[4].PushUrls[0].Should().Be("c:/Bare Repo");
+
+            // "c:\Bare Repo" is a Windows drive-letter local-file remote URL, as `git remote -v`
+            // would literally report it on Windows. GitModule.GetRemotesAsync runs it through
+            // GetWindowsPath(...).ToPosixPath(), both of which key off the NATIVE separator: on
+            // Windows that's '\', so ToPosixPath converts it to "c:/Bare Repo"; off Windows the
+            // native separator already is '/', so neither call touches the embedded '\' and the
+            // literal Windows-shaped string survives unchanged. Both are the correct,
+            // deterministic result for their own platform.
+            if (OperatingSystem.IsWindows())
+            {
+                remotes[4].FetchUrl.Should().Be("c:/Bare Repo");
+                remotes[4].PushUrls[0].Should().Be("c:/Bare Repo");
+            }
+            else
+            {
+                remotes[4].FetchUrl.Should().Be(@"c:\Bare Repo");
+                remotes[4].PushUrls[0].Should().Be(@"c:\Bare Repo");
+            }
 
             remotes[5].Name.Should().Be("multi");
             remotes[5].FetchUrl.Should().Be("git@github.com:drewnoakes/gitextensions.git");

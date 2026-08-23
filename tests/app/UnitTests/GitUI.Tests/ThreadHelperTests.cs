@@ -164,9 +164,17 @@ public sealed class ThreadHelperTests
 
     private sealed class ThreadExceptionHelper : IDisposable
     {
+        private readonly Action<Exception> _originalReporter;
+
         public ThreadExceptionHelper()
         {
             Application.ThreadException += HandleThreadException;
+
+            // Mirror the host wiring (GitExtensions/Program.cs): the platform-neutral TaskManager
+            // reports through this seam, and only the WinForms host routes it on to
+            // Application.OnThreadException - tests must install that route themselves.
+            _originalReporter = TaskManager.UnhandledExceptionReporter;
+            TaskManager.UnhandledExceptionReporter = Application.OnThreadException;
         }
 
         public Exception Exception { get; private set; } = null!;
@@ -176,6 +184,7 @@ public sealed class ThreadHelperTests
 
         public void Dispose()
         {
+            TaskManager.UnhandledExceptionReporter = _originalReporter;
             Application.ThreadException -= HandleThreadException;
         }
 

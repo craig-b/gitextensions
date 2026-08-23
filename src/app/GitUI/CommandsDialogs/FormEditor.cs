@@ -17,7 +17,7 @@ public sealed partial class FormEditor : GitModuleForm
 
     private bool _hasChanges;
 
-    public FormEditor(IGitUICommands commands, string? fileName, bool showWarning, bool readOnly = false, int? lineNumber = null)
+    public FormEditor(IGitUICommands commands, string? fileName, bool showWarning, int? lineNumber = null)
         : base(commands)
     {
         _fileName = fileName;
@@ -35,8 +35,6 @@ public sealed partial class FormEditor : GitModuleForm
         fileViewer.TextChanged += (s, e) => HasChanges = true;
         fileViewer.TextLoaded += (s, e) => HasChanges = false;
         panelMessage.Visible = showWarning;
-
-        fileViewer.IsReadOnly = readOnly;
     }
 
     private bool HasChanges
@@ -54,7 +52,6 @@ public sealed partial class FormEditor : GitModuleForm
         try
         {
             fileViewer.ViewFileAsync(fileName, line: line);
-            fileViewer.IsReadOnly = false;
             Text = fileName;
 
             // loading a new file from disk, the text hasn't been changed yet.

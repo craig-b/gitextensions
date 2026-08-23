@@ -35,7 +35,7 @@ public class GitExtensionsControl : TranslatedControl
     ///  If this control is not a <see cref="IGitModuleControl"/>) and is not placed on a <see cref="IGitModuleForm"/>.
     /// </exception>
     protected virtual IServiceProvider ServiceProvider
-        => FindForm() is IGitModuleForm form ? form.UICommands
+        => FindForm() is IGitModuleForm form ? (IServiceProvider)form.UICommands
             : throw new InvalidOperationException($"no chance to get {nameof(ServiceProvider)}");
 
     #region Hotkeys

@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -39,12 +40,12 @@ internal sealed class WorktreeNode(Tree tree, GitWorktree worktree, bool isCurre
             return;
         }
 
-        UICommands.WorktreeSwitch(ParentWindow(), Worktree.Path);
+        UICommands.Execute(new UICmd.WorktreeSwitch(Worktree.Path), ParentWindow());
     }
 
     public void DeleteWorktree()
     {
-        if (UICommands.WorktreeDelete(ParentWindow(), Worktree.Path))
+        if (UICommands.Execute(new UICmd.WorktreeDelete(Worktree.Path), ParentWindow()))
         {
             ((WorktreeTree)Tree).Refresh();
         }

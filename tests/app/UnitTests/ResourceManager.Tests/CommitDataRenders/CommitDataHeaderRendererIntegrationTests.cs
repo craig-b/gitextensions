@@ -57,7 +57,7 @@ public class CommitDataHeaderRendererIntegrationTests
                                "<a href='gitext://gotocommit/" + _data.ParentIds![0] + "'>" + _data.ParentIds![0].ToShortString() + "</a> " +
                                "<a href='gitext://gotocommit/" + _data.ParentIds![1] + "'>" + _data.ParentIds![1].ToShortString() + "</a>";
 
-        string result = _rendererTabs.Render(_data, true);
+        string result = _rendererTabs.Render(_data, true).ToXhtml();
 
         result.Should().Be(expectedHeader);
     }
@@ -78,7 +78,7 @@ public class CommitDataHeaderRendererIntegrationTests
                                _data.ParentIds![0].ToShortString() + " " +
                                _data.ParentIds![1].ToShortString();
 
-        string result = _rendererTabs.Render(_data, false);
+        string result = _rendererTabs.Render(_data, false).ToXhtml();
 
         result.Should().Be(expectedHeader);
     }
@@ -99,7 +99,7 @@ public class CommitDataHeaderRendererIntegrationTests
                                "<a href='gitext://gotocommit/" + _data.ParentIds![0] + "'>" + _data.ParentIds![0].ToShortString() + "</a> " +
                                "<a href='gitext://gotocommit/" + _data.ParentIds![1] + "'>" + _data.ParentIds![1].ToShortString() + "</a>";
 
-        string result = _rendererSpaces.Render(_data, true);
+        string result = _rendererSpaces.Render(_data, true).ToXhtml();
 
         result.Should().Be(expectedHeader);
     }
@@ -120,7 +120,7 @@ public class CommitDataHeaderRendererIntegrationTests
                                _data.ParentIds![0].ToShortString() + " " +
                                _data.ParentIds![1].ToShortString();
 
-        string result = _rendererSpaces.Render(_data, false);
+        string result = _rendererSpaces.Render(_data, false).ToXhtml();
 
         result.Should().Be(expectedHeader);
     }

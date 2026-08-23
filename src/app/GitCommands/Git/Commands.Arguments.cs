@@ -518,6 +518,14 @@ public static partial class Commands
         };
     }
 
+    /// <summary>Deletes a tag on the remote by pushing an empty source to its ref.</summary>
+    public static ArgumentString DeleteRemoteTag(string remote, string tagName)
+        => new GitArgumentBuilder("push")
+        {
+            remote.Trim().Quote(),
+            $":refs/tags/{tagName.Replace(" ", "")}"
+        };
+
     public static ArgumentString Rebase(in RebaseOptions rebaseOptions)
     {
         // TODO-NULLABLE does it make sense for 'branch' to be null here?
@@ -648,6 +656,16 @@ public static partial class Commands
     public static ArgumentString StartBisect()
     {
         return new GitArgumentBuilder("bisect") { "start" };
+    }
+
+    /// <summary>Removes remote-tracking refs the remote no longer has.</summary>
+    public static ArgumentString RemotePrune(string remote)
+    {
+        return new GitArgumentBuilder("remote")
+        {
+            "prune",
+            remote
+        };
     }
 
     public static ArgumentString StashSave(bool untracked, bool keepIndex, string message, IReadOnlyList<string>? selectedFiles)

@@ -2,6 +2,7 @@
 using GitExtensions.Extensibility.Git;
 using GitUI.LeftPanel.Interfaces;
 using GitUI.Properties;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.LeftPanel;
 
@@ -54,26 +55,26 @@ internal sealed class LocalBranchNode : BaseBranchLeafNode, IGitRefActions, ICan
 
     public bool Checkout()
     {
-        return MessageBoxes.ConfirmBranchCheckout(ParentWindow(), FullPath) && UICommands.StartCheckoutBranch(ParentWindow(), branch: FullPath, remote: false);
+        return MessageBoxes.ConfirmBranchCheckout(ParentWindow(), FullPath) && UICommands.Execute(new UICmd.CheckoutBranch(Branch: FullPath, Remote: false), ParentWindow());
     }
 
     public bool CreateBranch()
     {
-        return UICommands.StartCreateBranchDialog(ParentWindow(), branch: FullPath);
+        return UICommands.Execute(new UICmd.CreateBranchFrom(Branch: FullPath), ParentWindow());
     }
 
     public bool Merge()
     {
-        return UICommands.StartMergeBranchDialog(ParentWindow(), branch: FullPath);
+        return UICommands.Execute(new UICmd.MergeBranch(Branch: FullPath), ParentWindow());
     }
 
     public bool Delete()
     {
-        return UICommands.StartDeleteBranchDialog(ParentWindow(), branch: FullPath);
+        return UICommands.Execute(new UICmd.DeleteBranches([FullPath]), ParentWindow());
     }
 
     public bool Rename()
     {
-        return UICommands.StartRenameDialog(ParentWindow(), branch: FullPath);
+        return UICommands.Execute(new UICmd.RenameBranch(Branch: FullPath), ParentWindow());
     }
 }

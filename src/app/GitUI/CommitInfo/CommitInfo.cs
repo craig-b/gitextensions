@@ -7,6 +7,7 @@ using GitCommands;
 using GitCommands.ExternalLinks;
 using GitCommands.Git;
 using GitCommands.Remotes;
+using GitCommands.RichText;
 using GitCommands.Settings;
 using GitExtensions.Extensibility;
 using GitExtensions.Extensibility.Git;
@@ -68,14 +69,14 @@ public partial class CommitInfo : GitModuleControl
 
     private GitRevision? _revision;
     private IReadOnlyList<ObjectId>? _children;
-    private string? _linksInfo;
+    private RichContent? _linksInfo;
     private IDictionary<string, string>? _annotatedTagsMessages;
-    private string? _annotatedTagsInfo;
+    private RichContent? _annotatedTagsInfo;
     private string[]? _tags;
-    private string? _tagInfo;
+    private RichContent? _tagInfo;
     private string[]? _branches;
-    private string? _branchInfo;
-    private string? _gitDescribeInfo;
+    private RichContent? _branchInfo;
+    private RichContent? _gitDescribeInfo;
     private IDictionary<string, int>? _tagsOrderDict;
     private int _revisionInfoHeight;
     private int _commitMessageHeight;
@@ -108,8 +109,8 @@ public partial class CommitInfo : GitModuleControl
         pnlCommitMessage.BackColor = messageBackground;
         rtbxCommitMessage.BackColor = messageBackground;
 
-        rtbxCommitMessage.Font = AppSettings.CommitFont;
-        RevisionInfo.Font = AppSettings.Font;
+        rtbxCommitMessage.Font = AppFonts.Commit;
+        RevisionInfo.Font = AppFonts.App;
         addNoteToolStripMenuItem.ShortcutKeyDisplayString = GetShortcutKeyDisplayString(FormBrowse.Command.AddNotes);
 
         _commitMessageResizedSubscription = subscribeToContentsResized(rtbxCommitMessage, CommitMessage_ContentsResized);
@@ -319,11 +320,11 @@ public partial class CommitInfo : GitModuleControl
         _tags = null;
         _annotatedTagsMessages = null;
 
-        _annotatedTagsInfo = "";
-        _linksInfo = "";
-        _branchInfo = "";
-        _tagInfo = "";
-        _gitDescribeInfo = "";
+        _annotatedTagsInfo = new RichContent();
+        _linksInfo = new RichContent();
+        _branchInfo = new RichContent();
+        _tagInfo = new RichContent();
+        _gitDescribeInfo = new RichContent();
 
         if (_revision is not null && !_revision.IsArtificial && !_revision.IsAutostash)
         {
@@ -338,21 +339,21 @@ public partial class CommitInfo : GitModuleControl
         }
         else
         {
-            rtbxCommitMessage.SetXHTMLText(GetFixCommitMessage());
+            rtbxCommitMessage.SetRichContent(GetFixCommitMessage());
             RevisionInfo.Clear();
         }
 
         return;
 
-        string GetFixCommitMessage()
+        RichContent GetFixCommitMessage()
         {
             if (_revision is null)
             {
-                return string.Empty;
+                return new RichContent();
             }
 
             CommitData data = _commitDataManager.CreateFromRevision(_revision, _children);
-            return _commitDataBodyRenderer?.Render(data, showRevisionsAsLinks: false) ?? string.Empty;
+            return _commitDataBodyRenderer?.Render(data, showRevisionsAsLinks: false) ?? new RichContent();
         }
 
         async Task UpdateCommitMessageAsync(CancellationToken cancellationToken)
@@ -375,11 +376,11 @@ public partial class CommitInfo : GitModuleControl
                 return;
             }
 
-            string commitMessage = commitDataBodyRenderer.Render(data, showRevisionsAsLinks: CommandClickedEvent is not null);
+            RichContent commitMessage = commitDataBodyRenderer.Render(data, showRevisionsAsLinks: CommandClickedEvent is not null);
 
             await this.SwitchToMainThreadAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            rtbxCommitMessage.SetXHTMLText(commitMessage);
+            rtbxCommitMessage.SetRichContent(commitMessage);
         }
 
         void StartAsyncDataLoad(DistributedSettings settings, CancellationToken cancellationToken)
@@ -438,10 +439,10 @@ public partial class CommitInfo : GitModuleControl
                     return;
                 }
 
-                string linksInfo = GetLinksForRevision(settings);
+                RichContent linksInfo = GetLinksForRevision(settings);
 
                 // Most commits do not have link; do not switch to main thread if nothing is changed
-                if (_linksInfo == linksInfo)
+                if (linksInfo.SegmentsEqual(_linksInfo))
                 {
                     return;
                 }
@@ -451,18 +452,28 @@ public partial class CommitInfo : GitModuleControl
 
                 return;
 
-                string GetLinksForRevision(DistributedSettings settings)
+                RichContent GetLinksForRevision(DistributedSettings settings)
                 {
                     IEnumerable<ExternalLink> links = _gitRevisionExternalLinksParser.Parse(revision, settings);
                     cancellationToken.ThrowIfCancellationRequested();
-                    string result = string.Join(", ", links.Distinct().Select(link => linkFactory.CreateLink(link.Caption, link.Uri)));
 
-                    if (string.IsNullOrEmpty(result))
+                    RichContent result = new();
+                    foreach (ExternalLink link in links.Distinct())
                     {
-                        return "";
+                        if (!result.IsEmpty)
+                        {
+                            result.AddText(", ");
+                        }
+
+                        result.Add(linkFactory.CreateLink(link.Caption, link.Uri));
                     }
 
-                    return $"{WebUtility.HtmlEncode(_trsLinksRelatedToRevision.Text)} {result}";
+                    if (result.IsEmpty)
+                    {
+                        return result;
+                    }
+
+                    return new RichContent().AddText($"{_trsLinksRelatedToRevision.Text} ").Append(result);
                 }
             }
 
@@ -565,33 +576,33 @@ public partial class CommitInfo : GitModuleControl
                     return;
                 }
 
-                string info = GetDescribeInfoForRevision();
+                RichContent info = GetDescribeInfoForRevision();
 
                 await this.SwitchToMainThreadAsync(cancellationToken);
                 _gitDescribeInfo = info;
 
                 return;
 
-                string GetDescribeInfoForRevision()
+                RichContent GetDescribeInfoForRevision()
                 {
                     (string precedingTag, string commitCount) = _gitDescribeProvider.Get(commitId, cancellationToken);
 
-                    StringBuilder gitDescribeInfo = new();
+                    RichContent gitDescribeInfo = new();
                     if (!string.IsNullOrEmpty(precedingTag))
                     {
-                        string tagString = ShowBranchesAsLinks ? linkFactory.CreateTagLink(precedingTag) : WebUtility.HtmlEncode(precedingTag);
-                        gitDescribeInfo.Append(WebUtility.HtmlEncode(_derivesFromTag.Text)).Append(' ').Append(tagString);
+                        gitDescribeInfo.AddText($"{_derivesFromTag.Text} ");
+                        gitDescribeInfo.Add(ShowBranchesAsLinks ? linkFactory.CreateTagLink(precedingTag) : new RichTextSegment(precedingTag));
                         if (!string.IsNullOrEmpty(commitCount))
                         {
-                            gitDescribeInfo.Append(" + ").Append(commitCount).Append(' ').Append(WebUtility.HtmlEncode(_plusCommits.Text));
+                            gitDescribeInfo.AddText($" + {commitCount} {_plusCommits.Text}");
                         }
                     }
                     else
                     {
-                        gitDescribeInfo.Append(WebUtility.HtmlEncode(_derivesFromNoTag.Text));
+                        gitDescribeInfo.AddText(_derivesFromNoTag.Text);
                     }
 
-                    return gitDescribeInfo.ToString();
+                    return gitDescribeInfo;
                 }
             }
         }
@@ -610,7 +621,7 @@ public partial class CommitInfo : GitModuleControl
         {
             if (_annotatedTagsMessages is not null &&
                 _annotatedTagsMessages.Count > 0 &&
-                string.IsNullOrEmpty(_annotatedTagsInfo) &&
+                (_annotatedTagsInfo is null || _annotatedTagsInfo.IsEmpty) &&
                 Revision is not null)
             {
                 // having both lightweight & annotated tags in thisRevisionTagNames,
@@ -625,41 +636,60 @@ public partial class CommitInfo : GitModuleControl
                 _annotatedTagsInfo = GetAnnotatedTagsInfo(thisRevisionTagNames, _annotatedTagsMessages);
             }
 
-            if (_tags is not null && string.IsNullOrEmpty(_tagInfo))
+            if (_tags is not null && (_tagInfo is null || _tagInfo.IsEmpty))
             {
                 Array.Sort(_tags, new TagsComparer(_tagsOrderDict));
                 _tagInfo = refsFormatter.FormatTags(_tags, ShowBranchesAsLinks, limit: !_showAllTags);
             }
         }
 
-        if (_branches is not null && string.IsNullOrEmpty(_branchInfo))
+        if (_branches is not null && (_branchInfo is null || _branchInfo.IsEmpty))
         {
             Array.Sort(_branches, new BranchComparer(_branches, Module.GetSelectedBranch()));
             _branchInfo = refsFormatter.FormatBranches(_branches, ShowBranchesAsLinks, limit: !_showAllBranches);
         }
 
-        string body = string.Join(Environment.NewLine + Environment.NewLine,
-            new[] { _annotatedTagsInfo, _linksInfo, _branchInfo, _tagInfo, _gitDescribeInfo }
-                .Where(_ => !string.IsNullOrEmpty(_)));
+        RichContent body = new();
+        foreach (RichContent? part in new[] { _annotatedTagsInfo, _linksInfo, _branchInfo, _tagInfo, _gitDescribeInfo })
+        {
+            if (part is null || part.IsEmpty)
+            {
+                continue;
+            }
 
-        RevisionInfo.SetXHTMLText(body);
+            if (!body.IsEmpty)
+            {
+                body.AddLine().AddLine();
+            }
+
+            body.Append(part);
+        }
+
+        RevisionInfo.SetRichContent(body);
         return;
 
-        static string GetAnnotatedTagsInfo(
+        static RichContent GetAnnotatedTagsInfo(
             IEnumerable<string> tagNames,
             IDictionary<string, string> annotatedTagsMessages)
         {
-            StringBuilder result = new();
+            // M6: tag names and annotation messages are added as data - the old code spliced
+            // them RAW into the markup, so a tag containing < or & broke the XHTML parse.
+            RichContent result = new();
 
             foreach (string tag in tagNames)
             {
                 if (annotatedTagsMessages.TryGetValue(tag, out string? annotatedContents))
                 {
-                    result.Append("<u>").Append(tag).Append("</u>: ").Append(annotatedContents).AppendLine();
+                    if (!result.IsEmpty)
+                    {
+                        result.AddLine();
+                    }
+
+                    result.AddUnderlined(tag).AddText($": {annotatedContents.TrimEnd()}");
                 }
             }
 
-            return result.ToString().TrimEnd();
+            return result;
         }
     }
 

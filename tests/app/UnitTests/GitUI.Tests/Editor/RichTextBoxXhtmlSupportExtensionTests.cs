@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Text;
+﻿using GitCommands.RichText;
 using GitUI.Editor.RichTextBoxExtension;
 using ResourceManager;
 
@@ -30,31 +29,25 @@ public class RichTextBoxXhtmlSupportExtensionTests
 
     private void SetupLink(string prefix, string linkText, string uri, string suffix)
     {
-        StringBuilder text = new();
+        RichContent content = new();
 
-        if (prefix is not null)
-        {
-            text.Append(prefix);
-        }
+        content.AddText(prefix);
 
         if (uri is not null)
         {
             if (linkText is null)
             {
-                text.Append(WebUtility.HtmlEncode(uri));
+                content.AddText(uri);
             }
             else
             {
-                text.Append(_linkFactory.CreateLink(linkText, uri));
+                content.Add(_linkFactory.CreateLink(linkText, uri));
             }
         }
 
-        if (suffix is not null)
-        {
-            text.Append(suffix);
-        }
+        content.AddText(suffix);
 
-        _rtb.SetXHTMLText(text.ToString());
+        _rtb.SetRichContent(content);
     }
 
     private void SetupDefaultLink()

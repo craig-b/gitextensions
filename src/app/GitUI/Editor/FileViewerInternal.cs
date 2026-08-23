@@ -114,7 +114,7 @@ public partial class FileViewerInternal : GitModuleControl, IFileViewer
         IList<TextMarker> selectionMarkers = GetTextMarkersMatchingWord(text);
         TextEditor.Document.MarkerStrategy.AddMarkers(selectionMarkers);
 
-        _textHighlightService.AddTextHighlighting(TextEditor.Document);
+        ApplyTextHighlighting();
         TextEditor.ActiveTextAreaControl.TextArea.Invalidate();
     }
 
@@ -269,13 +269,18 @@ public partial class FileViewerInternal : GitModuleControl, IFileViewer
         _textHighlightService = viewMode switch
         {
             ViewMode.Text => TextHighlightService.Instance,
-            ViewMode.Diff or ViewMode.FixedDiff => new PatchHighlightService(ref text, useGitColoring, _lineNumbersControl),
-            ViewMode.CombinedDiff => new CombinedDiffHighlightService(ref text, useGitColoring, _lineNumbersControl),
-            ViewMode.Difftastic => new DifftasticHighlightService(ref text, _lineNumbersControl, out vrulerpos),
-            ViewMode.RangeDiff => new RangeDiffHighlightService(ref text, _lineNumbersControl),
-            ViewMode.Grep => new GrepHighlightService(ref text, _lineNumbersControl),
+            ViewMode.Diff or ViewMode.FixedDiff => new PatchHighlightService(ref text, useGitColoring),
+            ViewMode.CombinedDiff => new CombinedDiffHighlightService(ref text, useGitColoring),
+            ViewMode.Difftastic => new DifftasticHighlightService(ref text, out vrulerpos),
+            ViewMode.RangeDiff => new RangeDiffHighlightService(ref text),
+            ViewMode.Grep => new GrepHighlightService(ref text),
             _ => throw new ArgumentException($"Unexpected viewMode: {viewMode}", nameof(viewMode))
         };
+
+        if (_textHighlightService.DiffLinesInfo is DiffLinesInfo diffLinesInfo)
+        {
+            _lineNumbersControl.DisplayLineNum(diffLinesInfo, _textHighlightService.ShowLeftColumn);
+        }
 
         if (vrulerpos >= 0)
         {
@@ -413,7 +418,33 @@ public partial class FileViewerInternal : GitModuleControl, IFileViewer
     public void AddTextHighlighting()
     {
         TextEditor.Document.MarkerStrategy.RemoveAll(_ => true);
-        _textHighlightService.AddTextHighlighting(TextEditor.Document);
+        ApplyTextHighlighting();
+    }
+
+    /// <summary>
+    /// Applies the styled spans produced by <see cref="_textHighlightService"/> to the document's marker
+    /// strategy, reconstructing the equivalent <see cref="TextMarker"/> for each <see cref="StyledSpan"/>.
+    /// </summary>
+    private void ApplyTextHighlighting()
+    {
+        List<TextMarker> markers = [.. _textHighlightService.GetHighlighting().Select(ToTextMarker)];
+        TextEditor.Document.MarkerStrategy.AddMarkers(markers);
+
+        return;
+
+        static TextMarker ToTextMarker(StyledSpan span)
+        {
+            Color background = span.Background ?? AppColor.EditorBackground.GetThemeColor();
+
+            if (span.Length == 0)
+            {
+                return new TextMarker(span.Offset, span.Length, TextMarkerType.InterChar, background);
+            }
+
+            return span.Foreground is Color foreground
+                ? new TextMarker(span.Offset, span.Length, TextMarkerType.SolidBlock, background, foreground)
+                : new TextMarker(span.Offset, span.Length, TextMarkerType.SolidBlock, background);
+        }
     }
 
     /// <summary>
@@ -439,7 +470,7 @@ public partial class FileViewerInternal : GitModuleControl, IFileViewer
     /// <returns>An array with the prefixes.</returns>
     /// <param name="indexInText">The line to check.</param>
     private bool IsSearchMatch(int indexInText)
-        => _textHighlightService.IsSearchMatch(_lineNumbersControl, indexInText);
+        => _textHighlightService.IsSearchMatch(_lineNumbersControl.GetLineInfo(indexInText)?.LineType);
 
     private int FirstLineAfterHeader
     {

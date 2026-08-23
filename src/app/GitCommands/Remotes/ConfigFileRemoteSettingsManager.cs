@@ -131,45 +131,11 @@ public class ConfigFileRemoteSettingsManager : IConfigFileRemoteSettingsManager
     /// Returns the default remote for push operation.
     /// </summary>
     /// <returns>The <see cref="GitRef.Name"/> if found, otherwise <see langword="null"/>.</returns>
-    // TODO: moved verbatim from FormPush.cs, perhaps needs refactoring
     public string? GetDefaultPushRemote(ConfigFileRemote remote, string branch)
     {
         ArgumentNullException.ThrowIfNull(remote);
 
-        IGitModule module = GetModule();
-
-        GitRef? remoteHead = remote.Push?
-                               .Select(s => s.Split(Delimiters.Colon))
-                               .Where(t => t.Length == 2)
-                               .Where(t => IsSettingForBranch(t[0], branch))
-                               .Select(t => new GitRef(module, objectId: default, t[1]))
-                               .FirstOrDefault(h => h.IsHead);
-
-        if (remoteHead is not null)
-        {
-            return remoteHead.Name;
-        }
-
-        GitRef? remoteWildcardHead = remote.Push?
-                               .Select(s => s.Split(Delimiters.Colon))
-                               .Where(t => t.Length == 2)
-                               .Where(t => IsSettingForWildcardBranch(t[0]))
-                               .Select(t => new GitRef(module, objectId: default, t[1].Replace("*", branch)))
-                               .FirstOrDefault(h => h.IsHead);
-
-        return remoteWildcardHead?.Name;
-
-        bool IsSettingForBranch(string setting, string branchName)
-        {
-            GitRef head = new(module, objectId: default, setting);
-            return head.IsHead && head.Name.Equals(branchName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        bool IsSettingForWildcardBranch(string setting)
-        {
-            GitRef head = new(module, objectId: default, setting);
-            return head.IsHead && head.Name == "*";
-        }
+        return Push.PushRefspecResolver.ResolveDefaultPushTarget(remote.Push, branch);
     }
 
     /// <summary>

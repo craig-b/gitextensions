@@ -57,6 +57,6 @@ public static class ServiceContainerRegistry
                 useConsoleEmulation: AppSettings.UseConsoleEmulatorForCommands,
                 consoleEmulatorName: AppSettings.ConsoleEmulatorName,
                 consoleEmulatorTheme: AppSettings.ConEmuStyle,
-                consoleFont: () => AppSettings.ConEmuConsoleFont));
+                consoleFont: () => AppFonts.ConEmuConsole));
     }
 }

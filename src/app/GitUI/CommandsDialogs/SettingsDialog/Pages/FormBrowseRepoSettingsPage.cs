@@ -1,4 +1,5 @@
 using GitCommands;
+using GitCommands.Settings.Pages;
 using GitExtensions.Extensibility.Settings;
 using GitExtUtils;
 using GitUI.Hotkey;
@@ -21,6 +22,8 @@ public partial class FormBrowseRepoSettingsPage : SettingsPageWithHeader
               """);
     private readonly ShellProvider _shellProvider = new();
     private int _cboTerminalPreviousIndex = -1;
+
+    private readonly BrowseRepoPageModel _model = new();
 
     public FormBrowseRepoSettingsPage(IServiceProvider serviceProvider)
         : base(serviceProvider)
@@ -48,40 +51,29 @@ public partial class FormBrowseRepoSettingsPage : SettingsPageWithHeader
         base.OnRuntimeLoad();
     }
 
-    protected override void PageToSettings()
-    {
-        AppSettings.ShowConEmuTab.Value = chkShowConsoleTab.Checked;
-        AppSettings.UseBrowseForFileHistory.Value = chkUseBrowseForFileHistory.Checked;
-        AppSettings.UseDiffViewerForBlame.Value = chkUseDiffViewerForBlame.Checked;
-        AppSettings.ShowGpgInformation.Value = chkShowGpgInformation.Checked;
-        AppSettings.ShowFindInCommitFilesGitGrep.Value = chkShowFindInCommitFilesGitGrep.Checked;
-        AppSettings.ShowRevisionGridTooltips.Value = chkShowRevisionGridTooltip.Checked;
-
-        int outputHistoryDepth = (int)_NO_TRANSLATE_OutputHistoryDepth.Value;
-        bool changed = AppSettings.ShowOutputHistoryAsTab.Value != chkShowOutputHistoryAsTab.Checked || AppSettings.OutputHistoryDepth.Value != outputHistoryDepth;
-        if (changed)
-        {
-            AppSettings.ShowOutputHistoryAsTab.Value = chkShowOutputHistoryAsTab.Checked;
-            AppSettings.OutputHistoryDepth.Value = outputHistoryDepth;
-            AppSettings.OutputHistoryPanelVisible.Value = !chkShowOutputHistoryAsTab.Checked && outputHistoryDepth > 0;
-        }
-
-        AppSettings.ConEmuTerminal.Value = ((IShellDescriptor)cboTerminal.SelectedItem!).Name.ToLowerInvariant();
-
-        base.PageToSettings();
-    }
+    private IEnumerable<(BoolSettingsEntry Entry, Control Control)> BoolEntryControls =>
+    [
+        (_model.UseBrowseForFileHistory, chkUseBrowseForFileHistory),
+        (_model.UseDiffViewerForBlame, chkUseDiffViewerForBlame),
+        (_model.ShowFindInCommitFilesGitGrep, chkShowFindInCommitFilesGitGrep),
+        (_model.ShowRevisionGridTooltips, chkShowRevisionGridTooltip),
+        (_model.ShowGpgInformation, chkShowGpgInformation),
+        (_model.ShowOutputHistoryAsTab, chkShowOutputHistoryAsTab),
+    ];
 
     protected override void SettingsToPage()
     {
-        chkShowConsoleTab.Checked = AppSettings.ShowConEmuTab.Value;
-        chkUseBrowseForFileHistory.Checked = AppSettings.UseBrowseForFileHistory.Value;
-        chkUseDiffViewerForBlame.Checked = AppSettings.UseDiffViewerForBlame.Value;
-        chkShowGpgInformation.Checked = AppSettings.ShowGpgInformation.Value;
-        chkShowFindInCommitFilesGitGrep.Checked = AppSettings.ShowFindInCommitFilesGitGrep.Value;
-        chkShowRevisionGridTooltip.Checked = AppSettings.ShowRevisionGridTooltips.Value;
-        chkShowOutputHistoryAsTab.Checked = AppSettings.ShowOutputHistoryAsTab.Value;
-        _NO_TRANSLATE_OutputHistoryDepth.Value = Math.Clamp(AppSettings.OutputHistoryDepth.Value, _NO_TRANSLATE_OutputHistoryDepth.Minimum, _NO_TRANSLATE_OutputHistoryDepth.Maximum);
+        _model.Load();
 
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            SettingsPageBindings.SetChecked(control, entry.Value);
+        }
+
+        _NO_TRANSLATE_OutputHistoryDepth.Value = _model.OutputHistoryDepth.Value;
+
+        // the console tab and terminal picker are ConEmu (Windows-only) view chrome
+        chkShowConsoleTab.Checked = AppSettings.ShowConEmuTab.Value;
         foreach (IShellDescriptor shell in _shellProvider.GetShells())
         {
             cboTerminal.Items.Add(shell);
@@ -93,6 +85,23 @@ public partial class FormBrowseRepoSettingsPage : SettingsPageWithHeader
         }
 
         base.SettingsToPage();
+    }
+
+    protected override void PageToSettings()
+    {
+        foreach ((BoolSettingsEntry entry, Control control) in BoolEntryControls)
+        {
+            entry.Value = SettingsPageBindings.GetChecked(control);
+        }
+
+        _model.OutputHistoryDepth.Value = (int)_NO_TRANSLATE_OutputHistoryDepth.Value;
+
+        _model.Save();
+
+        AppSettings.ShowConEmuTab.Value = chkShowConsoleTab.Checked;
+        AppSettings.ConEmuTerminal.Value = ((IShellDescriptor)cboTerminal.SelectedItem!).Name.ToLowerInvariant();
+
+        base.PageToSettings();
     }
 
     public static SettingsPageReference GetPageReference()

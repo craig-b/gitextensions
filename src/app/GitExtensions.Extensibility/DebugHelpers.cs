@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace GitExtensions.Extensibility;
@@ -53,6 +54,12 @@ public static class DebugHelpers
         }
     }
 
+    // Environment.ProcessPath rather than Application.ExecutablePath: this type is otherwise
+    // platform-neutral, and detecting a test host does not need WinForms. The process-name match
+    // covers Windows' testhost.exe apphost; off Windows `dotnet test` runs testhost.dll inside
+    // the muxer, so the process is named "dotnet" and the entry assembly carries the signal.
     private static bool IsTestRunning
-        => Application.ExecutablePath.EndsWith("testhost.exe");
+        => Path.GetFileNameWithoutExtension(Environment.ProcessPath)
+               ?.Equals("testhost", StringComparison.OrdinalIgnoreCase) is true
+           || Assembly.GetEntryAssembly()?.GetName().Name?.Equals("testhost", StringComparison.OrdinalIgnoreCase) is true;
 }

@@ -21,6 +21,7 @@ using GitUIPluginInterfaces;
 using ICSharpCode.TextEditor.Util;
 using Microsoft;
 using ResourceManager;
+using UICmd = GitExtensions.Extensibility.Git.UICommands;
 
 namespace GitUI.Editor;
 
@@ -140,11 +141,11 @@ public partial class FileViewer : GitModuleControl
         showSyntaxHighlighting.Checked = ShowSyntaxHighlightingInDiff;
         showSyntaxHighlightingToolStripMenuItem.AdaptImageLightness();
         showSyntaxHighlightingToolStripMenuItem.Checked = ShowSyntaxHighlightingInDiff;
-        automaticContinuousScrollToolStripMenuItem.Text = TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
+        automaticContinuousScrollToolStripMenuItem.Text = ResourceManager.TranslatedStrings.ContScrollToNextFileOnlyWithAlt;
 
         showGitWordColoringToolStripMenuItem.AdaptImageLightness();
 
-        IsReadOnly = true;
+        SetEditable(false);
 
         internalFileViewer.MouseMove += (_, e) =>
         {
@@ -222,16 +223,22 @@ public partial class FileViewer : GitModuleControl
         set => internalFileViewer.Font = value;
     }
 
-    [DefaultValue(true)]
-    [Category("Behavior")]
-    public bool IsReadOnly
+    /// <summary>
+    ///  Whether the viewer rejects edits. Always <see langword="true"/> for this type - a
+    ///  FileViewer is read-only by construction (M5.3); the only editable viewer is
+    ///  <see cref="EditableFileViewer"/>, which opts in via <see cref="SetEditable"/>.
+    /// </summary>
+    public bool IsReadOnly => internalFileViewer.IsReadOnly;
+
+    /// <summary>
+    ///  The single knob for editability, deliberately not public: only the
+    ///  <see cref="EditableFileViewer"/> subclass (and this class's constructor) may flip it.
+    ///  Keeps the replace UI's visibility in lockstep, as the old IsReadOnly setter did.
+    /// </summary>
+    private protected void SetEditable(bool editable)
     {
-        get => internalFileViewer.IsReadOnly;
-        set
-        {
-            internalFileViewer.IsReadOnly = value;
-            replaceToolStripMenuItem.Visible = !value;
-        }
+        internalFileViewer.IsReadOnly = !editable;
+        replaceToolStripMenuItem.Visible = editable;
     }
 
     [DefaultValue(true)]
@@ -914,7 +921,7 @@ public partial class FileViewer : GitModuleControl
 
         ReloadHotkeys();
 
-        Font = AppSettings.FixedWidthFont;
+        Font = AppFonts.FixedWidth;
 
         string[] encodings = [.. AppSettings.AvailableEncodings.Values.Select(e => e.EncodingName)];
         encodingToolStripComboBox.Items.AddRange(encodings);
@@ -1559,7 +1566,7 @@ public partial class FileViewer : GitModuleControl
 
     private void settingsButton_Click(object sender, EventArgs e)
     {
-        UICommands.StartSettingsDialog(ParentForm, DiffViewerSettingsPage.GetPageReference());
+        UICommands.Execute(new UICmd.OpenSettings(DiffViewerSettingsPage.GetPageReference()), ParentForm);
     }
 
     private void IgnoreAllWhitespaceChangesToolStripMenuItem_Click(object sender, EventArgs e)

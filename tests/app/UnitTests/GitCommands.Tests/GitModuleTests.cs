@@ -454,8 +454,13 @@ public sealed partial class GitModuleTests
         // execute test look-up
         string? actualReturnedMessage = repo.Module.GetTagMessage("test_tag", cancellationToken: default);
 
-        // compare result to expectations
-        actualReturnedMessage.Should().Be(expectedReturnedMessage);
+        // GitModule.GetTagMessage rejoins the parsed lines with Environment.NewLine, so the
+        // expected literal - which the [TestCase]s above hardcode as "\r\n" - only matches
+        // byte-for-byte on Windows. Normalising it here (a no-op on Windows, where
+        // Environment.NewLine already is "\r\n") keeps the assertion platform-correct without
+        // touching what's actually being tested: the blank-line collapsing/trimming behaviour
+        // above, and the mixed-newline-style splitting exercised by the raw tagMessage input.
+        actualReturnedMessage.Should().Be(expectedReturnedMessage.Replace("\r\n", Environment.NewLine));
     }
 
     // TODO: add GetTagMessage "sad-path" tests, ones that test what happens if we try to execute it on a non-tag object.

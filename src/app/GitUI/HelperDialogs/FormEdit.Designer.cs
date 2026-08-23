@@ -30,7 +30,7 @@ partial class FormEdit
     /// </summary>
     private void InitializeComponent()
     {
-        Viewer = new GitUI.Editor.FileViewer();
+        Viewer = new GitUI.Editor.EditableFileViewer();
         SuspendLayout();
         // 
         // Viewer
@@ -57,5 +57,5 @@ partial class FormEdit
 
     #endregion
 
-    private FileViewer Viewer;
+    private EditableFileViewer Viewer;
 }
