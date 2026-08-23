@@ -48,6 +48,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The application icon, shared with the installer artwork. PNG rather than the .ico
+         flavor: Skia on Linux does not decode .ico. -->
+    <AvaloniaResource Include="$(RepoRoot)setup\assets\Logo\git-extensions-logo-256px.png" Link="Assets\git-extensions-logo.png" />
+
     <!-- The xlf catalog for the §11 source-join client localization. -->
     <None Include="..\..\app\GitUI\Translation\*.xlf" Link="Translation\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
