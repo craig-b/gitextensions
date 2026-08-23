@@ -238,8 +238,9 @@ public partial class MainWindow : Window
                     TaskCompletionSource<int> done = new();
                     int count = 0;
                     await Task.Run(() => _session.StreamLog(
-                        batch => count += batch.Count,
-                        () => done.TrySetResult(count),
+                        // Only real log rows: the weaver now adds artificial and stash rows.
+                        batch => count += batch.Count(r => !r.IsArtificial && r.ReflogSelector is null),
+                        _ => done.TrySetResult(count),
                         ex => done.TrySetException(ex),
                         CancellationToken.None));
                     return await done.Task;
@@ -271,6 +272,103 @@ public partial class MainWindow : Window
                 bool ok = byMessage == 1 && byBranch > 0 && byBranch < all && byPath >= 1 && byPath < all && grepOk;
                 Console.Error.WriteLine($"[filter] {(ok ? "OK" : "FAIL")}");
                 Environment.Exit(ok ? 0 : 1);
+            };
+        }
+
+        if (Environment.GetEnvironmentVariable("GE_SPIKE_GRIDROWSTEST") == "1")
+        {
+            // Verifies the woven grid rows end-to-end: artificial worktree/index before HEAD,
+            // stash row (with its untracked companion) before its parent, worktree file groups,
+            // and the completion fallback when a filter hides HEAD.
+            // MUTATES the repo - scratch repos only.
+            Loaded += async (_, _) =>
+            {
+                bool allOk = true;
+                void Report(string name, bool ok, string detail = "")
+                {
+                    allOk &= ok;
+                    Console.Error.WriteLine($"[gridrows] {name}: {(ok ? "OK" : "FAIL")}{(detail.Length > 0 ? $" | {detail}" : "")}");
+                }
+
+                await Task.Delay(2500);
+
+                // Arrange two stashes on a repo whose commits the harness backdated, so date
+                // order is deterministic: stash@{0}'s tip streams from the log (refs/stash) and
+                // gets its selector attached, while stash@{1} lives only in the reflog and is
+                // woven in before its parent. Both carry an untracked file; worktree ends dirty.
+                string tracked = System.IO.Path.Combine(_session.WorkingDir, "f1.txt");
+                async Task<(bool, string)> MakeStashAsync(string marker)
+                {
+                    System.IO.File.WriteAllText(tracked, $"stashed-{marker}\n");
+                    System.IO.File.WriteAllText(System.IO.Path.Combine(_session.WorkingDir, $"gr-untracked-{marker}.txt"), "u\n");
+                    return await _session.StashSaveAsync($"gridrows-{marker}", keepIndex: false, includeUntracked: true);
+                }
+
+                (bool stash1Ok, string stash1Out) = await MakeStashAsync("one");
+                Report("stash-save-1", stash1Ok, stash1Out.Replace("\n", " / ").Trim());
+                (bool stash0Ok, string stash0Out) = await MakeStashAsync("two");
+                Report("stash-save-0", stash0Ok, stash0Out.Replace("\n", " / ").Trim());
+                System.IO.File.WriteAllText(tracked, "dirty\n");
+
+                async Task<(List<GitRevision> Rows, SliceSession.PendingArtificialRows? Pending)> StreamAsync()
+                {
+                    List<GitRevision> rows = [];
+                    TaskCompletionSource<SliceSession.PendingArtificialRows?> done = new();
+                    await Task.Run(() => _session.StreamLog(
+                        batch => rows.AddRange(batch),
+                        pending => done.TrySetResult(pending),
+                        ex => done.TrySetException(ex),
+                        CancellationToken.None));
+                    return (rows, await done.Task);
+                }
+
+                (List<GitRevision> rows, SliceSession.PendingArtificialRows? pending) = await StreamAsync();
+
+                foreach (GitRevision row in rows)
+                {
+                    Console.Error.WriteLine($"[gridrows] row: {row.ObjectId.ToShortString()} '{row.Subject}' selector={row.ReflogSelector ?? "-"} parents={row.ParentIds?.Count ?? 0}");
+                }
+
+                int workTreeRow = rows.FindIndex(r => r.ObjectId == ObjectId.WorkTreeId);
+                int indexRow = rows.FindIndex(r => r.ObjectId == ObjectId.IndexId);
+                int headRow = rows.FindIndex(r => r.ObjectId == _session.CurrentCheckout);
+                Report(
+                    "artificial-before-head",
+                    workTreeRow >= 0 && indexRow == workTreeRow + 1 && headRow == indexRow + 1,
+                    $"worktree={workTreeRow} index={indexRow} head={headRow}");
+                Report("no-pending-on-unfiltered", pending is null);
+                Report("no-duplicate-rows", rows.GroupBy(r => r.ObjectId).All(g => g.Count() == 1));
+
+                // stash@{0}: its tip is in the log via refs/stash; the selector is attached in place.
+                GitRevision? streamedStash = rows.FirstOrDefault(r => r.ReflogSelector?.EndsWith("stash@{0}") is true);
+                Report("streamed-stash-row", streamedStash is not null && streamedStash.IsStash);
+
+                // stash@{1}: reflog-only, woven in before its parent with its untracked companion.
+                GitRevision? wovenStash = rows.FirstOrDefault(r => r.ReflogSelector?.EndsWith("stash@{1}") is true);
+                Report("woven-stash-row", wovenStash is not null);
+                if (wovenStash is not null)
+                {
+                    int stashIdx = rows.IndexOf(wovenStash);
+                    int parentIdx = rows.FindIndex(r => r.ObjectId == wovenStash.FirstParentId);
+                    Report("woven-stash-before-parent", parentIdx > stashIdx, $"stash={stashIdx} parent={parentIdx}");
+                    Report(
+                        "woven-stash-untracked-companion",
+                        wovenStash.ParentIds!.Count == 2 && rows[stashIdx + 1].ObjectId == wovenStash.ParentIds[1]);
+                }
+
+                IReadOnlyList<GitUI.FileStatusWithDescription> worktreeGroups =
+                    _session.GetRevisionFileGroups(rows[workTreeRow], null, CancellationToken.None);
+                Report("worktree-file-groups", worktreeGroups.Any(group => group.Statuses.Count > 0));
+
+                // A filter that hides HEAD delivers the artificial pair for the completion insert.
+                _session.Filter.Apply(new GitUI.UserControls.RevisionGrid.RevisionFilter(
+                    "gridrows-never-matches", byCommit: true, byCommitter: false, byAuthor: false, byDiffContent: false));
+                (_, SliceSession.PendingArtificialRows? filteredPending) = await StreamAsync();
+                _session.Filter.ResetAllFilters();
+                Report("pending-on-filtered", filteredPending is not null && filteredPending.HeadParents.Count > 0);
+
+                Console.Error.WriteLine($"[gridrows] {(allOk ? "OK" : "FAIL")}");
+                Environment.Exit(allOk ? 0 : 1);
             };
         }
 
@@ -1630,8 +1728,15 @@ public partial class MainWindow : Window
 
                         Dispatcher.UIThread.Post(LogControl.NotifyRowsChanged, DispatcherPriority.Background);
                     },
-                    onCompleted: () =>
+                    onCompleted: pendingArtificial =>
                     {
+                        // HEAD was not streamed (filtered/limited log): attach the artificial
+                        // rows near its parents, the same way the WinForms grid does.
+                        if (pendingArtificial is not null)
+                        {
+                            LogControl.Graph.Insert(pendingArtificial.Artificial.WorkTree, pendingArtificial.Artificial.Index, pendingArtificial.HeadParents);
+                        }
+
                         loadStopwatch.Stop();
                         LogControl.Graph.LoadingCompleted();
 

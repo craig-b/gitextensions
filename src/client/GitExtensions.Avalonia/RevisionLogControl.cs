@@ -612,7 +612,11 @@ public sealed class RevisionLogControl : Control, ILogicalScrollable
         subjectWidth = Math.Max(20, subjectRight - textX);
         DrawCachedText(context, 0, revision.Subject, _textTypeface, 13, palette.Text, new Point(textX, yMid), subjectWidth);
         DrawCachedText(context, 1, revision.Author ?? "", _textTypeface, 12, palette.DimText, new Point(textX + subjectWidth + 8, yMid), authorWidth);
-        DrawCachedText(context, 2, revision.AuthorDate.ToString("yyyy-MM-dd HH:mm"), _typeface, 12, palette.DimText, new Point(textX + subjectWidth + 8 + authorWidth + 8, yMid), dateWidth);
+        // Artificial worktree/index rows have no timestamp (unix 0) - leave the column empty.
+        if (!revision.IsArtificial)
+        {
+            DrawCachedText(context, 2, revision.AuthorDate.ToString("yyyy-MM-dd HH:mm"), _typeface, 12, palette.DimText, new Point(textX + subjectWidth + 8 + authorWidth + 8, yMid), dateWidth);
+        }
     }
 
     // FormattedText construction (text shaping) dominates frame cost if done per frame; cache it

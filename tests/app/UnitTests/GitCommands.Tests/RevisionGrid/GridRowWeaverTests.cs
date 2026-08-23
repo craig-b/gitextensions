@@ -166,6 +166,27 @@ public class GridRowWeaverTests
     }
 
     [Test]
+    public void Weave_skips_the_streamed_duplicate_of_a_woven_stash()
+    {
+        // Date-order ties can list the parent before the stash tip: the stash (and its
+        // untracked companion) is woven in at the parent, and the streamed copies arriving
+        // later must be skipped - the graph does not deduplicate rows.
+        GitRevision parent = Commit();
+        GitRevision untracked = Commit();
+        GitRevision stash = Stash(parent.ObjectId, "stash@{0}", untracked.ObjectId);
+        GitRevision streamedStash = new(stash.ObjectId) { ParentIds = new ObjectId[] { parent.ObjectId } };
+        GitRevision streamedUntracked = new(untracked.ObjectId);
+        GridStashes stashes = GridStashes.Prepare([stash], showReflogReferences: false, maxStashesWithUntrackedFiles: 5, _ => [untracked])!;
+        GridRowWeaver weaver = new(ObjectId.Random(), stashes, artificial: null, _noRefs);
+
+        IReadOnlyList<GitRevision> first = weaver.Weave([parent]);
+        IReadOnlyList<GitRevision> second = weaver.Weave([streamedStash, streamedUntracked]);
+
+        first.Should().Equal(stash, untracked, parent);
+        second.Should().BeEmpty();
+    }
+
+    [Test]
     public void Prepare_with_reflog_references_only_attaches_selectors()
     {
         // The reflog already shows every stash commit, so no rows are woven in; the streamed

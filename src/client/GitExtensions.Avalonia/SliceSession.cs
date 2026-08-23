@@ -16,6 +16,7 @@ using GitExtensions.Extensibility.Git;
 using GitUIPluginInterfaces;
 using GitUI;
 using GitUI.Editor.Diff;
+using GitUI.UserControls.RevisionGrid;
 using ResourceManager;
 using ResourceManager.CommitDataRenders;
 
@@ -851,12 +852,15 @@ public sealed class SliceSession
     {
         // A dedicated FilterInfo, like FormFileHistory's own grid: the path filter engages
         // the --parents/--full-history/--simplify-merges block, everything else stays default.
-        GitUI.UserControls.RevisionGrid.FilterInfo fileFilter = new() { ByPathFilter = true, PathFilter = pathFilter };
+        FilterInfo fileFilter = new() { ByPathFilter = true, PathFilter = pathFilter };
         StreamLogCore(
             fileFilter.GetRevisionFilter(new Lazy<ObjectId>(() => CurrentCheckout)).ToString(),
             pathFilter,
+            // No artificial/stash rows in the file-history log (the window has no
+            // worktree/index file plumbing yet; revisit for full WinForms parity).
+            weaveRows: false,
             onBatch,
-            onCompleted,
+            _ => onCompleted(),
             onError,
             cancellationToken);
     }
@@ -975,42 +979,68 @@ public sealed class SliceSession
     ///  Streams the full log the way the WinForms grid does: RevisionReader.GetLog batches
     ///  revisions through an observer from a detached git-log process.
     /// </summary>
-    public void StreamLog(Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
+    public void StreamLog(Action<IReadOnlyList<GitRevision>> onBatch, Action<PendingArtificialRows?> onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
         => StreamLogCore(
             Filter.GetRevisionFilter(new Lazy<ObjectId>(() => CurrentCheckout)).ToString(),
             string.IsNullOrWhiteSpace(Filter.PathFilter)
                 ? ""
                 : GitCommands.FileHistory.FileHistoryPathFilter.NormalizeArgument(Filter.PathFilter).Path,
+            weaveRows: true,
             onBatch,
             onCompleted,
             onError,
             cancellationToken);
 
     /// <summary>
+    ///  The artificial worktree/index rows when HEAD was not in the streamed log (filtered or
+    ///  limited): the caller attaches them near HEAD's parents via the graph's Insert.
+    /// </summary>
+    public sealed record PendingArtificialRows(ArtificialCommits Artificial, IReadOnlyList<ObjectId> HeadParents);
+
+    /// <summary>
     ///  The browse log's filter: the same portable FilterInfo the WinForms grid owns, so the
     ///  unfiltered default is its branch group (all refs minus notes/stashes/session refs)
     ///  and every filter dimension builds the exact WinForms git-log arguments.
     /// </summary>
-    public GitUI.UserControls.RevisionGrid.FilterInfo Filter { get; } = new();
+    public FilterInfo Filter { get; } = new();
 
-    private void StreamLogCore(string revisionFilter, string pathFilter, Action<IReadOnlyList<GitRevision>> onBatch, Action onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
+    private void StreamLogCore(string revisionFilter, string pathFilter, bool weaveRows, Action<IReadOnlyList<GitRevision>> onBatch, Action<PendingArtificialRows?> onCompleted, Action<Exception> onError, CancellationToken cancellationToken)
     {
-        // Refs are looked up per revision, the same way the WinForms grid attaches them.
-        ILookup<ObjectId, IGitRef> refsByObjectId = _module.GetRefs(RefsFilter.NoFilter).ToLookup(gitRef => gitRef.ObjectId);
+        bool bare = _module.IsBareRepository();
+        bool showStashes = weaveRows && AppSettings.ShowStashes && !bare;
+
+        // Refs are looked up per revision, the same way the WinForms grid attaches them; the
+        // 'stash' ref is excluded when stashes are woven in as their own rows.
+        ILookup<ObjectId, IGitRef> refsByObjectId = _module.GetRefs(RefsFilter.NoFilter)
+            .Where(gitRef => (!showStashes || gitRef.CompleteName != GitRefName.RefsStashPrefix) && !gitRef.ObjectId.IsZero)
+            .ToLookup(gitRef => gitRef.ObjectId);
+
+        GridStashes? stashes = showStashes
+            ? GridStashes.Prepare(
+                new RevisionReader(_module, allBodies: false).GetStashes(cancellationToken),
+                AppSettings.ShowReflogReferences,
+                AppSettings.MaxStashesWithUntrackedFiles,
+                untrackedIds => new RevisionReader(_module, allBodies: false).GetRevisionsFromList(untrackedIds, cancellationToken))
+            : null;
+
+        ArtificialCommits? artificial = weaveRows && AppSettings.RevisionGraphShowArtificialCommits && !bare
+            ? ArtificialCommits.Create(_module, CurrentCheckout)
+            : null;
+
+        GridRowWeaver weaver = new(CurrentCheckout, stashes, artificial, refsByObjectId);
 
         RevisionReader reader = new(_module, allBodies: false);
         reader.GetLog(
             new BatchObserver(
-                revisions =>
-                {
-                    foreach (GitRevision revision in revisions)
-                    {
-                        revision.Refs = [.. refsByObjectId[revision.ObjectId]];
-                    }
-
-                    onBatch(revisions);
-                },
-                onCompleted,
+                revisions => onBatch(weaver.Weave(revisions)),
+                () => onCompleted(
+                    weaver.HeadIsHandled || artificial is null
+                        ? null
+                        : new PendingArtificialRows(
+                            artificial,
+                            CurrentCheckout.IsZero
+                                ? []
+                                : [.. GridRowWeaver.TryGetParents(_module, CurrentCheckout)])),
                 onError),
             revisionFilter: revisionFilter,
             pathFilter: pathFilter,

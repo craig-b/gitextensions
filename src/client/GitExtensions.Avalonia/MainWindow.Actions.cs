@@ -35,7 +35,7 @@ public partial class MainWindow
 
     private GridCommitMenuContext CommitMenuContext(GitRevision revision) => new(
         IsArtificial: revision.IsArtificial,
-        IsStash: revision.ReflogSelector?.StartsWith("stash@") is true,
+        IsStash: revision.IsStash,
         InBisect: _session.InBisect,
         IsBareRepository: _session.IsBareRepository,
         SelectedCount: Math.Max(1, LogControl.SelectedRevisions.Count),
@@ -286,7 +286,7 @@ public partial class MainWindow
         ["bisect.skip"] = _ => RunOperationAsync("Bisect: skip", () => _session.ContinueBisectAsync(GitBisectOption.Skip)),
         ["bisect.stop"] = _ => RunOperationAsync("Bisect: stop", () => _session.StopBisectAsync()),
         ["stash.apply"] = revision => RunOperationAsync("Apply stash", () => _session.StashApplyAsync(revision.ReflogSelector!)),
-        ["stash.pop"] = revision => RunOperationAsync("Pop stash", () => _session.StashPopAsync()),
+        ["stash.pop"] = revision => RunOperationAsync("Pop stash", () => _session.StashPopAsync(revision.ReflogSelector!)),
         ["stash.drop"] = async revision =>
         {
             if (await ConfirmDialog.ConfirmAsync(this, "Drop stash", $"Drop {revision.ReflogSelector}?"))

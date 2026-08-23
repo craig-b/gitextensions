@@ -153,6 +153,12 @@ public sealed class GridRowWeaver
     private readonly ArtificialCommits? _artificial;
     private readonly ILookup<ObjectId, IGitRef> _refsByObjectId;
 
+    // Rows woven in before their parent whose commit may still arrive from the log later:
+    // stash tips are reachable via refs/stash, so with date-order ties the log can list the
+    // parent (triggering the weave) before the tip. The streamed duplicate is skipped - the
+    // graph does not deduplicate rows.
+    private readonly HashSet<ObjectId> _wovenRowIds = [];
+
     /// <param name="currentCheckout">HEAD; the artificial rows go just before it. Zero (empty repo) puts them first.</param>
     /// <param name="stashes">Prepared stash rows to weave in; null when stashes are hidden or none exist.</param>
     /// <param name="artificial">The artificial pair to insert; null when uncommitted changes are hidden or the repo is bare.</param>
@@ -185,6 +191,11 @@ public sealed class GridRowWeaver
 
         foreach (GitRevision revision in revisions)
         {
+            if (_wovenRowIds.Count != 0 && _wovenRowIds.Remove(revision.ObjectId))
+            {
+                continue;
+            }
+
             if (_stashes is not null && _stashes.StashesById.Count != 0)
             {
                 if (_stashes.StashesById.TryGetValue(revision.ObjectId, out GitRevision? gridStash))
@@ -202,6 +213,7 @@ public sealed class GridRowWeaver
                         if (_stashes.StashesById.ContainsKey(stash.ObjectId))
                         {
                             revisionsToDisplay.Add(stash);
+                            _wovenRowIds.Add(stash.ObjectId);
 
                             // Remove current stash from list of stashes to display
                             _stashes.StashesById.Remove(stash.ObjectId);
@@ -209,6 +221,7 @@ public sealed class GridRowWeaver
                             if (_stashes.UntrackedByStashId!.TryGetValue(stash.ObjectId, out GitRevision? untracked))
                             {
                                 revisionsToDisplay.Add(untracked);
+                                _wovenRowIds.Add(untracked.ObjectId);
                             }
                         }
                     }
