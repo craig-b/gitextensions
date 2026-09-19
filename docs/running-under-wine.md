@@ -89,6 +89,25 @@ Things that bite:
   dialog never waited. Unset `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `VISUAL`
   and `EDITOR` in the launcher and set `core.editor` in the prefix's global
   git config to `"<app dir>/GitExtensions.exe" fileeditor`.
+- **Missing glyphs show as boxes.** The app's font is the system message font,
+  which under Wine is Wine's own Tahoma, and that font lacks whole blocks:
+  the ahead/behind arrows on branch labels come out as empty rectangles.
+  Windows would borrow the glyph from another font through font linking;
+  Wine implements the same mechanism, but its default chain for every font
+  is Microsoft Sans Serif, Tahoma and the East Asian fonts the registry
+  links to those, none of which the prefix has. Point the link at a font
+  fontconfig provides and every font in the app inherits it, while the UI
+  font itself stays as it was:
+
+  ```
+  wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink' \
+    /v Tahoma /t REG_MULTI_SZ /d 'DejaVuSans.ttf,DejaVu Sans' /f
+  ```
+
+  `WINEDEBUG=+font wine cmd /c exit` traces `load_system_links` and shows
+  whether the entry resolved to a file. Setting the application font to
+  DejaVu Sans in the app's settings also shows the arrows, but changes the
+  look of the whole grid.
 - **Existing installs elsewhere.** A copy installed through Bottles or another
   prefix has its own prefix, config and menu entry. Nothing configured in your
   prefix applies to it, and the two look identical in a window list.
