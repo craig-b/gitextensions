@@ -264,6 +264,12 @@ process start; the nine commands the app fires when it opens a repository took
   The daemon sets `GIT_EDITOR` to `git-bridge-editor`, which converts the file
   path and runs the app's own editor under Wine, and `LC_MESSAGES=C` so the
   messages the app parses stay in English.
+- **Progress dialogs.** `FormProcess` runs git through the plain-text runner
+  when the bridge is on, which streams stdout and stderr from the socket and
+  passes the dialog's own variables to the daemon unfiltered, so the sed
+  expression that rewrites a rebase todo for Edit commit runs on Linux sed.
+  The daemon's own editor and message-language defaults are applied first,
+  so those variables win.
 - **Tools with windows.** The app gives `mergetool` and `difftool` a console
   window; the bridge takes them anyway, since the tools open their own windows
   and native git then launches native tools. The daemon adds
@@ -271,7 +277,9 @@ process start; the nine commands the app fires when it opens a repository took
   merge resolution tool" over a socket.
 - **What still runs the Windows git.** Calls that need an interactive console
   (`add --patch`, `checkout -p`, `notes edit` with a foreign editor) and the
-  Console tab. Direct `CreateProcess` of a Linux binary is not an alternative:
+  Console tab. Those never write the index in normal use, so the tree is in
+  practice owned by native git. Do not commit files with the execute bit: the
+  Windows git cannot see it and reports them as modified. Direct `CreateProcess` of a Linux binary is not an alternative:
   Wine's `fork_and_exec` in `ntdll/unix/process.c` returns no process handle,
   closes stdin and stdout when the parent has no console or passes
   `CREATE_NO_WINDOW`, never wires stderr, and execs with the Linux environment.
@@ -302,9 +310,13 @@ without the bridge, in order of effect:
 ## 9. Remotes and credentials
 
 Fetch, pull and push run through native git (section 8) with your Linux
-credential helpers, SSH keys and known hosts; fetching from GitHub over HTTPS
-works with nothing configured in the prefix. What follows applies only to the
-Windows git, which now touches remotes only from the Console tab.
+credential helpers, SSH keys and known hosts, and so do all the other
+progress dialogs: rebase, merge, cherry-pick, checkout, reset and the rest of
+`FormProcess`. Under the bridge those dialogs use the plain-text output view
+instead of the console emulator, because a bridged process has no console to
+host; the emulator setting is ignored. The notes below apply only to the
+Windows git, which now runs only in the Console tab and for the interactive
+patch commands.
 
 - **Git Credential Manager does not work.** MinGit's system config sets
   `credential.helper=manager`, which talks to the Windows credential store.

@@ -1,3 +1,4 @@
+﻿using GitCommands;
 using GitCommands.Settings;
 using GitUI.ConsoleEmulation.ConEmu;
 using GitUI.ConsoleEmulation.PlainText;
@@ -20,7 +21,8 @@ internal sealed class ConsoleEmulatorsRegistry(
     /// </summary>
     public IConsoleCommandRunner CreateCommandController()
     {
-        if (!useConsoleEmulation.Value)
+        // A bridged git process (native git under Wine) has no console for an emulator to host; the plain runner streams its output.
+        if (!useConsoleEmulation.Value || NativeGitBridge.IsEnabled)
         {
             return new PlainTextConsoleCommandRunner();
         }
