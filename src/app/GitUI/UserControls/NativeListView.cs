@@ -8,6 +8,19 @@ public class NativeListView : ListView
     internal static event EventHandler? EndCreateHandle;
     internal event ScrollEventHandler? Scroll;
 
+    private const int WM_REFLECT_NOTIFY = 0x2000 + 0x004E;
+    private const int NM_CUSTOMDRAW = -12;
+    private const int CDDS_ITEMPREPAINT = 0x00010001;
+    private const int CDRF_SKIPDEFAULT = 0x00000004;
+
+    /// <summary>
+    /// When set, the control answers the item pre-paint custom-draw stage with CDRF_SKIPDEFAULT
+    /// after <see cref="ListView.DrawItem"/> ran, so the native control paints nothing of its own.
+    /// Wine's comctl32 ignores the sub-item handshake WinForms uses for owner-drawn details/tile
+    /// views and paints the plain item text over the owner drawing; this keeps it out.
+    /// </summary>
+    internal bool SkipNativeItemPainting { get; set; }
+
     public NativeListView()
     {
         DoubleBuffered = true;
@@ -33,10 +46,33 @@ public class NativeListView : ListView
         Message message = m;
         switch (m.Msg)
         {
+            case WM_REFLECT_NOTIFY when SkipNativeItemPainting && OwnerDraw:
+                base.WndProc(ref m);
+                if (IsItemPrePaintNotification(m.LParam))
+                {
+                    m.Result = CDRF_SKIPDEFAULT;
+                }
+
+                break;
+
             default:
                 HandleScroll(m);
                 base.WndProc(ref m);
                 break;
+        }
+
+        static bool IsItemPrePaintNotification(IntPtr nmhdr)
+        {
+            // NMHDR { HWND hwndFrom; UINT_PTR idFrom; UINT code; } followed by NMCUSTOMDRAW.dwDrawStage
+            int code = System.Runtime.InteropServices.Marshal.ReadInt32(nmhdr, 2 * IntPtr.Size);
+            if (code != NM_CUSTOMDRAW)
+            {
+                return false;
+            }
+
+            int nmhdrSize = IntPtr.Size == 8 ? 24 : 12;
+            int drawStage = System.Runtime.InteropServices.Marshal.ReadInt32(nmhdr, nmhdrSize);
+            return drawStage == CDDS_ITEMPREPAINT;
         }
 
         void HandleScroll(Message msg)
