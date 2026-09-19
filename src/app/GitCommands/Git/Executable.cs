@@ -60,7 +60,7 @@ public sealed class Executable : IExecutable
 
         string fileName = _fileNameProvider();
 
-        if (!createWindow && !useShellExecute && NativeGitBridge.IsEnabled && NativeGitBridge.IsGit(fileName))
+        if (!useShellExecute && NativeGitBridge.IsEnabled && NativeGitBridge.IsGit(fileName) && (!createWindow || NativeGitBridge.AllowsWindow(args)))
         {
             // Under Wine, native git through the bridge daemon is a socket round trip instead of a process start.
             return NativeGitBridge.Start(fileName, PrefixArguments, args, _workingDir, redirectInput, redirectOutput, outputEncoding, throwOnErrorExit, cancellationToken);

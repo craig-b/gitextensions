@@ -28,7 +28,7 @@ namespace GitCommands;
 ///   3 exit code, 4 error text, 5 process id.
 ///  </para>
 /// </remarks>
-internal static class NativeGitBridge
+public static class NativeGitBridge
 {
     private static readonly Lazy<(int Port, string Token)?> _endpoint = new(ReadEndpoint);
 
@@ -37,6 +37,33 @@ internal static class NativeGitBridge
     public static bool IsGit(string fileName)
         => Path.GetFileName(fileName) is { } name
            && (name.Equals("git.exe", StringComparison.OrdinalIgnoreCase) || name.Equals("git", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    ///  Whether a git command the app would give a console window can go over the bridge anyway:
+    ///  the merge and diff tools open their own windows and need no console, and native git then
+    ///  launches native tools. Anything interactive on the console (add --patch) stays with Windows git.
+    /// </summary>
+    public static bool AllowsWindow(string arguments)
+    {
+        bool skipNext = false;
+        foreach (string token in SplitArguments(arguments))
+        {
+            if (skipNext)
+            {
+                skipNext = false;
+            }
+            else if (token is "-c" or "-C" or "--git-dir" or "--work-tree")
+            {
+                skipNext = true;
+            }
+            else if (!token.StartsWith('-'))
+            {
+                return token is "mergetool" or "difftool";
+            }
+        }
+
+        return false;
+    }
 
     public static IProcess Start(string fileName,
                                  string prefixArguments,
