@@ -3427,8 +3427,11 @@ public sealed partial class RevisionGridControl : GitModuleControl, ICheckRefs, 
 
         using FormProcess formProcess = new(UICommands, arguments: rebaseCmd, Module.WorkingDir, input: null, useDialogSettings: true);
 
+        // Replace the first "pick" with the command and copy the rest through. Written in POSIX sed: the shorter GNU form
+        // "0,/pick/s//cmd/" is silently ignored by BusyBox sed (e.g. the BusyBox flavour of MinGit), and "1,/pick/" would
+        // also hit the second pick when the todo has no rebase-merges header. A "}" must be its own -e, as a label runs to the end of its expression.
         const string envVarNameGitSequenceEditor = "GIT_SEQUENCE_EDITOR";
-        formProcess.ProcessEnvVariables.Add(envVarNameGitSequenceEditor, string.Format("sed -i -re '0,/pick/s//{0}/'", command));
+        formProcess.ProcessEnvVariables.Add(envVarNameGitSequenceEditor, $"sed -i -e '/^pick/{{' -e 's/^pick/{command}/' -e ':a' -e 'n' -e 'ba' -e '}}'");
         formProcess.ProcessEnvVariables.ForwardEnvironmentVariableToWsl(Module.WorkingDir, envVarNameGitSequenceEditor);
 
         formProcess.ShowDialog(ParentForm);
