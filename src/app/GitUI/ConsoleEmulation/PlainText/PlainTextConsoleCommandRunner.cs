@@ -56,8 +56,15 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
             DebugHelpers.Assert(!InvokeRequired, "!InvokeRequired");
 
             _editbox.Visible = true;
-            _editbox.Text += text;
-            _editbox.SelectionStart = _editbox.Text.Length;
+
+            // Insert at the end with the box's text colour set on the insertion point. Setting ForeColor
+            // on an empty rich edit reformats nothing under Wine's riched20 (SCF_ALL never updates the
+            // default style there), so text streamed in later came out black on the dark background.
+            _editbox.SelectionStart = _editbox.TextLength;
+            _editbox.SelectionLength = 0;
+            _editbox.SelectionColor = _editbox.ForeColor;
+            _editbox.SelectedText = text;
+            _editbox.SelectionStart = _editbox.TextLength;
             _editbox.ScrollToCaret();
         }
     }
