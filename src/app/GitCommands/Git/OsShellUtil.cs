@@ -1,4 +1,5 @@
-﻿using GitExtensions.Extensibility;
+﻿using GitCommands.Utils;
+using GitExtensions.Extensibility;
 
 namespace GitCommands;
 
@@ -16,6 +17,12 @@ public static class OsShellUtil
     /// <param name="filePath">Pathname of the file to open.</param>
     public static void Open(string filePath)
     {
+        if (EnvUtils.RunningUnderWine)
+        {
+            OpenWithHostDesktop(filePath);
+            return;
+        }
+
         try
         {
             _ = CreateExecutable(filePath).Start(useShellExecute: true, throwOnErrorExit: false);
@@ -32,8 +39,25 @@ public static class OsShellUtil
     /// <param name="filePath">Pathname of the file to open.</param>
     public static void OpenAs(string filePath)
     {
+        if (EnvUtils.RunningUnderWine)
+        {
+            OpenWithHostDesktop(filePath);
+            return;
+        }
+
         // filePath must not be quoted
         _ = CreateExecutable("rundll32.exe").Start("shell32.dll,OpenAs_RunDLL " + filePath, redirectOutput: true, outputEncoding: System.Text.Encoding.UTF8);
+    }
+
+    /// <summary>
+    ///  Under Wine the prefix has no file associations, so ShellExecute reports "no association", and
+    ///  shell32's OpenAs_RunDLL is a stub. winebrowser turns a file: URI into a Unix path and hands it to
+    ///  xdg-open, i.e. the host desktop's default application for the file.
+    /// </summary>
+    private static void OpenWithHostDesktop(string filePath)
+    {
+        string fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
+        _ = CreateExecutable("winebrowser.exe").Start(fileUri.Quote(), throwOnErrorExit: false);
     }
 
     /// <summary>
