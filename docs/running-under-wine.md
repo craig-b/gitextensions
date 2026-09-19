@@ -159,6 +159,10 @@ Things that bite:
 
 ## 6. Using native Linux tools from git-under-Wine
 
+With the git bridge from section 8, `difftool` and the app's diff and blame
+run through native git, which launches native tools directly. The plumbing
+below is what the Windows git still needs, for `mergetool` and the Console tab.
+
 You will want the native kdiff3, meld or whatever rather than a Windows port.
 The plumbing:
 
@@ -218,13 +222,54 @@ start a process that imports only `kernel32`, and 0.29 s for anything that
 imports `user32`, which includes `git.exe` and `cmd.exe`. Native spawn is
 under a millisecond. Git Extensions runs one or more git commands per click.
 
-What helped, in order of effect:
+The fix is to not start a Windows process at all. The app routes every git
+call through `IExecutable`, so under Wine that seam is swapped for a socket
+client (`NativeGitBridge` in GitCommands) that talks to a small daemon on the
+Linux side, `eng/wine/git-bridge.py`, which runs native git. One git command
+is then a localhost round trip of a few milliseconds instead of a 0.3 s
+process start; the nine commands the app fires when it opens a repository took
+56 ms together.
+
+- **Wiring.** The launcher picks a free port and a random token, starts the
+  daemon with them in `GITEXT_GIT_BRIDGE_PORT` and `GITEXT_GIT_BRIDGE_TOKEN`,
+  runs the app, and kills the daemon afterwards. The daemon also exits when its
+  parent goes away. The app bridges only the git executable, only when it would
+  not create a console window, and only when both variables are set;
+  `GITEXT_GIT_BRIDGE=0` in the launcher's environment turns it off.
+- **Protocol.** One JSON header line with the token, working directory,
+  argument list, forwarded environment and whether stdin follows, then framed
+  bytes both ways (a type byte plus a little-endian length). The argument
+  string is split with `CommandLineToArgvW`, the rules git.exe would have
+  applied. Closing the connection kills the git process.
+- **Paths.** The daemon translates the working directory and any argument that
+  looks like `X:\...` or `--opt=X:\...` through the prefix's `dosdevices`
+  links, and maps absolute paths back to drive form in the output of
+  `rev-parse` and `worktree`. Relative paths pass through untouched. Nothing
+  else in git's output is translated, so far.
+- **Environment.** `GIT_*` and `DFT_*` variables set by the app are forwarded,
+  except those that carry Windows paths (`GIT_SSH`, `GIT_EDITOR`,
+  `GIT_SEQUENCE_EDITOR`, `GIT_ASKPASS`, `GIT_EXEC_PATH`). `HOME` is not, so
+  native git reads your Linux configuration, identity and credential helpers.
+  The daemon sets `GIT_EDITOR` to `git-bridge-editor`, which converts the file
+  path and runs the app's own editor under Wine, and `LC_MESSAGES=C` so the
+  messages the app parses stay in English.
+- **What still runs the Windows git.** Calls that need a console window
+  (`add --patch`, `checkout -p`, `mergetool`) and the Console tab. Direct
+  `CreateProcess` of a Linux binary is not an alternative: Wine's
+  `fork_and_exec` in `ntdll/unix/process.c` returns no process handle, closes
+  stdin and stdout when the parent has no console or passes
+  `CREATE_NO_WINDOW`, never wires stderr, and execs with the Linux environment.
+
+What still helped, for the Windows git that remains and for running
+without the bridge, in order of effect:
 
 - **Turn off the background git calls.** `showgitstatusinbrowsetoolbar`,
   `showgitstatusforartificialcommits` and `showaheadbehinddata` each fire git
   on focus changes and file-watcher events, and a `git status` walk through
-  Wine's filesystem layer costs about a second more. Set them to `false`.
-  The uncommitted-change counts on the working-directory rows go away; the
+  Wine's filesystem layer costs about a second more. Over the bridge each is
+  a few milliseconds and the walk runs in native git, so leave them on; set
+  them to `false` only when running without the bridge. The
+  uncommitted-change counts on the working-directory rows then go away; the
   rows still work on demand.
 - **Fonts.** Every Windows process enumerates fonts at startup. With a full
   Noto installation that is about 2,300 file opens plus a registry value read
@@ -238,11 +283,11 @@ What helped, in order of effect:
 - **Not worth doing:** `WINEESYNC`, `WINEFSYNC`, the kernel's ntsync driver,
   a tmpfs prefix, or git's `core.fscache`. None moved the numbers.
 
-The only way below the floor would be a `kernel32`-only `git.exe` shim that
-forwards to native git over a socket, which needs path translation in both
-directions. That is a project, not a tweak.
-
 ## 9. Remotes and credentials
+
+With the git bridge from section 8, fetch, pull and push run through native
+git with your Linux credential helpers, SSH keys and known hosts. The notes
+below apply to the Windows git in the prefix.
 
 - **Git Credential Manager does not work.** MinGit's system config sets
   `credential.helper=manager`, which talks to the Windows credential store.
@@ -310,5 +355,6 @@ clone over SSH; the dashboard's recent repositories.
 Keep the whole rebuild-and-overlay sequence in one script: stamp the version,
 build with Windows targeting, `rsync` the output over the install excluding
 the translation tool, XML docs, PDBs and the Linux apphosts, flip `IsPortable`
-back to `True`, then restore the stamped files so the tree stays clean. Running
+back to `True`, copy `eng/wine/git-bridge.py` and `git-bridge-editor` next to
+the launcher, then restore the stamped files so the tree stays clean. Running
 that after every change is what made the iteration loop bearable.

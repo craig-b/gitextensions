@@ -17,3 +17,4 @@
 *.bin binary diff=text
 *RevisionReaderTests.*.approved.* binary diff=text
 *DoAutoCRLF*.approved.* binary diff=text
+eng/wine/git-bridge-editor text eol=lf
