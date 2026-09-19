@@ -1,0 +1,7 @@
+#!/bin/sh
+# GIT_EDITOR for native git driven from Git Extensions under Wine:
+# hands the file to the app's own editor, as core.editor does for the Windows git.
+f=$1
+case "$f" in /*) ;; *) f="$PWD/$f" ;; esac
+w=$(printf 'Z:%s' "$f" | sed 's#/#\\#g')
+exec wine "${GITEXT_APP:-$HOME/.local/opt/gitext-wine/app}/GitExtensions.exe" fileeditor "$w"
