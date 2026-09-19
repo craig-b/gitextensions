@@ -157,14 +157,23 @@ Things that bite:
   `defaultclonedestinationpath`). The keys are case-sensitive and mostly
   lower-case; check `AppSettings.cs` for the exact string.
 
-## 6. Using native Linux tools from git-under-Wine
+## 6. Native Linux tools
 
-With the git bridge from section 8, `difftool` and the app's diff and blame
-run through native git, which launches native tools directly. The plumbing
-below is what the Windows git still needs, for `mergetool` and the Console tab.
+With the git bridge from section 8, `difftool`, `mergetool` and the app's own
+diff and blame run through native git, which launches native tools directly:
+no `start.exe`, no marker files, no path conversion. The tool comes from your
+Linux git configuration (`merge.guitool`, then `merge.tool`, then git's own
+candidate list), not from the prefix's, so the app's settings pages show no
+tool until `merge.tool`, `diff.tool` and their `guitool` twins are set in your
+Linux global config. The conflicts dialog hands the file to `git mergetool`
+rather than running the tool itself, so git stages the result when the tool
+reports success. Repository hooks run under your Linux shell for the same
+reason.
 
-You will want the native kdiff3, meld or whatever rather than a Windows port.
-The plumbing:
+Before the bridge, the Windows git had to reach a Linux program by itself,
+through a wrapper script in the prefix's git config. That plumbing is retired,
+but the facts are worth keeping for the next time a Windows-side script needs
+a Linux program:
 
 - **Neither msys nor BusyBox can exec a Linux binary.** Both check the file
   header and refuse with "Exec format error". Wine's own loader can
@@ -241,11 +250,13 @@ process start; the nine commands the app fires when it opens a repository took
   bytes both ways (a type byte plus a little-endian length). The argument
   string is split with `CommandLineToArgvW`, the rules git.exe would have
   applied. Closing the connection kills the git process.
-- **Paths.** The daemon translates the working directory and any argument that
-  looks like `X:\...` or `--opt=X:\...` through the prefix's `dosdevices`
-  links, and maps absolute paths back to drive form in the output of
-  `rev-parse` and `worktree`. Relative paths pass through untouched. Nothing
-  else in git's output is translated, so far.
+- **Paths.** The daemon rewrites every `X:\\...` or `X:/...` span in the
+  working directory, the arguments and the forwarded environment values
+  through the prefix's `dosdevices` links, including `--opt=X:\\...`,
+  `-c key=X:\\...` and `file:///X:/...`. Coming back, absolute paths in the
+  output of `rev-parse` and `worktree list` (both the `-z` and the line form)
+  are mapped to `Z:/...` form, which is what the Windows git printed. Nothing
+  else in git's output is translated; relative paths pass through untouched.
 - **Environment.** `GIT_*` and `DFT_*` variables set by the app are forwarded,
   except those that carry Windows paths (`GIT_SSH`, `GIT_EDITOR`,
   `GIT_SEQUENCE_EDITOR`, `GIT_ASKPASS`, `GIT_EXEC_PATH`). `HOME` is not, so
@@ -253,11 +264,16 @@ process start; the nine commands the app fires when it opens a repository took
   The daemon sets `GIT_EDITOR` to `git-bridge-editor`, which converts the file
   path and runs the app's own editor under Wine, and `LC_MESSAGES=C` so the
   messages the app parses stay in English.
-- **What still runs the Windows git.** Calls that need a console window
-  (`add --patch`, `checkout -p`, `mergetool`) and the Console tab. Direct
-  `CreateProcess` of a Linux binary is not an alternative: Wine's
-  `fork_and_exec` in `ntdll/unix/process.c` returns no process handle, closes
-  stdin and stdout when the parent has no console or passes
+- **Tools with windows.** The app gives `mergetool` and `difftool` a console
+  window; the bridge takes them anyway, since the tools open their own windows
+  and native git then launches native tools. The daemon adds
+  `-c mergetool.prompt=false` because nobody can answer "Hit return to start
+  merge resolution tool" over a socket.
+- **What still runs the Windows git.** Calls that need an interactive console
+  (`add --patch`, `checkout -p`, `notes edit` with a foreign editor) and the
+  Console tab. Direct `CreateProcess` of a Linux binary is not an alternative:
+  Wine's `fork_and_exec` in `ntdll/unix/process.c` returns no process handle,
+  closes stdin and stdout when the parent has no console or passes
   `CREATE_NO_WINDOW`, never wires stderr, and execs with the Linux environment.
 
 What still helped, for the Windows git that remains and for running
@@ -285,21 +301,22 @@ without the bridge, in order of effect:
 
 ## 9. Remotes and credentials
 
-With the git bridge from section 8, fetch, pull and push run through native
-git with your Linux credential helpers, SSH keys and known hosts. The notes
-below apply to the Windows git in the prefix.
+Fetch, pull and push run through native git (section 8) with your Linux
+credential helpers, SSH keys and known hosts; fetching from GitHub over HTTPS
+works with nothing configured in the prefix. What follows applies only to the
+Windows git, which now touches remotes only from the Console tab.
 
 - **Git Credential Manager does not work.** MinGit's system config sets
   `credential.helper=manager`, which talks to the Windows credential store.
   Under Wine that fails with "Failed to enumerate credentials [0x3ec]" and
   git falls back to a username prompt it cannot show. Override the helper in
   the prefix's global config: an empty first `credential.helper` entry resets
-  the list, then add one that works. A tiny script that answers with a token
-  from a file on the Linux side keeps the secret out of the prefix.
-- **SSH works.** The msys `ssh.exe` that MinGit ships runs under Wine, reads a
-  key straight off the Z: drive, and `git ls-remote` over SSH succeeds. Set
-  `core.sshCommand` to `ssh -i Z:/path/to/key` in the prefix's global config.
-  Known hosts live in the Wine user's profile, not your Linux `~/.ssh`.
+  the list, then add one that works, such as a script that answers with a
+  token from a file on the Linux side.
+- **SSH works.** The msys `ssh.exe` that MinGit ships runs under Wine and
+  reads a key straight off the Z: drive with `core.sshCommand` set to
+  `ssh -i Z:/path/to/key`. Known hosts live in the Wine user's profile, not
+  your Linux `~/.ssh`.
 
 ## 10. Diagnostics that actually work
 
@@ -332,23 +349,26 @@ the deployment; keep this table current when it changes.
 | Feature | Status under Wine | Why |
 |---|---|---|
 | Edit commit, Reword | works | POSIX sed expression in code (BusyBox sed ignores GNU `0,/re/`) |
-| Git LFS | works | `git-lfs.exe` (release zip, checksum verified) dropped into `Git\cmd` |
+| Git LFS | works | native `git-lfs` through the bridge; `git-lfs.exe` in `Git\cmd` for the Console tab |
 | Open, Open with... | works | routed through `winebrowser` to `xdg-open` in code (Wine only) |
 | Show in folder | expected to work | Wine's explorer implements `/select,` |
 | Batch user scripts (`cmd`) | works | Wine cmd handles the generated `.cmd` |
 | Git GUI, GitK (Tools menu) | missing | MinGit ships neither, and no Tcl/Tk |
-| GPG tab on signed commits | error only | no `gpg.exe` in MinGit; unsigned commits show nothing, correctly |
+| GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
 | Convert workspace file to LF / CRLF scripts | works | edited in the portable settings: command `sh.exe`, arguments `dos2unix` / `unix2dos` without `.exe` (BusyBox resolves applets by bare name) |
 | Open in VS Code script | fails | calls `bash`, and there is no `code` in the prefix |
-| Repository hooks | depend on the hook | they run under BusyBox ash, not bash |
+| Repository hooks | work | run by native git under your Linux shell |
 | Gource, AutoCompileSubmodules plugins | missing programs | need `gource.exe` / msbuild in the prefix |
-| Credential manager | unusable | see section 9 |
+| Merge tool, diff tool | work | native tools through the bridge; set them in your Linux git config (section 6) |
+| Credential manager | not needed | remotes go through native git with your Linux helpers (section 9) |
 
-Smoke checklist after a Wine, prefix or MinGit upgrade: open the Console tab
-and switch windows; Edit commit on a throwaway branch; Open with... on a
-file; `git lfs version` from the Console tab; resolve a conflict with kdiff3;
-clone over SSH; the dashboard's recent repositories.
+Smoke checklist after a Wine, prefix, MinGit or git upgrade: open the
+Console tab and switch windows; Edit commit on a throwaway branch; Open
+with... on a file; `git lfs version` from the Console tab; resolve a conflict
+with the merge tool and open a file with the diff tool; fetch from a remote;
+the dashboard's recent repositories. `GITEXT_GIT_BRIDGE_LOG=<file>` in the
+launcher's environment lists every command the bridge ran.
 
 ## 12. A refresh script
 

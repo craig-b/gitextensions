@@ -709,6 +709,14 @@ public partial class FormResolveConflicts : GitModuleForm
             return false;
         }
 
+        if (NativeGitBridge.IsEnabled)
+        {
+            // The tool is a Linux program that native git launches itself; the app cannot run it directly.
+            _mergetoolCmd = null;
+            _mergetoolPath = null;
+            return true;
+        }
+
         using (WaitCursorScope.Enter())
         {
             _mergetoolCmd = nativeSettings.GetValue($"mergetool.{_mergetool}.cmd");
@@ -823,7 +831,7 @@ public partial class FormResolveConflicts : GitModuleForm
     private void SetAvailableCommands(bool enabled)
     {
         // Disable extra GE processing if path or cmd is not set
-        bool mergeToolExtrasConfigured = !string.IsNullOrWhiteSpace(_mergetoolPath) || !string.IsNullOrWhiteSpace(_mergetoolCmd);
+        bool mergeToolExtrasConfigured = !string.IsNullOrWhiteSpace(_mergetoolPath) || !string.IsNullOrWhiteSpace(_mergetoolCmd) || NativeGitBridge.IsEnabled;
         OpenMergetool.Enabled = enabled && mergeToolExtrasConfigured;
         customMergetool.Enabled = enabled;
         openMergeToolBtn.Enabled = enabled && mergeToolExtrasConfigured;
