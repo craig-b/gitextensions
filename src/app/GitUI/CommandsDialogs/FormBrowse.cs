@@ -574,6 +574,8 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
 
         _windowsJumpListManager.EnableThumbnailToolbar(_dashboard?.Visible is not true && Module.IsValidGitWorkingDir());
 
+        RepaintTerminalIfShown();
+
         this.InvokeAndForget(OnActivate);
         base.OnActivated(e);
     }
@@ -583,7 +585,20 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
         bool formDeactivatedByOwnModalDialog = ActiveForm is not null;
         _windowsJumpListManager.EnableThumbnailToolbar(!formDeactivatedByOwnModalDialog && _dashboard?.Visible is not true && Module.IsValidGitWorkingDir());
 
+        RepaintTerminalIfShown();
+
         base.OnDeactivate(e);
+    }
+
+    /// <summary>
+    ///  Activation changes repaint the form (selection colours, focus cues); under Wine that wipes the hosted terminal, see <see cref="HostedTerminalRepaint"/>.
+    /// </summary>
+    private void RepaintTerminalIfShown()
+    {
+        if (_consoleTabPage is not null && CommitInfoTabControl.SelectedTab == _consoleTabPage && _terminal?.IsShellRunning is true)
+        {
+            HostedTerminalRepaint.Soon(_terminal.Control);
+        }
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
