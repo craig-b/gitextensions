@@ -1,4 +1,4 @@
-using GitExtensions.Extensibility;
+﻿using GitExtensions.Extensibility;
 using GitExtUtils.GitUI.Theming;
 using GitUI.Theming;
 using ICSharpCode.TextEditor;
@@ -12,6 +12,13 @@ public class DiffViewerLineNumberControl : AbstractMargin
     private IReadOnlyDictionary<int, DiffLineInfo> _diffLines = _empty;
     private bool _visible = true;
     private bool _showLeftColumn = true;
+
+    // The current line's number is drawn with the highlighting's "selected" font, normally bold.
+    // Where the bold face is a substitute (e.g. under Wine, which lacks Consolas) it can be wider
+    // than the regular font's WideSpaceWidth the margin is sized from, so measure it as well.
+    private Font? _measuredFont;
+    private int _measuredDigits;
+    private int _measuredNumberWidth;
 
     public DiffViewerLineNumberControl(TextArea textArea)
         : base(textArea)
@@ -31,12 +38,33 @@ public class DiffViewerLineNumberControl : AbstractMargin
             {
                 // add a space behind each number
                 int maxDigits = MaxLineNumber > 0 ? ((int)Math.Log10(MaxLineNumber) + 1) : 0;
-                int length = (_showLeftColumn ? 2 : 1) * (1 + maxDigits);
-                return _textHorizontalMargin + (textArea.TextView.WideSpaceWidth * length);
+                int spaceWidth = textArea.TextView.WideSpaceWidth;
+                int numberWidth = Math.Max(spaceWidth * maxDigits, MeasureSelectedLineNumberWidth(maxDigits));
+                int columns = _showLeftColumn ? 2 : 1;
+                return _textHorizontalMargin + (columns * (spaceWidth + numberWidth));
             }
 
             return 0;
         }
+    }
+
+    private int MeasureSelectedLineNumberWidth(int digits)
+    {
+        if (digits == 0)
+        {
+            return 0;
+        }
+
+        Font font = textArea.Document.HighlightingStrategy.GetColorFor("LineNumberSelected").GetFont(TextEditorProperties.FontContainer);
+        if (!ReferenceEquals(font, _measuredFont) || digits != _measuredDigits)
+        {
+            using Graphics g = textArea.CreateGraphics();
+            _measuredNumberWidth = (int)Math.Ceiling(g.MeasureString(new string('9', digits), font).Width);
+            _measuredFont = font;
+            _measuredDigits = digits;
+        }
+
+        return _measuredNumberWidth;
     }
 
     /// <summary>
