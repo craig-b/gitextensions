@@ -32,6 +32,7 @@ partial class CopyPathsToolStripMenuItem
         copyRelativePathsPosixToolStripMenuItem = new ToolStripMenuItem();
         copyRelativePathsNativeToolStripMenuItem = new ToolStripMenuItem();
         copyFullPathsNativeToolStripMenuItem = new ToolStripMenuItem();
+        copyFullPathsWindowsToolStripMenuItem = new ToolStripMenuItem();
         copyFullPathsWslToolStripMenuItem = new ToolStripMenuItem();
         copyFullPathsCygwinToolStripMenuItem = new ToolStripMenuItem();
         // 
@@ -41,6 +42,7 @@ partial class CopyPathsToolStripMenuItem
         copyRelativePathsPosixToolStripMenuItem,
         copyRelativePathsNativeToolStripMenuItem,
         copyFullPathsNativeToolStripMenuItem,
+        copyFullPathsWindowsToolStripMenuItem,
         copyFullPathsWslToolStripMenuItem,
         copyFullPathsCygwinToolStripMenuItem});
         Image = Properties.Images.CopyToClipboard;
@@ -71,6 +73,14 @@ partial class CopyPathsToolStripMenuItem
         copyFullPathsNativeToolStripMenuItem.Text = "Copy &full path(s) - native";
         copyFullPathsNativeToolStripMenuItem.Click += CopyFullPathsNativeToolStripMenuItem_Click;
         // 
+        // copyFullPathsWindowsToolStripMenuItem
+        // 
+        copyFullPathsWindowsToolStripMenuItem.Name = "copyFullPathsWindowsToolStripMenuItem";
+        copyFullPathsWindowsToolStripMenuItem.Size = new Size(247, 22);
+        copyFullPathsWindowsToolStripMenuItem.Text = "Copy full path(s) - &Windows";
+        copyFullPathsWindowsToolStripMenuItem.Visible = false;
+        copyFullPathsWindowsToolStripMenuItem.Click += CopyFullPathsWindowsToolStripMenuItem_Click;
+        // 
         // copyFullPathsWslToolStripMenuItem
         // 
         copyFullPathsWslToolStripMenuItem.Name = "copyFullPathsWslToolStripMenuItem";
@@ -91,6 +101,7 @@ partial class CopyPathsToolStripMenuItem
     private ToolStripMenuItem copyRelativePathsPosixToolStripMenuItem;
     private ToolStripMenuItem copyRelativePathsNativeToolStripMenuItem;
     private ToolStripMenuItem copyFullPathsNativeToolStripMenuItem;
+    private ToolStripMenuItem copyFullPathsWindowsToolStripMenuItem;
     private ToolStripMenuItem copyFullPathsWslToolStripMenuItem;
     private ToolStripMenuItem copyFullPathsCygwinToolStripMenuItem;
 }

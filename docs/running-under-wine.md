@@ -382,6 +382,7 @@ the deployment; keep this table current when it changes.
 | Edit commit, Reword | works | POSIX sed expression in code (BusyBox sed ignores GNU `0,/re/`) |
 | Git LFS | works | native `git-lfs` through the bridge; `git-lfs.exe` in `Git\cmd` for the Console tab |
 | Open, Open with... | works | routed through `winebrowser` to `xdg-open` in code (Wine only) |
+| Copy path(s) | works | "native" is the Linux path in code (Wine only): drive letters resolved through `winepath -u`, once per drive; the Windows form is its own item; WSL and Cygwin are hidden |
 | Show in folder | expected to work | Wine's explorer implements `/select,` |
 | Batch user scripts (`cmd`) | works | Wine cmd handles the generated `.cmd` |
 | Git GUI, GitK (Tools menu) | missing | MinGit ships neither, and no Tcl/Tk |

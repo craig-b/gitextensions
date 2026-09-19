@@ -1,4 +1,5 @@
 ﻿using GitCommands;
+using GitCommands.Utils;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 
@@ -13,6 +14,16 @@ internal partial class CopyPathsToolStripMenuItem : ToolStripMenuItemEx
         InitializeComponent();
 
         copyFullPathsNativeToolStripMenuItem.Font = new(copyFullPathsNativeToolStripMenuItem.Font, FontStyle.Bold);
+
+        if (EnvUtils.RunningUnderWine)
+        {
+            // The host is Linux, so "native" is the host path. WSL and Cygwin layouts do not exist here, and a
+            // relative native path is the POSIX one. The Windows form stays reachable for pasting into another Wine program.
+            copyRelativePathsNativeToolStripMenuItem.Available = false;
+            copyFullPathsWslToolStripMenuItem.Available = false;
+            copyFullPathsCygwinToolStripMenuItem.Available = false;
+            copyFullPathsWindowsToolStripMenuItem.Available = true;
+        }
     }
 
     public CopyPathsToolStripMenuItem Initialize(Func<IGitUICommands> getUICommands, Func<IEnumerable<string?>> getSelectedFilePaths)
@@ -47,6 +58,11 @@ internal partial class CopyPathsToolStripMenuItem : ToolStripMenuItemEx
         // The command can be invoked via the keyboard, and the parent is null
         GetCurrentParent()?.Hide();
 
+        CopyPathsToClipboard(Module.WorkingDir, EnvUtils.RunningUnderWine ? WinePaths.ToHostPath : PathUtil.ToNativePath);
+    }
+
+    private void CopyFullPathsWindowsToolStripMenuItem_Click(object sender, EventArgs e)
+    {
         CopyPathsToClipboard(Module.WorkingDir, PathUtil.ToNativePath);
     }
 
