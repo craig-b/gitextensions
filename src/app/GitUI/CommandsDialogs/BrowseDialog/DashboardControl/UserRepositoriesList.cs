@@ -62,6 +62,11 @@ public partial class UserRepositoriesList : GitExtensionsControl
     private bool _hasInvalidRepos;
     private ListViewItem? _rightClickedItem;
 
+    // Wine's comctl32 does not implement ListView tile view: tiles collapse to icon size and
+    // hit-testing fails, so nothing opens on click. Under Wine the list runs as a single-column
+    // details view instead; this image list only exists to give rows the tile height.
+    private readonly ImageList? _wineRowHeightImageList;
+
     public event EventHandler<GitModuleEventArgs>? GitModuleChanged;
 
     private IUserRepositoriesListController Controller
@@ -98,7 +103,21 @@ public partial class UserRepositoriesList : GitExtensionsControl
         imageList1.Images.Clear();
         imageList1.ImageSize = DpiUtil.Scale(imageList1.ImageSize);
         imageList1.Images.Add(Images.DashboardFolderGit);
+
+        if (GitCommands.Utils.EnvUtils.RunningUnderWine)
+        {
+            _wineRowHeightImageList = new ImageList { ImageSize = new Size(1, listView1.TileSize.Height) };
+            listView1.View = View.Details;
+            listView1.FullRowSelect = true;
+            listView1.SkipNativeItemPainting = true;
+
+            // Wine never sends NM_CLICK, which is what WinForms raises MouseClick from; item
+            // activation (one-click, see designer) does arrive, so open from there instead
+            listView1.ItemActivate += (_, _) => TryOpenRepository(GetSelectedRepository());
+        }
+
         imageList1.Images.Add(Images.DashboardFolderError);
+        ApplyWineRowLayout();
 
         DragEnter += OnDragEnter;
         DragDrop += OnDragDrop;
@@ -311,6 +330,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
             if (recentRepositories.Count > 0 || favouriteRepositories.Count > 0)
             {
                 listView1.TileSize = GetTileSize(recentRepositories, favouriteRepositories);
+                ApplyWineRowLayout();
             }
 
             _hasInvalidRepos = false;
@@ -455,6 +475,36 @@ public partial class UserRepositoriesList : GitExtensionsControl
     {
         return listView1.Groups.Cast<ListViewGroup>()
             .SingleOrDefault(x => GroupHeaderComparer.Equals(x.Header, repository.Category))!;
+    }
+
+    private void ApplyWineRowLayout()
+    {
+        if (_wineRowHeightImageList is null)
+        {
+            return;
+        }
+
+        // the whole tile is owner-drawn into the first column; the branch/category columns
+        // only carry the sub-item data the tile rendering reads
+        listView1.Columns[0].Width = listView1.TileSize.Width;
+        for (int i = 1; i < listView1.Columns.Count; i++)
+        {
+            listView1.Columns[i].Width = 0;
+        }
+
+        _wineRowHeightImageList.ImageSize = new Size(1, listView1.TileSize.Height);
+
+        // ListViewItem.ImageIndex reports -1 once the index exceeds the assigned image list, and the
+        // tile rendering indexes imageList1 with it, so keep as many (blank) entries as imageList1 has
+        _wineRowHeightImageList.Images.Clear();
+        for (int i = 0; i < imageList1.Images.Count; i++)
+        {
+            _wineRowHeightImageList.Images.Add(new Bitmap(1, listView1.TileSize.Height));
+        }
+
+        // re-assign so the list picks up the new row height
+        listView1.SmallImageList = null;
+        listView1.SmallImageList = _wineRowHeightImageList;
     }
 
     private Size GetTileSize(IEnumerable<RecentRepoInfo> recentRepositories, IEnumerable<RecentRepoInfo> favouriteRepositories)
@@ -667,13 +717,26 @@ public partial class UserRepositoriesList : GitExtensionsControl
     {
         if (e.Button == MouseButtons.Left)
         {
+            if (listView1.SelectedItems.Count == 0)
+            {
+                // Wine's hit-testing does not select on click in the details fallback; select by bounds
+                ListViewItem? clicked = GetItemAtPoint(e.Location);
+                clicked?.Selected = true;
+            }
+
             TryOpenRepository(GetSelectedRepository());
         }
         else if (e.Button == MouseButtons.Right)
         {
-            _rightClickedItem = listView1.GetItemAt(e.X, e.Y);
+            _rightClickedItem = GetItemAtPoint(e.Location);
             _rightClickedItem?.Selected = true;
         }
+    }
+
+    private ListViewItem? GetItemAtPoint(Point location)
+    {
+        return listView1.GetItemAt(location.X, location.Y)
+            ?? listView1.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Bounds.Contains(location));
     }
 
     private void TextBoxSearch_TextChanged(object sender, EventArgs e)
@@ -702,7 +765,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
 
     private void listView1_MouseMove(object sender, MouseEventArgs e)
     {
-        HoveredItem = listView1.GetItemAt(e.X, e.Y);
+        HoveredItem = GetItemAtPoint(e.Location);
     }
 
     private void listView1_MouseLeave(object sender, EventArgs e)
