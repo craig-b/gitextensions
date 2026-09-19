@@ -32,6 +32,7 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
         _editbox = new RichTextBox
         {
             BackColor = Application.IsDarkModeEnabled ? AppColor.EditorBackground.GetThemeColor() : SystemColors.Info,
+            ForeColor = Application.IsDarkModeEnabled ? AppColor.AnsiTerminalWhiteForeNormal.GetThemeColor() : SystemColors.WindowText,
             BorderStyle = BorderStyle.FixedSingle,
             Dock = DockStyle.Fill,
             Font = AppSettings.MonospaceFont,
