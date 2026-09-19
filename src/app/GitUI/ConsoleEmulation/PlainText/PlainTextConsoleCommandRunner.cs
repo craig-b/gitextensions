@@ -21,6 +21,8 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
 
     private Process? _process;
 
+    private IBridgedConsoleProcess? _bridgedProcess;
+
     private Action? _logProcessKilled;
 
     private ProcessOutputThrottle? _outputThrottle;
@@ -89,6 +91,26 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
             throw new InvalidOperationException("This operation is to be executed on the home thread.");
         }
 
+        if (_bridgedProcess is { } bridged)
+        {
+            _bridgedProcess = null;
+            _logProcessKilled?.Invoke();
+            _logProcessKilled = null;
+            try
+            {
+                bridged.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+            }
+
+            bridged.Dispose();
+            _input = null;
+            CommandProcessExited?.Invoke(this, new ConsoleProcessExitEventArgs(-1));
+            return;
+        }
+
         if (_process is null)
         {
             return;
@@ -122,9 +144,15 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
 
     public void StartCommand(string command, string arguments, string workDir, Dictionary<string, string> envVariables)
     {
-        ProcessOperation operation = CommandLog.LogProcessStart(command, arguments, workDir);
-
         WriteOutputText($"{command.Quote()} {arguments}{Environment.NewLine}");
+
+        if (NativeGitBridge.IsEnabled && NativeGitBridge.IsGit(command))
+        {
+            StartBridgedCommand(command, arguments, workDir, envVariables);
+            return;
+        }
+
+        ProcessOperation operation = CommandLog.LogProcessStart(command, arguments, workDir);
 
         try
         {
@@ -239,26 +267,81 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
             ex.Data.Add("arguments", arguments);
             throw;
         }
+    }
 
-        return;
+    /// <summary>
+    ///  Runs git through the native git bridge (Wine): the process logs itself, output is streamed from the socket.
+    /// </summary>
+    private void StartBridgedCommand(string command, string arguments, string workDir, Dictionary<string, string> envVariables)
+    {
+        EnvironmentConfiguration.SetEnvironmentVariables();
+        KillCommandProcess();
 
-        void ForwardOutput(string output)
+        IBridgedConsoleProcess process = NativeGitBridge.StartConsole(command, arguments, workDir, envVariables, GitModule.SystemEncoding);
+        _bridgedProcess = process;
+        _input = process.StandardInput;
+        _logProcessKilled = null;
+        AsyncStreamReader outputReader = new(process.StandardOutput, ForwardOutput);
+        AsyncStreamReader errorReader = new(process.StandardErrorReader, ForwardOutput);
+
+        ThreadHelper.FileAndForget(async () =>
         {
-            output = output.Replace("\r\n", "\n");
-
-            for (int startIndex = 0; startIndex < output.Length;)
+            int exitCode;
+            try
             {
-                int nextLineStart = output.IndexOfAny(Delimiters.LineFeedAndCarriageReturnSearchValues, startIndex) + 1;
-                if (nextLineStart == 0)
-                {
-                    nextLineStart = output.Length;
-                }
-
-                string outputLine = output[startIndex..nextLineStart];
-                CommandOutputReceived?.Invoke(this, new ConsoleOutputEventArgs(outputLine));
-
-                startIndex = nextLineStart;
+                exitCode = await process.WaitForExitAsync();
             }
+            catch (OperationCanceledException)
+            {
+                // killed or reset; KillCommandProcess has reported the exit
+                outputReader.Dispose();
+                errorReader.Dispose();
+                return;
+            }
+            catch (Exception ex)
+            {
+                WriteOutputText(ex.Message + Environment.NewLine);
+                exitCode = -1;
+            }
+
+            using CancellationTokenSource eofTimeoutTokenSource = new(millisecondsDelay: 5000);
+            await outputReader.WaitUntilEofAsync(eofTimeoutTokenSource.Token);
+            outputReader.Dispose();
+            await errorReader.WaitUntilEofAsync(eofTimeoutTokenSource.Token);
+            errorReader.Dispose();
+
+            await this.SwitchToMainThreadAsync();
+            if (_bridgedProcess != process)
+            {
+                // killed meanwhile
+                return;
+            }
+
+            WriteOutputText("Done");
+            _bridgedProcess = null;
+            _input = null;
+            process.Dispose();
+            _outputThrottle?.Stop(flush: true);
+            CommandProcessExited?.Invoke(this, new ConsoleProcessExitEventArgs(exitCode));
+        });
+    }
+
+    private void ForwardOutput(string output)
+    {
+        output = output.Replace("\r\n", "\n");
+
+        for (int startIndex = 0; startIndex < output.Length;)
+        {
+            int nextLineStart = output.IndexOfAny(Delimiters.LineFeedAndCarriageReturnSearchValues, startIndex) + 1;
+            if (nextLineStart == 0)
+            {
+                nextLineStart = output.Length;
+            }
+
+            string outputLine = output[startIndex..nextLineStart];
+            CommandOutputReceived?.Invoke(this, new ConsoleOutputEventArgs(outputLine));
+
+            startIndex = nextLineStart;
         }
     }
 
@@ -271,6 +354,8 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
             _outputThrottle = null;
             _process?.Dispose();
             _process = null;
+            _bridgedProcess?.Dispose();
+            _bridgedProcess = null;
             _input?.Dispose();
             _input = null;
         }

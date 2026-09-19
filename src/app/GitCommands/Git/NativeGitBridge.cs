@@ -13,6 +13,14 @@ using Microsoft.VisualStudio.Threading;
 namespace GitCommands;
 
 /// <summary>
+///  A bridged git process whose error output is streamed live, for the progress dialogs.
+/// </summary>
+public interface IBridgedConsoleProcess : IProcess
+{
+    StreamReader StandardErrorReader { get; }
+}
+
+/// <summary>
 ///  Runs git through the Linux-side bridge daemon when the app runs under Wine.
 /// </summary>
 /// <remarks>
@@ -76,7 +84,18 @@ public static class NativeGitBridge
                                  CancellationToken cancellationToken)
     {
         (int port, string token) = _endpoint.Value!.Value;
-        return new BridgeProcess(port, token, fileName, prefixArguments, arguments, workDir, redirectInput, redirectOutput, outputEncoding, throwOnErrorExit, cancellationToken);
+        return new BridgeProcess(port, token, fileName, prefixArguments, arguments, workDir, redirectInput, redirectOutput, outputEncoding, throwOnErrorExit, cancellationToken, extraEnvironment: null, liveErrorOutput: false);
+    }
+
+    /// <summary>
+    ///  Starts git for a progress dialog: stdin open, stdout and stderr streamed live, the exit code reported rather than thrown.
+    /// </summary>
+    /// <param name="environment">Variables for this process only, such as the sequence editor for an interactive rebase; not filtered.</param>
+    public static IBridgedConsoleProcess StartConsole(string fileName, string arguments, string workDir, IReadOnlyDictionary<string, string> environment, Encoding outputEncoding)
+    {
+        (int port, string token) = _endpoint.Value!.Value;
+        arguments = arguments.Replace("$QUOTE$", "\\\"");
+        return new BridgeProcess(port, token, fileName, prefixArguments: "", arguments, workDir, redirectInput: true, redirectOutput: true, outputEncoding, throwOnErrorExit: false, CancellationToken.None, environment, liveErrorOutput: true);
     }
 
     private static (int, string)? ReadEndpoint()
@@ -118,7 +137,7 @@ public static class NativeGitBridge
     ///  Environment variables the app sets for git that make sense on the Linux side.
     ///  Editor and ssh variables carry Windows paths and stay behind; the daemon sets its own.
     /// </summary>
-    private static Dictionary<string, string> ForwardedEnvironment()
+    private static Dictionary<string, string> ForwardedEnvironment(IReadOnlyDictionary<string, string>? extra)
     {
         Dictionary<string, string> env = [];
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
@@ -127,6 +146,14 @@ public static class NativeGitBridge
             bool forward = (name.StartsWith("GIT_", StringComparison.Ordinal) || name.StartsWith("DFT_", StringComparison.Ordinal))
                 && name is not ("GIT_SSH" or "GIT_EDITOR" or "GIT_SEQUENCE_EDITOR" or "GIT_ASKPASS" or "GIT_EXEC_PATH" or "GIT_TEMPLATE_DIR" or "GIT_CONFIG_SYSTEM");
             if (forward && entry.Value is string value)
+            {
+                env[name] = value;
+            }
+        }
+
+        if (extra is not null)
+        {
+            foreach ((string name, string value) in extra)
             {
                 env[name] = value;
             }
@@ -144,7 +171,7 @@ public static class NativeGitBridge
         public static extern nint LocalFree(nint hMem);
     }
 
-    private sealed class BridgeProcess : IProcess
+    private sealed class BridgeProcess : IBridgedConsoleProcess
     {
         private const byte StdinData = 0;
         private const byte StdinEof = 1;
@@ -164,7 +191,9 @@ public static class NativeGitBridge
         private readonly NetworkStream _stream;
         private readonly Lock _sendLock = new();
         private readonly Pipe? _stdoutPipe;
+        private readonly Pipe? _stderrPipe;
         private readonly StreamReader? _standardOutput;
+        private readonly StreamReader? _standardError;
         private readonly StreamWriter? _standardInput;
         private readonly string _command;
         private readonly string _arguments;
@@ -185,7 +214,9 @@ public static class NativeGitBridge
                              bool redirectOutput,
                              Encoding? outputEncoding,
                              bool throwOnErrorExit,
-                             CancellationToken cancellationToken)
+                             CancellationToken cancellationToken,
+                             IReadOnlyDictionary<string, string>? extraEnvironment,
+                             bool liveErrorOutput)
         {
             _command = $"{fileName} {prefixArguments}".Trim();
             _arguments = arguments;
@@ -207,7 +238,7 @@ public static class NativeGitBridge
                     token,
                     cwd = workDir,
                     args = SplitArguments($"{prefixArguments}{arguments}"),
-                    env = ForwardedEnvironment(),
+                    env = ForwardedEnvironment(extraEnvironment),
                     stdin = redirectInput
                 });
                 byte[] headerBytes = Encoding.UTF8.GetBytes(header + "\n");
@@ -226,6 +257,12 @@ public static class NativeGitBridge
                 {
                     _stdoutPipe = new Pipe();
                     _standardOutput = new StreamReader(_stdoutPipe.Reader.AsStream(), outputEncoding ?? Encoding.Default);
+                }
+
+                if (liveErrorOutput)
+                {
+                    _stderrPipe = new Pipe();
+                    _standardError = new StreamReader(_stderrPipe.Reader.AsStream(), outputEncoding ?? Encoding.Default);
                 }
 
                 _ = Task.Run(ReceiveLoopAsync);
@@ -291,7 +328,15 @@ public static class NativeGitBridge
 
                             break;
                         case StderrFrame:
-                            _errorOutputStream.Write(payload);
+                            if (_stderrPipe is not null)
+                            {
+                                await _stderrPipe.Writer.WriteAsync(payload);
+                            }
+                            else
+                            {
+                                _errorOutputStream.Write(payload);
+                            }
+
                             break;
                         case PidFrame:
                             _logOperation.SetProcessId(BinaryPrimitives.ReadInt32LittleEndian(payload));
@@ -332,6 +377,11 @@ public static class NativeGitBridge
             {
                 await _stdoutPipe.Writer.CompleteAsync(ex);
             }
+
+            if (_stderrPipe is not null)
+            {
+                await _stderrPipe.Writer.CompleteAsync(ex);
+            }
         }
 
         private void HandleProcessExit(int exitCode)
@@ -365,6 +415,8 @@ public static class NativeGitBridge
         public StreamReader StandardOutput => _standardOutput ?? throw new InvalidOperationException("Process was not created with redirected output.");
 
         public string StandardError => _errorOutput ?? throw new InvalidOperationException("Process was not created with redirected output.");
+
+        public StreamReader StandardErrorReader => _standardError ?? throw new InvalidOperationException("Process was not created with live error output.");
 
         public void Kill(bool entireProcessTree) => SendFrame(KillRequest, ReadOnlySpan<byte>.Empty);
 

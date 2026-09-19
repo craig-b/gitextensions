@@ -178,11 +178,12 @@ async def handle(reader, writer):
         args, cmd = prepare_args(req.get("args", []))
         want_stdin = bool(req.get("stdin"))
         env = dict(os.environ)
-        env.update({k: to_unix(v) for k, v in (req.get("env") or {}).items()})
         env["LC_MESSAGES"] = "C"
         if EDITOR:
             env["GIT_EDITOR"] = EDITOR
             env.pop("GIT_SEQUENCE_EDITOR", None)
+        # the app's own variables win, e.g. the sed sequence editor that rewrites a rebase todo
+        env.update({k: to_unix(v) for k, v in (req.get("env") or {}).items()})
         log(f"run cwd={cwd} args={args}")
         if cwd and not os.path.isdir(cwd):
             # what git itself says for -C on a missing directory; the app handles the exit code
