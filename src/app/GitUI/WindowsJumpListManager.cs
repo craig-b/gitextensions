@@ -35,6 +35,7 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
     private ThumbnailToolBarButton? _pushButton;
     private ThumbnailToolBarButton? _pullButton;
     private string? _deferredAddToRecent;
+    private bool _jumpListsUnavailable;
     private bool ToolbarButtonsCreated => _commitButton is not null;
 
     static WindowsJumpListManager()
@@ -71,8 +72,8 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
         }
     }
 
-    private static bool IsSupported => OperatingSystem.IsWindows() && TaskbarManager.IsPlatformSupported;
-    private static bool IsSupportedAndVisible => EnvUtils.RunningOnWindowsWithMainWindow() && TaskbarManager.IsPlatformSupported;
+    private bool IsSupported => OperatingSystem.IsWindows() && TaskbarManager.IsPlatformSupported && !_jumpListsUnavailable;
+    private bool IsSupportedAndVisible => IsSupported && EnvUtils.RunningOnWindowsWithMainWindow();
 
     /// <summary>
     /// Adds the given working directory to the list of Recent for future quick access.
@@ -166,12 +167,20 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
             return;
         }
 
-        SafeInvoke(() =>
+        Exception? failure = SafeInvoke(() =>
         {
             UpdateJumpList();
 
             CreateTaskbarButtons(windowHandle, buttons);
         }, nameof(CreateJumpList));
+
+        if (failure is NotImplementedException)
+        {
+            // The environment (e.g. Wine) has no jump list support at all; it will not appear on a later activation,
+            // so stop asking rather than logging the same failure every time the window is activated.
+            _jumpListsUnavailable = true;
+            return;
+        }
 
         if (ToolbarButtonsCreated && _deferredAddToRecent is not null)
         {
@@ -302,11 +311,16 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
         return icon;
     }
 
-    private static void SafeInvoke(Action action, string callerName)
+    /// <summary>
+    ///  Runs <paramref name="action"/>, swallowing the taskbar failures known to be environmental.
+    /// </summary>
+    /// <returns>The swallowed exception, or <see langword="null"/> if the action succeeded.</returns>
+    private static Exception? SafeInvoke(Action action, string callerName)
     {
         try
         {
             action();
+            return null;
         }
         catch (Exception ex)
             when (
@@ -325,10 +339,20 @@ public sealed class WindowsJumpListManager : IWindowsJumpListManager
                 // looks like a regression in Windows 10.0.16299 (1709)
                 ex is IOException ||
 
+                // observed under Wine: the taskbar COM interfaces exist but their methods return E_NOTIMPL
+                // (e.g. ICustomDestinationList.SetAppID) - treat as "jump lists unavailable"
+                ex is NotImplementedException ||
+
                 // observed during integration tests: A valid active Window is needed to update the Taskbar.
                 ex is InvalidOperationException)
         {
-            Trace.WriteLine(ex.Message, callerName);
+            if (ex is not NotImplementedException)
+            {
+                // "The method or operation is not implemented." is expected where the feature is absent and says nothing useful.
+                Trace.WriteLine(ex.Message, callerName);
+            }
+
+            return ex;
         }
     }
 }
