@@ -143,6 +143,8 @@ internal sealed class ConEmuConsoleCommandRunner : ContainerControl, IConsoleCom
                 }
             };
 
+            ConEmuWineSettings.Apply(startInfo);
+
             Validates.NotNull(_terminal);
             Validates.NotNull(_settings.Font);
             _terminal.Start(startInfo, ThreadHelper.JoinableTaskFactory, _settings.Theme, _settings.Font.Name, _settings.Font.Size.ToString("F0", CultureInfo.InvariantCulture));
