@@ -651,6 +651,11 @@ partial class FileStatusList
             return;
         }
 
+        if (RunPatchDialog("add", item))
+        {
+            return;
+        }
+
         CancellationToken token = _interactiveAddResetChunkSequence.Next();
         ThreadHelper.FileAndForget(async () =>
         {
@@ -658,6 +663,33 @@ partial class FileStatusList
             await this.SwitchToMainThreadAsync(token);
             RequestRefresh();
         });
+    }
+
+    /// <summary>
+    ///  Under the native git bridge there is no console window to host <c>git add --patch</c> or <c>git checkout -p</c>,
+    ///  so the process dialog is the terminal: hunks and prompts stream into it, answers are typed into its input line.
+    ///  Single-key reading and colours are off because the dialog is a pipe, not a terminal.
+    /// </summary>
+    /// <returns>Whether the bridge handled the command; otherwise the caller opens the console window.</returns>
+    private bool RunPatchDialog(string command, GitItemStatus item)
+    {
+        if (!NativeGitBridge.IsEnabled)
+        {
+            return false;
+        }
+
+        GitArgumentBuilder args = new(command)
+        {
+            new GitConfigItem("interactive.singleKey", "false"),
+            new GitConfigItem("color.ui", "false"),
+            { command == "add", "--patch", "-p" },
+            "--",
+            item.Name.Quote()
+        };
+
+        FormProcess.ShowInteractiveDialog(this, UICommands, args, Module.WorkingDir);
+        RequestRefresh();
+        return true;
     }
 
     public void LoadCustomDifftools()
@@ -919,6 +951,11 @@ partial class FileStatusList
     private void ResetChunkOfFile_Click(object sender, EventArgs e)
     {
         if (SelectedGitItem is not GitItemStatus item)
+        {
+            return;
+        }
+
+        if (RunPatchDialog("checkout", item))
         {
             return;
         }

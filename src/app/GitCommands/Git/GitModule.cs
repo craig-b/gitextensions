@@ -1925,6 +1925,7 @@ public sealed partial class GitModule : IGitModule
         GitArgumentBuilder args = new("add")
         {
             "--patch",
+            "--",
             file.Name.Quote()
         };
 
@@ -1937,6 +1938,7 @@ public sealed partial class GitModule : IGitModule
         GitArgumentBuilder args = new("checkout")
         {
             "-p",
+            "--",
             file.Name.Quote()
         };
 

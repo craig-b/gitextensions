@@ -81,6 +81,18 @@ public partial class FormProcess : FormStatus
         return !formProcess.ErrorOccurred();
     }
 
+    /// <summary>
+    ///  Runs a command that asks questions, such as <c>git add --patch</c>, with the dialog as its terminal:
+    ///  the prompts stream into the output and the answers are typed into the input line.
+    /// </summary>
+    /// <returns>Whether the command exited successfully.</returns>
+    public static bool ShowInteractiveDialog(IWin32Window owner, IGitUICommands commands, ArgumentString arguments, string workingDirectory)
+    {
+        using FormProcess formProcess = new(commands, arguments, workingDirectory, input: null, useDialogSettings: true) { InteractiveInput = true };
+        formProcess.ShowDialog(owner);
+        return !formProcess.ErrorOccurred();
+    }
+
     public static string ReadDialog(IWin32Window? owner, IGitUICommands commands, ArgumentString arguments, string workingDirectory, string? input, bool useDialogSettings)
     {
         DebugHelpers.Assert(owner is not null, "Progress window must be owned by another window! This is a bug, please correct and send a pull request with a fix.");

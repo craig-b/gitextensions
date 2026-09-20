@@ -15,6 +15,16 @@ public partial class PasswordInput : TranslatedControl
 
     public event EventHandler<TextEventArgs>? PasswordEntered;
 
+    /// <summary>
+    ///  Turns the box into a plain input line for a process that asks questions, such as <c>git add --patch</c>:
+    ///  the text is visible and the mask toggle is gone.
+    /// </summary>
+    public void UsePlainText()
+    {
+        Password.UseSystemPasswordChar = false;
+        ShowPassword.Visible = false;
+    }
+
     private void SendInput_Click(object sender, EventArgs e)
     {
         PasswordEntered?.Invoke(this, new TextEventArgs(Password.Text));
