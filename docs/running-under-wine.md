@@ -314,9 +314,20 @@ app fires when it opens a repository took 56 ms together.
   into its input line, with single-key reading and colours turned off because
   a pipe is not a terminal. `e` opens the hunk in the app's own editor through
   the bridge's `GIT_EDITOR`.
-- **What still runs the Windows git.** The Console tab, `notes edit` with a
-  foreign editor, and anything you configure with an explicit Windows
-  extension. Those never write the index in normal use, so the tree is in
+- **The Console tab is a Linux terminal.** ConEmu can only host a Windows
+  program, so it hosts `bridge-tty.exe` (`eng/wine/bridge-tty.c`, built with
+  MinGW by the refresh script), which asks the daemon for a pseudo-terminal
+  session running your login shell in the repository directory and is then a
+  wire: terminal output goes to the console untouched with virtual terminal
+  processing on, key events become the byte sequences an xterm sends, and
+  console resizes become `TIOCSWINSZ`. Your prompt, dotfiles, SSH agent and
+  credential helpers are all there, and `git` in the tab is native git. The
+  launcher passes the relay's path in `GITEXT_GIT_BRIDGE_TTY`; without it the
+  tab falls back to the BusyBox shell. The daemon resets the signal
+  dispositions it inherits from the launcher's background job, or Ctrl+C
+  would be ignored in the session.
+- **What still runs the Windows git.** `notes edit` with a foreign editor,
+  and anything you configure with an explicit Windows extension. Those never write the index in normal use, so the tree is in
   practice owned by native git. Do not commit files with the execute bit: the
   Windows git cannot see it and reports them as modified. Direct `CreateProcess` of a Linux binary is not an alternative:
   Wine's `fork_and_exec` in `ntdll/unix/process.c` returns no process handle,
@@ -408,6 +419,7 @@ the deployment; keep this table current when it changes.
 | Git GUI, GitK (Tools menu) | work | native `gitk` and `git gui` through the bridge; they need Tk on the Linux side (git's optional dependency) |
 | User scripts and external tools | run natively | a program without a Windows extension is a Linux program to the bridge; arguments with `Z:` paths are translated |
 | Stage / unstage by patch (context menu) | work | native git in the process dialog, answers typed into its input line (section 8) |
+| Console tab | Linux login shell | the terminal relay over the bridge (section 8); the BusyBox shell notes in section 4 apply only without it |
 | GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
 | Convert workspace file to LF / CRLF scripts | works | edited in the portable settings: command `sh.exe`, arguments `dos2unix` / `unix2dos` without `.exe` (BusyBox resolves applets by bare name) |

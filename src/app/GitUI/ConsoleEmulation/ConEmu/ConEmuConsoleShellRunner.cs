@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using ConEmu.WinForms;
 using GitCommands;
 using GitUI.ConsoleEmulation;
@@ -41,6 +41,7 @@ internal sealed class ConEmuConsoleShellRunner(IShellProvider shellProvider, Con
         switch (shell.Name)
         {
             case BashShell.ShellName:
+            case LinuxShell.ShellName:
                 // Use a ConEmu macro to send the sequence for clearing the bash command line
                 session.BeginGuiMacro("Keys").WithParam("^A").WithParam("^K").ExecuteSync();
                 WriteInput(command);
