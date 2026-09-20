@@ -47,7 +47,8 @@ public class CheckSettingsLogic
 
     public static bool SolveLinuxToolsDir(string? possibleNewPath = null)
     {
-        if (!OperatingSystem.IsWindows())
+        // Under the Wine git bridge the tools are the Linux ones, found on the daemon's PATH like git itself.
+        if (!OperatingSystem.IsWindows() || NativeGitBridge.IsEnabled)
         {
             AppSettings.LinuxToolsDir = string.Empty;
             return true;

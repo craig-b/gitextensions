@@ -65,8 +65,9 @@ public static class NativeGitBridge
     /// <summary>
     ///  Whether a command the app would give a console window can go over the bridge anyway.
     ///  A Linux program other than git opens its own window or needs none. For git, the merge and
-    ///  diff tools and the Tk GUIs open their own windows, and native git then launches native tools.
-    ///  Anything interactive on the console (add --patch) stays with Windows git.
+    ///  diff tools and the Tk GUIs open their own windows, native git then launches native tools, and
+    ///  notes edit opens the app's own editor through the daemon's GIT_EDITOR. Anything interactive on
+    ///  the console (add --patch) is hosted by the process dialog instead.
     /// </summary>
     public static bool AllowsWindow(string fileName, string arguments)
     {
@@ -88,7 +89,7 @@ public static class NativeGitBridge
             }
             else if (!token.StartsWith('-'))
             {
-                return token is "mergetool" or "difftool" or "gui" or "citool";
+                return token is "mergetool" or "difftool" or "gui" or "citool" or "notes";
             }
         }
 
