@@ -253,15 +253,19 @@ under a millisecond. Git Extensions runs one or more git commands per click.
 The fix is to not start a Windows process at all. The app routes every git
 call through `IExecutable`, so under Wine that seam is swapped for a socket
 client (`NativeGitBridge` in GitCommands) that talks to a small daemon on the
-Linux side, `eng/wine/git-bridge.py`, which runs native git. One git command
-is then a localhost round trip of a few milliseconds instead of a 0.3 s
-process start; the nine commands the app fires when it opens a repository took
-56 ms together.
+Linux side, `eng/wine/git-bridge.cs`, which runs native git. The daemon is a
+single-file .NET 10 program published as a native AOT executable
+(`dotnet publish eng/wine/git-bridge.cs -o <dir>`), so it needs no runtime and
+starts in a few milliseconds. One git command is then a localhost round trip
+of a few milliseconds instead of a 0.3 s process start; the nine commands the
+app fires when it opens a repository took 56 ms together.
 
 - **Wiring.** The launcher picks a free port and a random token, starts the
   daemon with them in `GITEXT_GIT_BRIDGE_PORT` and `GITEXT_GIT_BRIDGE_TOKEN`,
   runs the app, and kills the daemon afterwards. The daemon also exits when its
-  parent goes away. The app bridges only the git executable, only when it would
+  parent goes away. The daemon puts itself in its own session at startup, so
+  no git it runs has a controlling terminal to prompt on, and a kill takes
+  git's whole process tree with it. The app bridges only the git executable, only when it would
   not create a console window, and only when both variables are set;
   `GITEXT_GIT_BRIDGE=0` in the launcher's environment turns it off.
 - **Protocol.** One JSON header line with the token, working directory,
@@ -407,6 +411,6 @@ launcher's environment lists every command the bridge ran.
 Keep the whole rebuild-and-overlay sequence in one script: stamp the version,
 build with Windows targeting, `rsync` the output over the install excluding
 the translation tool, XML docs, PDBs and the Linux apphosts, flip `IsPortable`
-back to `True`, copy `eng/wine/git-bridge.py` and `git-bridge-editor` next to
-the launcher, then restore the stamped files so the tree stays clean. Running
+back to `True`, publish `eng/wine/git-bridge.cs` and copy `git-bridge-editor`
+next to the launcher, then restore the stamped files so the tree stays clean. Running
 that after every change is what made the iteration loop bearable.
