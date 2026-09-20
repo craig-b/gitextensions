@@ -1,0 +1,50 @@
+#!/bin/sh
+# Launches the Git Extensions Wine build installed next to this script (the app in ./app, the git bridge
+# daemon in ./git-bridge, the terminal relay and helper scripts alongside). Install it as a symlink on PATH.
+# Usage: gitext-wine [browse] [path]   - a Linux path is mapped to Z:\...
+# GITEXT_WINEPREFIX overrides the prefix; GITEXT_GIT_BRIDGE=0 runs without the native git bridge.
+set -u
+ROOT=$(dirname "$(readlink -f "$0")")
+APP="$ROOT/app"
+export WINEPREFIX="${GITEXT_WINEPREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/wineprefixes/gitext}"
+export WINEDEBUG="${WINEDEBUG:--all}"
+# Every Windows process under Wine enumerates fontconfig's fonts at startup; the install ships a slim set.
+if [ -f "$ROOT/fonts.conf" ]; then
+  export FONTCONFIG_FILE="${FONTCONFIG_FILE:-$ROOT/fonts.conf}"
+fi
+# Editors from the Linux session do not exist inside the prefix; git must fall through to its configuration.
+unset GIT_EDITOR GIT_SEQUENCE_EDITOR VISUAL EDITOR
+# The Windows apphost must not see the Linux dotnet install.
+for v in $(env | grep -o '^DOTNET[A-Z_]*='); do unset "${v%=}"; done
+
+winpath() { printf 'Z:%s' "$1" | sed 's#/#\\#g'; }
+if [ $# -eq 0 ]; then set -- browse "$(pwd)"; fi
+n=$#
+i=0
+while [ $i -lt $n ]; do
+  a=$1; shift
+  case "$a" in /*) a=$(winpath "$a") ;; esac
+  set -- "$@" "$a"
+  i=$((i+1))
+done
+
+BRIDGE_PID=
+if [ "${GITEXT_GIT_BRIDGE:-1}" != 0 ]; then
+  export GITEXT_GIT_BRIDGE_EDITOR="$ROOT/git-bridge-editor"
+  export GITEXT_GIT_BRIDGE_TTY=$(winpath "$ROOT/bridge-tty.exe")
+  export GITEXT_APP="$APP"
+  # the daemon picks a free port and a token and prints both as its first line
+  BRIDGE_FIFO=$(mktemp -u "${TMPDIR:-/tmp}/gitext-bridge.XXXXXX")
+  mkfifo -m 600 "$BRIDGE_FIFO"
+  "$ROOT/git-bridge/git-bridge" > "$BRIDGE_FIFO" &
+  BRIDGE_PID=$!
+  exec 3< "$BRIDGE_FIFO"
+  rm -f "$BRIDGE_FIFO"
+  read GITEXT_GIT_BRIDGE_PORT GITEXT_GIT_BRIDGE_TOKEN <&3
+  export GITEXT_GIT_BRIDGE_PORT GITEXT_GIT_BRIDGE_TOKEN
+fi
+
+cd "$APP" && wine GitExtensions.exe "$@"
+rc=$?
+[ -n "$BRIDGE_PID" ] && kill "$BRIDGE_PID" 2>/dev/null
+exit $rc

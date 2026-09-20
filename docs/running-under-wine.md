@@ -499,7 +499,21 @@ with the merge tool and open a file with the diff tool; fetch from a remote;
 the dashboard's recent repositories. `GITEXT_GIT_BRIDGE_LOG=<file>` in the
 launcher's environment lists every command the bridge ran.
 
-## 12. A refresh script
+## 12. Releases and a refresh script
+
+`.github/workflows/wine-release.yml` builds the whole Wine distribution on a
+Linux runner: a push to `wine-support` builds the portable app archive and a
+Linux tarball (the daemon, the relay, the launcher and helper scripts, this
+guide) and keeps them as workflow artifacts; a tag `wine-v<version>-<n>`
+publishes them as a GitHub release with a checksum file. The version is
+stamped from the tag, so `wine-v7.2.1.7-3` builds 7.2.1.7 and the archive
+names carry the commit hash. Nothing in it comes from an official archive and
+nothing needs Windows. The launcher, `eng/wine/gitext-wine`, finds the app,
+the daemon and the scripts next to itself, so the tarball unpacks into one
+directory and a symlink on `PATH` is the install.
+
+### The refresh script
+
 
 Keep the whole rebuild-and-overlay sequence in one script: stamp the version,
 build with Windows targeting, `dotnet publish` the solution, `rsync` the
