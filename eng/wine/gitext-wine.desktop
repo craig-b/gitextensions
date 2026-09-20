@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Git Extensions (Wine)
+GenericName=Git client
+Comment=Git Extensions running under Wine, with native git
+Exec=gitext-wine browse %f
+Icon=gitext-wine
+Terminal=false
+Categories=Development;RevisionControl;
+MimeType=inode/directory;
+Keywords=git;repository;commit;
+StartupWMClass=gitextensions.exe
