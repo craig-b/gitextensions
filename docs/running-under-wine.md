@@ -52,13 +52,21 @@ Things that bite:
   load an assembly older than the one a reference was compiled against.
   `dotnet run set_version_to.cs` trips over the NuGet audit like the build
   does; set `NuGetAudit=false` in the environment for it.
-- **No apphost, no native code.** The Linux build produces no
-  `GitExtensions.exe`, and the shell extension and SSH askpass helpers are C++
-  projects that need MSVC. Take `GitExtensions.exe`, `BugReporter.exe`, the
-  `GitExtensionsShellEx*.dll` files and the `ConEmu` folder from the official
-  portable zip of the same version and overlay the managed build output on
-  top. The apphost only launches `GitExtensions.dll`, so it does not care that
-  the DLL was rebuilt.
+- **The apphost needs a runtime identifier.** A plain build produces a Linux
+  apphost named `GitExtensions` next to the DLL, not `GitExtensions.exe`.
+  Building with `-r win-x64 --self-contained false` (and
+  `-p:AppendRuntimeIdentifierToOutputPath=false` to keep the output path)
+  fetches the Windows host pack and produces a proper `GitExtensions.exe` on
+  Linux, with the icon, version resource and manifest embedded; the SDK's
+  resource updater is managed code and runs anywhere.
+- **The native code needs ATL.** The shell extension and the SSH askpass
+  helper are C++ projects, and what stops them building here is not the
+  compiler, MinGW and clang can both target Windows, but ATL, which ships only
+  with Visual Studio. Until they are rewritten in plain COM, take the
+  `GitExtensionsShellEx*.dll` files (and `BugReporter.exe` and the `ConEmu`
+  folder) from the official portable zip of the same version and overlay the
+  managed build output on top. The apphost only launches `GitExtensions.dll`,
+  so it does not care that the DLL was rebuilt.
 - **Plugins layout.** The published zip flattens plugins; the dev build keeps
   each plugin in its own folder with its dependencies and rewrites the probing
   path in `GitExtensions.dll.config` to match. Use the dev layout wholesale and
