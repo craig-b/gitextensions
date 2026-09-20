@@ -16,6 +16,7 @@ public static class ConEmuControlExtensions
         switch (shell.Name)
         {
             case BashShell.ShellName:
+            case LinuxShell.ShellName:
                 // Use a ConEmu macro to send the sequence for clearing the bash command line
                 terminal.RunningSession.BeginGuiMacro("Keys").WithParam("^A").WithParam("^K").ExecuteSync();
                 terminal.RunningSession.WriteInputTextAsync(command);

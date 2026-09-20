@@ -17,8 +17,13 @@
 // translated through the prefix's dosdevices links. Frames follow, both ways, as
 // <byte type><uint32 length> plus payload (little endian).
 //
-//   client -> daemon: 0 stdin data, 1 stdin EOF, 2 kill
+//   client -> daemon: 0 stdin data, 1 stdin EOF, 2 kill, 3 resize (uint16 cols, uint16 rows)
 //   daemon -> client: 1 stdout, 2 stderr, 3 exit (int32), 4 error text, 5 pid (int32)
+//
+// With "pty": true (plus "cols" and "rows") the program runs on a pseudo-terminal instead of
+// pipes: stdin frames are keystrokes, stdout frames are the terminal's output, and a resize
+// frame becomes TIOCSWINSZ. No program means the user's login shell. That is how the app's
+// Console tab hosts a Linux shell.
 //
 // Closing the connection kills the git process. The daemon exits when its parent (the launcher)
 // goes away. Build with `dotnet publish eng/wine/git-bridge.cs -o <dir>`; the result is a native
@@ -31,6 +36,7 @@ using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
@@ -38,6 +44,11 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 [assembly: SupportedOSPlatform("linux")]
+
+// A non-interactive shell starts a background job, which is what the launcher makes of us, with SIGINT and
+// SIGQUIT ignored, and .NET hands children whatever it found at startup. Reset them first, before the runtime
+// looks, so that Ctrl-C in a terminal session and a broken pipe in a git hook behave as they do anywhere else.
+Libc.ResetSignalDispositions();
 
 BridgeSettings settings = BridgeSettings.FromEnvironment();
 DriveMap drives = DriveMap.FromPrefix(settings.WinePrefix);
@@ -143,7 +154,7 @@ internal static class Programs
 }
 
 /// <summary>The request header line the app sends.</summary>
-internal sealed record Request(string? Token, string? Cwd, string? Program, string[]? Args, Dictionary<string, string>? Env, bool Stdin);
+internal sealed record Request(string? Token, string? Cwd, string? Program, string[]? Args, Dictionary<string, string>? Env, bool Stdin, bool Pty, ushort Cols, ushort Rows);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Request))]
@@ -155,6 +166,7 @@ internal enum Inbound : byte
     StdinData = 0,
     StdinEof = 1,
     Kill = 2,
+    Resize = 3,
 }
 
 /// <summary>Frames the daemon sends.</summary>
@@ -368,7 +380,14 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
                 return;
             }
 
-            await RunGitAsync(request, reader);
+            if (request.Pty)
+            {
+                await RunTerminalAsync(request, reader);
+            }
+            else
+            {
+                await RunGitAsync(request, reader);
+            }
         }
         catch (Exception ex)
         {
@@ -472,6 +491,151 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
         // nothing more can arrive that matters; the feeder is blocked in a read
         reader.CancelPendingRead();
         await feeder;
+    }
+
+    /// <summary>
+    ///  Runs a program, by default the user's login shell, on a pseudo-terminal and relays the terminal both ways.
+    ///  The program is a session leader with the terminal as its controlling tty, so job control, signals and
+    ///  window-size changes behave as in any terminal emulator; the client is expected to be one.
+    /// </summary>
+    private async Task RunTerminalAsync(Request request, PipeReader reader)
+    {
+        string? cwd = request.Cwd is { Length: > 0 } ? drives.ToUnix(request.Cwd) : null;
+        if (cwd is not null && !Directory.Exists(cwd))
+        {
+            cwd = null;
+        }
+
+        string? program;
+        List<string> args = [.. (request.Args ?? []).Select(drives.ToUnix)];
+        if (string.IsNullOrEmpty(request.Program))
+        {
+            program = Environment.GetEnvironmentVariable("SHELL") is { Length: > 0 } shell ? shell : "/bin/sh";
+            if (args.Count == 0)
+            {
+                args.Add("-l");
+            }
+        }
+        else
+        {
+            program = Programs.Resolve(drives.ToUnix(request.Program));
+        }
+
+        log.Write($"terminal cwd={cwd} program={program ?? request.Program} args=[{string.Join(", ", args)}] size={request.Cols}x{request.Rows}");
+
+        if (program is null)
+        {
+            await SendFrameAsync(TextFrame(Outbound.Stdout, $"{request.Program}: command not found\r\n"));
+            await SendFrameAsync(Int32Frame(Outbound.Exit, 127));
+            return;
+        }
+
+        using Pty pty = Pty.Open(request.Cols is 0 ? (ushort)80 : request.Cols, request.Rows is 0 ? (ushort)24 : request.Rows);
+
+        // setsid makes the program a session leader; opening the slave as its first terminal then makes that
+        // terminal its controlling tty. The redirections happen in the child, where .NET cannot reach.
+        ProcessStartInfo startInfo = new("setsid")
+        {
+            ArgumentList = { "sh", "-c", "p=$GITEXT_PTY; unset GITEXT_PTY; exec \"$0\" \"$@\" 0<>\"$p\" 1>&0 2>&0", program },
+            WorkingDirectory = cwd ?? Environment.GetEnvironmentVariable("HOME") ?? Environment.CurrentDirectory,
+            UseShellExecute = false,
+        };
+        foreach (string arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        startInfo.Environment["GITEXT_PTY"] = pty.SlavePath;
+        startInfo.Environment["TERM"] = "xterm-256color";
+        foreach ((string name, string value) in request.Env ?? [])
+        {
+            startInfo.Environment[name] = drives.ToUnix(value);
+        }
+
+        Process process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{program} did not start");
+        _process = process;
+        await SendFrameAsync(Int32Frame(Outbound.Pid, process.Id));
+
+        using FileStream output = pty.OpenRead();
+        using FileStream input = pty.OpenWrite();
+        Task feeder = FeedTerminalAsync(reader, input, pty);
+        Task pump = PumpTerminalAsync(output);
+        Task exit = process.WaitForExitAsync();
+
+        // the terminal closes when its last user goes (EIO on the master) or shortly after the program itself exits,
+        // whichever is first; a background process that kept the slave does not keep the tab open
+        await Task.WhenAny(pump, exit);
+        if (!pump.IsCompleted)
+        {
+            await Task.WhenAny(pump, Task.Delay(TimeSpan.FromMilliseconds(200)));
+        }
+
+        pty.Dispose();
+        await pump;
+        await exit;
+        await SendFrameAsync(Int32Frame(Outbound.Exit, process.ExitCode));
+
+        reader.CancelPendingRead();
+        await feeder;
+    }
+
+    /// <summary>The terminal's output, until the master reports EIO because its last user has gone, or is closed on exit.</summary>
+    private async Task PumpTerminalAsync(FileStream output)
+    {
+        try
+        {
+            await PumpAsync(output, Outbound.Stdout, translate: null);
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or UnauthorizedAccessException)
+        {
+            // expected ends of a pseudo-terminal
+        }
+    }
+
+    /// <summary>Keystrokes go to the terminal, resizes to the kernel; a kill frame or a dropped connection ends the session.</summary>
+    private async Task FeedTerminalAsync(PipeReader reader, FileStream input, Pty pty)
+    {
+        byte[] size = new byte[4];
+        try
+        {
+            while (true)
+            {
+                (Inbound kind, ReadOnlySequence<byte> payload) = await ReadFrameAsync(reader);
+                try
+                {
+                    switch (kind)
+                    {
+                        case Inbound.StdinData:
+                            foreach (ReadOnlyMemory<byte> segment in payload)
+                            {
+                                await input.WriteAsync(segment);
+                            }
+
+                            break;
+                        case Inbound.Resize when payload.Length >= 4:
+                            payload.Slice(0, 4).CopyTo(size);
+                            pty.Resize(BinaryPrimitives.ReadUInt16LittleEndian(size), BinaryPrimitives.ReadUInt16LittleEndian(size.AsSpan(2)));
+                            break;
+                        case Inbound.Kill:
+                            Kill();
+                            break;
+                    }
+                }
+                finally
+                {
+                    reader.AdvanceTo(payload.End);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // the session is over
+        }
+        catch (Exception ex) when (ex is EndOfStreamException or IOException or SocketException or ObjectDisposedException)
+        {
+            // the terminal window went away: hang up
+            Kill();
+        }
     }
 
     /// <summary>Forwards a stream of git's output as frames, reading straight into the frame so each one is a single write.</summary>
@@ -698,8 +862,115 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
     }
 }
 
+/// <summary>The master side of a pseudo-terminal; the slave is opened by the child by path.</summary>
+internal sealed class Pty : IDisposable
+{
+    private readonly int _master;
+    private bool _closed;
+
+    private Pty(int master, string slavePath)
+    {
+        _master = master;
+        SlavePath = slavePath;
+    }
+
+    public string SlavePath { get; }
+
+    public static Pty Open(ushort cols, ushort rows)
+    {
+        int master = Libc.posix_openpt(Libc.O_RDWR | Libc.O_NOCTTY);
+        if (master < 0 || Libc.grantpt(master) != 0 || Libc.unlockpt(master) != 0)
+        {
+            throw new IOException($"cannot open a pseudo-terminal: errno {Marshal.GetLastPInvokeError()}");
+        }
+
+        Span<byte> name = stackalloc byte[128];
+        if (Libc.ptsname_r(master, name, (nuint)name.Length) != 0)
+        {
+            throw new IOException($"ptsname_r failed: errno {Marshal.GetLastPInvokeError()}");
+        }
+
+        Pty pty = new(master, Encoding.UTF8.GetString(name[..name.IndexOf((byte)0)]));
+        pty.Resize(cols, rows);
+        return pty;
+    }
+
+    public void Resize(ushort cols, ushort rows)
+    {
+        Libc.WinSize size = new() { Rows = rows, Cols = cols };
+        _ = Libc.ioctl(_master, Libc.TIOCSWINSZ, ref size);
+    }
+
+    /// <summary>A read stream on the master; the handle stays ours, so disposing the terminal ends the reads with an error.</summary>
+    public FileStream OpenRead()
+        => new(new SafeFileHandle(_master, ownsHandle: false), FileAccess.Read, bufferSize: 0);
+
+    public FileStream OpenWrite()
+        => new(new SafeFileHandle(Libc.dup(_master), ownsHandle: true), FileAccess.Write, bufferSize: 0);
+
+    public void Dispose()
+    {
+        if (!_closed)
+        {
+            _closed = true;
+            _ = Libc.close(_master);
+        }
+    }
+}
+
 internal static partial class Libc
 {
+    public const int O_RDWR = 2;
+    public const int O_NOCTTY = 0x100;
+    public const nuint TIOCSWINSZ = 0x5414;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WinSize
+    {
+        public ushort Rows;
+        public ushort Cols;
+        public ushort XPixels;
+        public ushort YPixels;
+    }
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int posix_openpt(int flags);
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int grantpt(int fd);
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int unlockpt(int fd);
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int ptsname_r(int fd, Span<byte> buffer, nuint length);
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int ioctl(int fd, nuint request, ref WinSize size);
+
+    [LibraryImport("libc")]
+    public static partial int dup(int fd);
+
+    private const int SIGHUP = 1;
+    private const int SIGINT = 2;
+    private const int SIGQUIT = 3;
+    private const int SIGPIPE = 13;
+    private const int SIGTERM = 15;
+
+    public static void ResetSignalDispositions()
+    {
+        foreach (int signal in (ReadOnlySpan<int>)[SIGHUP, SIGINT, SIGQUIT, SIGPIPE, SIGTERM])
+        {
+            _ = Libc.signal(signal, 0);
+        }
+    }
+
+    [LibraryImport("libc")]
+    private static partial nint signal(int signal, nint handler);
+
+    [LibraryImport("libc")]
+    public static partial int close(int fd);
+
     [LibraryImport("libc")]
     public static partial int getppid();
 

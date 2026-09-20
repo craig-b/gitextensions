@@ -4,7 +4,8 @@ namespace GitUI.Shells;
 
 public class ShellProvider : IShellProvider
 {
-    private static IShellDescriptor DefaultShell = new BashShell();
+    // Under Wine with the git bridge the Console tab is a Linux terminal; the BusyBox bash of the prefix is not offered then.
+    private static readonly IShellDescriptor DefaultShell = new LinuxShell() is { HasExecutable: true } linux ? linux : new BashShell();
     private static readonly IShellDescriptor[] Shells = [DefaultShell, new CmdShell(), new PwshShell(), new PowerShellShell()];
 
     public IReadOnlyList<IShellDescriptor> GetShells() => Shells;
