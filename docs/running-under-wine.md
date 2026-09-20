@@ -452,6 +452,8 @@ the deployment; keep this table current when it changes.
 | Stage / unstage by patch (context menu) | work | native git in the process dialog, answers typed into its input line (section 8) |
 | Console tab | Linux login shell | the terminal relay over the bridge (section 8); the BusyBox shell notes in section 4 apply only without it |
 | Edit notes | works | native git with the app's editor through the bridge |
+| Tools, Linux terminal (Git bash on Windows) | works | opens your terminal emulator in the repository through `open-terminal` next to the relay: `TERMINAL`, then `xdg-terminal-exec`, then common emulators |
+| Tools, PuTTY | hidden | SSH is the Linux one under the bridge |
 | GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
 | Convert workspace file to LF / CRLF scripts | work | command `sh` so they run natively; they need `dos2unix` on the Linux side |

@@ -17,7 +17,8 @@ internal partial class ToolsToolStripMenuItem : ToolStripMenuItemEx
     {
         InitializeComponent();
 
-        if (!OperatingSystem.IsWindows())
+        // Under the Wine git bridge SSH is the Linux one; PuTTY has no part to play.
+        if (!OperatingSystem.IsWindows() || NativeGitBridge.IsEnabled)
         {
             toolStripSeparator6.Visible = false;
             PuTTYToolStripMenuItem.Visible = false;
@@ -28,7 +29,13 @@ internal partial class ToolsToolStripMenuItem : ToolStripMenuItemEx
     {
         base.OnInitialized();
 
-        gitBashToolStripMenuItem.Tag = UICommands.GetRequiredService<IShellProvider>().GetShell(BashShell.ShellName);
+        IShellDescriptor shell = UICommands.GetRequiredService<IShellProvider>().GetShell(BashShell.ShellName);
+        gitBashToolStripMenuItem.Tag = shell;
+        if (shell is LinuxShell)
+        {
+            gitBashToolStripMenuItem.Text = "Linux &terminal";
+            gitBashToolStripMenuItem.Image = shell.Icon;
+        }
     }
 
     public override void RefreshShortcutKeys(IEnumerable<HotkeyCommand>? hotkeys)
