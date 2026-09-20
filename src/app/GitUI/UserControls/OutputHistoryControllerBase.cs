@@ -34,7 +34,13 @@ internal abstract class OutputHistoryControllerBase : IDisposable
         _textBox.InvokeAndForget(() =>
         {
             _textBox.Text = history;
+
+            // Wine's riched20 does not apply the control's fore colour to text assigned later (SCF_ALL never
+            // updates its default style), which left the history black on the dark background; colour it explicitly.
+            _textBox.SelectAll();
+            _textBox.SelectionColor = _textBox.ForeColor;
             _textBox.SelectionStart = history.Length;
+            _textBox.SelectionLength = 0;
             _textBox.ScrollToCaret();
         });
     }
