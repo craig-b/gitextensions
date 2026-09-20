@@ -1,0 +1,129 @@
+# Builds the Wine distribution of Git Extensions entirely on Linux: the portable app archive (own
+# executables, plugins, translations, ConEmu) and the Linux-side pieces (the native git bridge daemon,
+# the terminal relay, the launcher and helper scripts). A push to wine-support builds and keeps the
+# archives as workflow artifacts; a wine-v* tag publishes them as a GitHub release.
+# See docs/running-under-wine.md.
+name: Wine release
+
+on:
+  push:
+    branches: [wine-support]
+    tags: ['wine-v*']
+  pull_request:
+    branches: [wine-support]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wine-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NuGetAudit: false
+  # The version the build is stamped with. A tag wine-v<version>-<n> overrides it below.
+  GE_VERSION: 7.2.1.7
+
+jobs:
+  build:
+    # 22.04's glibc 2.35 is the daemon's baseline; the daemon is a native binary
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install MinGW and clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mingw-w64 clang zlib1g-dev
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-wine-${{ hashFiles('Directory.Packages.props', 'global.json') }}
+          restore-keys: nuget-wine-
+
+      - name: Resolve version
+        id: version
+        run: |
+          version="$GE_VERSION"
+          if [[ "$GITHUB_REF" == refs/tags/wine-v* ]]; then
+            tag="${GITHUB_REF#refs/tags/wine-v}"
+            version="${tag%%-*}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Building $version at $(git rev-parse --short HEAD)"
+
+      - name: Stamp version
+        working-directory: eng
+        run: dotnet run set_version_to.cs -- -v "${{ steps.version.outputs.version }}" -t "${{ steps.version.outputs.version }}"
+
+      - name: Build
+        run: dotnet build GitExtensions.slnx -c Release -p:EnableWindowsTargeting=true -p:ContinuousIntegrationBuild=true --nologo -v q
+
+      - name: Publish portable app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet publish GitExtensions.slnx -c Release --no-build -p:EnableWindowsTargeting=true -p:ContinuousIntegrationBuild=true --nologo -v q
+
+      - name: Build the Linux-side pieces
+        run: |
+          set -e
+          out=artifacts/wine/gitext-wine
+          mkdir -p "$out"
+          dotnet publish eng/wine/git-bridge.cs -o "$out/git-bridge" --nologo -v q
+          rm -f "$out/git-bridge/"*.dbg
+          x86_64-w64-mingw32-gcc -O2 -municode -o "$out/bridge-tty.exe" eng/wine/bridge-tty.c -lws2_32
+          install -m755 eng/wine/gitext-wine eng/wine/git-bridge-editor eng/wine/open-terminal "$out/"
+          install -m644 docs/running-under-wine.md "$out/"
+
+      - name: Name the archives
+        id: names
+        run: |
+          v="${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}"
+          zip=$(ls artifacts/Release/publish/GitExtensions-Portable-x64-*.zip)
+          echo "app=$zip" >> "$GITHUB_OUTPUT"
+          echo "linux=artifacts/wine/gitext-wine-linux-x64-$v.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Pack the Linux tarball and checksums
+        run: |
+          set -e
+          tar -C artifacts/wine -czf "${{ steps.names.outputs.linux }}" gitext-wine
+          (cd "$(dirname "${{ steps.names.outputs.app }}")" && sha256sum "$(basename "${{ steps.names.outputs.app }}")") > artifacts/wine/SHA256SUMS
+          (cd artifacts/wine && sha256sum "$(basename "${{ steps.names.outputs.linux }}")") >> artifacts/wine/SHA256SUMS
+          cat artifacts/wine/SHA256SUMS
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitext-wine-${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}
+          path: |
+            ${{ steps.names.outputs.app }}
+            ${{ steps.names.outputs.linux }}
+            artifacts/wine/SHA256SUMS
+          retention-days: 14
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/wine-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            --title "Git Extensions for Wine ${GITHUB_REF#refs/tags/wine-v}" \
+            --generate-notes \
+            --notes "Built on Linux for running under Wine. Setup and background: docs/running-under-wine.md in the Linux tarball." \
+            "${{ steps.names.outputs.app }}" \
+            "${{ steps.names.outputs.linux }}" \
+            artifacts/wine/SHA256SUMS
