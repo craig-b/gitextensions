@@ -6,6 +6,14 @@
     <ApplicationIcon>Resources\git-extensions-logo.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- The apphost needs a runtime identifier. On a non-Windows host, the Wine build, target win-x64 so the
+       executable is a Windows one with its icon and version resource; nothing changes on a Windows host. -->
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' and '$(RuntimeIdentifier)' == ''">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\GitExtUtils\GitExtUtils.csproj" />
     <ProjectReference Include="..\ResourceManager\ResourceManager.csproj" />

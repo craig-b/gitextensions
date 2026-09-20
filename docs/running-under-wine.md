@@ -59,6 +59,20 @@ Things that bite:
   fetches the Windows host pack and produces a proper `GitExtensions.exe` on
   Linux, with the icon, version resource and manifest embedded; the SDK's
   resource updater is managed code and runs anywhere.
+- **`dotnet publish` produces the portable archive on Linux.** With the two
+  changes above in the tree, `dotnet publish GitExtensions.slnx -c Release
+  --no-build -p:EnableWindowsTargeting=true` after the build runs the same
+  publish targets as the Windows pipeline and writes
+  `artifacts/Release/publish/GitExtensions-Portable-x64-<version>-<commit>.zip`:
+  the app with its own executables, plugins, the plugin manager, translations,
+  ConEmu and the portable flag set. The plugin manager step and the runtime
+  config patch are file-based C# scripts in `eng`, run with `dotnet run`, in
+  place of the PowerShell they were; the installer's manifest check and the MSI
+  itself run on Windows only. The plugin manager download uses the GitHub API,
+  which allows sixty anonymous requests an hour; set `GITHUB_TOKEN` when that
+  bites. What the archive lacks against the official one is the shell
+  extension and the SSH askpass helper, neither of which does anything under
+  Wine.
 - **The native code needs ATL.** The shell extension and the SSH askpass
   helper are C++ projects, and what stops them building here is not the
   compiler, MinGW and clang can both target Windows, but ATL, which ships only
@@ -488,8 +502,8 @@ launcher's environment lists every command the bridge ran.
 ## 12. A refresh script
 
 Keep the whole rebuild-and-overlay sequence in one script: stamp the version,
-build with Windows targeting, `rsync` the output over the install excluding
-the translation tool, XML docs, PDBs and the Linux apphosts, flip `IsPortable`
-back to `True`, publish `eng/wine/git-bridge.cs` and copy `git-bridge-editor`
-next to the launcher, then restore the stamped files so the tree stays clean. Running
+build with Windows targeting, `dotnet publish` the solution, `rsync` the
+published portable app over the install, flip `IsPortable` back to `True`,
+publish `eng/wine/git-bridge.cs`, compile the relay and copy the scripts next
+to the launcher, then restore the stamped files so the tree stays clean. Running
 that after every change is what made the iteration loop bearable.

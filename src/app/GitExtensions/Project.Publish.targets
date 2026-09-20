@@ -51,9 +51,11 @@
   </PropertyGroup>
 
   <Target Name="_DownloadPluginManager">
-    <Exec 
+    <!-- run from eng so that dotnet sees a file-based app, not this project -->
+    <Exec
       Condition="!Exists('$(_PluginManagerPath)')"
-      Command="powershell.exe $(RepoRoot)\eng\Download-PluginManager.ps1 -ExtractRootPath '$(_PluginManagerPath)'" />
+      WorkingDirectory="$(RepoRoot)eng"
+      Command="dotnet run Download-PluginManager.cs -- &quot;$(_PluginManagerPath)&quot;" />
   </Target>
 
   <!--
@@ -98,7 +100,7 @@
         <RuntimeConfigJsonFiles Include="$(AppPublishDir)\*.runtimeconfig.json"/>
       </ItemGroup>
   
-      <Exec Command="powershell.exe $(RepoRoot)\eng\Patch-RuntimeConfigJsonFiles.ps1 '@(RuntimeConfigJsonFiles)'" />
+      <Exec WorkingDirectory="$(RepoRoot)eng" Command="dotnet run Patch-RuntimeConfigJsonFiles.cs -- &quot;@(RuntimeConfigJsonFiles)&quot;" />
     </Target>
 
   <!--
@@ -199,7 +201,9 @@
     ============================================================
     -->
   <Target Name="_CheckBundlesConsistent" AfterTargets="Publish" DependsOnTargets="_PublishTranslations;_DownloadPluginManager;_EnsureBundleContent;_CleanupBeforePack">
+    <!-- The check compares the bundle with the installer's manifest; the installer is built on Windows only. -->
     <Exec
+        Condition="'$(OS)' == 'Windows_NT'"
         Command="powershell.exe .\setup\installer\Check-BundlesConsistent.ps1 '$(PublishDir)'"
         WorkingDirectory="$(RepoRoot)"
         EchoOff="true"
@@ -272,7 +276,8 @@
     Creates an MSI.
     ============================================================
     -->
-  <Target Name="CreateMsi" AfterTargets="CreatePortable">
+  <!-- The installer needs Visual Studio's MSBuild and WiX 3; on other hosts the portable archive is the product. -->
+  <Target Name="CreateMsi" AfterTargets="CreatePortable" Condition="'$(OS)' == 'Windows_NT'">
     <PropertyGroup>
       <_AppVeyorSuffix>$(ARTIFACT_BUILD_SUFFIX)</_AppVeyorSuffix>
       <_PublishMsiVersionSuffix>-$(CurrentBuildVersion.ToString())$(_AppVeyorSuffix)</_PublishMsiVersionSuffix>
