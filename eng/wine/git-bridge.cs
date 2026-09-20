@@ -10,7 +10,9 @@
 
 // Runs native git on behalf of Git Extensions running under Wine.
 //
-// The app connects to 127.0.0.1:$GITEXT_GIT_BRIDGE_PORT once per command and sends one JSON
+// The daemon listens on 127.0.0.1, on GITEXT_GIT_BRIDGE_PORT or on a free port of its own choosing,
+// and prints "<port> <token>" as its first line of output for the launcher to pass to the app; the
+// token is GITEXT_GIT_BRIDGE_TOKEN or freshly generated. The app connects once per command and sends one JSON
 // header line: {"token", "cwd", "program", "args", "env", "stdin"}. The program is git when
 // absent, otherwise a name looked up on the daemon's PATH or a path; user tools and scripts
 // come this way too. Paths in cwd, program and args arrive in Windows form (Z:\var\...) and are
@@ -38,6 +40,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -66,7 +69,12 @@ using PosixSignalRegistration sigint = PosixSignalRegistration.Create(PosixSigna
 
 TcpListener listener = new(IPAddress.Loopback, settings.Port);
 listener.Start();
-log.Write($"listening on {settings.Port} for parent {parent}{(detached ? "" : ", not detached")}");
+int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+log.Write($"listening on {port} for parent {parent}{(detached ? "" : ", not detached")}");
+
+// the launcher reads this line and exports both for the app
+Console.Out.WriteLine($"{port} {settings.Token}");
+Console.Out.Flush();
 
 _ = WatchParentAsync();
 
@@ -109,14 +117,14 @@ async Task WatchParentAsync()
     }
 }
 
-/// <summary>What the launcher passes in the environment.</summary>
+/// <summary>What the launcher passes in the environment; port 0 means any free port, and a missing token is generated.</summary>
 internal sealed record BridgeSettings(string WinePrefix, int Port, string Token, string Git, string? Editor, string? LogPath)
 {
     public static BridgeSettings FromEnvironment()
         => new(
             WinePrefix: Require("WINEPREFIX"),
-            Port: int.Parse(Require("GITEXT_GIT_BRIDGE_PORT")),
-            Token: Require("GITEXT_GIT_BRIDGE_TOKEN"),
+            Port: Optional("GITEXT_GIT_BRIDGE_PORT") is { } port ? int.Parse(port) : 0,
+            Token: Optional("GITEXT_GIT_BRIDGE_TOKEN") ?? Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)),
             Git: Programs.Resolve(Optional("GITEXT_GIT_BRIDGE_GIT") ?? "git") ?? "git",
             Editor: Optional("GITEXT_GIT_BRIDGE_EDITOR"),
             LogPath: Optional("GITEXT_GIT_BRIDGE_LOG"));
