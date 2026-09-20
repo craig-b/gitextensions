@@ -308,9 +308,14 @@ app fires when it opens a repository took 56 ms together.
   and native git then launches native tools. The daemon adds
   `-c mergetool.prompt=false` because nobody can answer "Hit return to start
   merge resolution tool" over a socket.
-- **What still runs the Windows git.** Calls that need an interactive console
-  (`add --patch`, `checkout -p`, `notes edit` with a foreign editor) and the
-  Console tab, plus anything you configure with an explicit Windows
+- **Stage and unstage by patch.** `add --patch` and `checkout -p` need
+  something to ask their questions on. Under the bridge the process dialog is
+  that something: the hunks and prompts stream into it and the answer goes
+  into its input line, with single-key reading and colours turned off because
+  a pipe is not a terminal. `e` opens the hunk in the app's own editor through
+  the bridge's `GIT_EDITOR`.
+- **What still runs the Windows git.** The Console tab, `notes edit` with a
+  foreign editor, and anything you configure with an explicit Windows
   extension. Those never write the index in normal use, so the tree is in
   practice owned by native git. Do not commit files with the execute bit: the
   Windows git cannot see it and reports them as modified. Direct `CreateProcess` of a Linux binary is not an alternative:
@@ -402,6 +407,7 @@ the deployment; keep this table current when it changes.
 | Batch user scripts (`cmd`) | works | Wine cmd handles the generated `.cmd` |
 | Git GUI, GitK (Tools menu) | work | native `gitk` and `git gui` through the bridge; they need Tk on the Linux side (git's optional dependency) |
 | User scripts and external tools | run natively | a program without a Windows extension is a Linux program to the bridge; arguments with `Z:` paths are translated |
+| Stage / unstage by patch (context menu) | work | native git in the process dialog, answers typed into its input line (section 8) |
 | GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
 | Convert workspace file to LF / CRLF scripts | works | edited in the portable settings: command `sh.exe`, arguments `dos2unix` / `unix2dos` without `.exe` (BusyBox resolves applets by bare name) |

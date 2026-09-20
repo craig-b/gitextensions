@@ -20,6 +20,12 @@ public partial class FormStatus : GitExtensionsDialog
     private protected Action<FormStatus>? ProcessCallback;
     private protected Action<FormStatus>? AbortCallback;
 
+    /// <summary>
+    ///  The process asks questions on its standard output and reads the answers from its standard input,
+    ///  so the input line is always shown, unmasked, and has the focus.
+    /// </summary>
+    private protected bool InteractiveInput { get; set; }
+
     public FormStatus(IGitUICommands commands, IConsoleEmulatorsRegistry consoleEmulatorsRegistry, bool useDialogSettings)
         : base(commands, enablePositionRestore: true)
     {
@@ -204,8 +210,13 @@ public partial class FormStatus : GitExtensionsDialog
         SetIcon(Images.StatusBadgeWaiting);
         ConsoleCommandRunner.ResetConsole();
         OutputLog.Clear();
-        ShowPassword.Visible = true;
-        PasswordInput.Visible = ShowPassword.CheckState != CheckState.Unchecked;
+        if (InteractiveInput)
+        {
+            PasswordInput.UsePlainText();
+        }
+
+        ShowPassword.Visible = !InteractiveInput;
+        PasswordInput.Visible = InteractiveInput || ShowPassword.CheckState != CheckState.Unchecked;
         ProgressBar.Visible = true;
         Ok.Enabled = false;
         ActiveControl = PasswordInput.Visible ? PasswordInput : null;
