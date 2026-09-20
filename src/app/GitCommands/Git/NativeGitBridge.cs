@@ -26,9 +26,10 @@ public interface IBridgedConsoleProcess : IProcess
 /// <remarks>
 ///  <para>
 ///   Every Windows process Wine creates costs about a quarter of a second, and the app runs git
-///   once or more per click. The launcher starts <c>git-bridge.py</c> next to the install and passes
-///   its port and token in <c>GITEXT_GIT_BRIDGE_PORT</c> and <c>GITEXT_GIT_BRIDGE_TOKEN</c>; the daemon
-///   runs native git and translates paths between the two worlds. See docs/running-under-wine.md.
+///   once or more per click. The launcher starts the <c>git-bridge</c> daemon (built from eng/wine/git-bridge.cs)
+///   next to the install and passes its port and token in <c>GITEXT_GIT_BRIDGE_PORT</c> and
+///   <c>GITEXT_GIT_BRIDGE_TOKEN</c>; the daemon runs native git and translates paths between the two worlds.
+///   See docs/running-under-wine.md.
 ///  </para>
 ///  <para>
 ///   Protocol: one JSON header line, then frames of a byte type and a little-endian length.
