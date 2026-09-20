@@ -130,6 +130,13 @@ Things that bite:
 
 ## 4. Git inside the prefix
 
+With the bridge (section 8) the prefix needs no git at all: every git call,
+the Console tab, the patch commands, user scripts and tools run the Linux
+programs. The `gitcommand` setting can simply be `git`; the app resolves it
+by name through the daemon, and the settings checklist knows that `sh` is the
+Linux one. The notes below apply only when running without the bridge
+(`GITEXT_GIT_BRIDGE=0`), which then needs a git in the prefix.
+
 - **Use the BusyBox flavour of MinGit.** The msys flavour's `sh.exe`
   segfaults under Wine every time git runs `git-difftool--helper` or
   `git-mergetool--lib` (msys fork emulation does not survive Wine). Simple
@@ -427,7 +434,7 @@ the deployment; keep this table current when it changes.
 | Feature | Status under Wine | Why |
 |---|---|---|
 | Edit commit, Reword | works | POSIX sed expression in code (BusyBox sed ignores GNU `0,/re/`) |
-| Git LFS | works | native `git-lfs` through the bridge; `git-lfs.exe` in `Git\cmd` for the Console tab |
+| Git LFS | works | native `git-lfs` through the bridge, in the Console tab too |
 | Open, Open with... | works | routed through `winebrowser` to `xdg-open` in code (Wine only) |
 | Copy path(s) | works | "native" is the Linux path in code (Wine only): drive letters resolved through `winepath -u`, once per drive; the Windows form is its own item; WSL and Cygwin are hidden |
 | Show in folder | expected to work | Wine's explorer implements `/select,` |
@@ -436,16 +443,17 @@ the deployment; keep this table current when it changes.
 | User scripts and external tools | run natively | a program without a Windows extension is a Linux program to the bridge; arguments with `Z:` paths are translated |
 | Stage / unstage by patch (context menu) | work | native git in the process dialog, answers typed into its input line (section 8) |
 | Console tab | Linux login shell | the terminal relay over the bridge (section 8); the BusyBox shell notes in section 4 apply only without it |
+| Edit notes | works | native git with the app's editor through the bridge |
 | GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
-| Convert workspace file to LF / CRLF scripts | works | edited in the portable settings: command `sh.exe`, arguments `dos2unix` / `unix2dos` without `.exe` (BusyBox resolves applets by bare name) |
+| Convert workspace file to LF / CRLF scripts | work | command `sh` so they run natively; they need `dos2unix` on the Linux side |
 | Open in VS Code script | works | `bash` runs natively, so it finds the Linux `code` |
 | Repository hooks | work | run by native git under your Linux shell |
 | Gource, AutoCompileSubmodules plugins | missing programs | need `gource.exe` / msbuild in the prefix |
 | Merge tool, diff tool | work | native tools through the bridge; set them in your Linux git config (section 6) |
 | Credential manager | not needed | remotes go through native git with your Linux helpers (section 9) |
 
-Smoke checklist after a Wine, prefix, MinGit or git upgrade: open the
+Smoke checklist after a Wine, prefix or git upgrade: open the
 Console tab and switch windows; Edit commit on a throwaway branch; Open
 with... on a file; `git lfs version` from the Console tab; resolve a conflict
 with the merge tool and open a file with the diff tool; fetch from a remote;

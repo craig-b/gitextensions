@@ -408,7 +408,9 @@ public partial class ChecklistSettingsPage : SettingsPageWithHeader
 
     private bool CheckGitExe()
     {
-        return RenderSettingSetUnset(() => !File.Exists(AppSettings.LinuxToolsDir + "sh.exe") && !File.Exists(AppSettings.LinuxToolsDir + "sh") &&
+        // Under the Wine git bridge sh is the Linux one, always there.
+        return RenderSettingSetUnset(() => !NativeGitBridge.IsEnabled &&
+                                     !File.Exists(AppSettings.LinuxToolsDir + "sh.exe") && !File.Exists(AppSettings.LinuxToolsDir + "sh") &&
                                      !CheckSettingsLogic.CheckIfFileIsInPath("sh.exe") && !CheckSettingsLogic.CheckIfFileIsInPath("sh"),
                                GitBinFound, GitBinFound_Fix,
                                _linuxToolsSshNotFound.Text, _linuxToolsSshFound.Text);
