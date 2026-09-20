@@ -100,12 +100,21 @@ internal sealed class ConEmuConsoleCommandRunner : ContainerControl, IConsoleCom
         try
         {
             string commandLine = new ArgumentBuilder { command.Quote(), arguments }.ToString();
-            ConsoleCommandLineOutputProcessor outputProcessor = new(commandLine.Length, args => CommandOutputReceived?.Invoke(this, args));
+            bool echoCommandLine = true;
+            if (NativeGitBridge.IsEnabled && NativeGitBridge.IsBridged(command) && NativeGitBridge.TerminalRelay is { } relay)
+            {
+                // ConEmu can only host a Windows program: the relay runs the Linux program on a pseudo-terminal in this
+                // console, so terminal editors and tools work. The command was already written above; do not echo the relay.
+                commandLine = new ArgumentBuilder { relay.Quote(), NativeGitBridge.IsGit(command) ? "git" : command.Quote(), arguments }.ToString();
+                echoCommandLine = false;
+            }
+
+            ConsoleCommandLineOutputProcessor outputProcessor = new(echoCommandLine ? commandLine.Length : 0, args => CommandOutputReceived?.Invoke(this, args));
 
             ConEmuStartInfo startInfo = new()
             {
                 ConsoleProcessCommandLine = commandLine,
-                IsEchoingConsoleCommandLine = true,
+                IsEchoingConsoleCommandLine = echoCommandLine,
                 WhenConsoleProcessExits = WhenConsoleProcessExits.KeepConsoleEmulatorAndShowMessage,
                 AnsiStreamChunkReceivedEventSink = outputProcessor.AnsiStreamChunkReceived,
                 StartupDirectory = workDir
@@ -159,7 +168,10 @@ public partial class ConsoleCommandLineOutputProcessor
     {
         _fireDataReceived = fireDataReceived;
         _commandLineCharsInOutput = commandLineCharsInOutput;
-        _commandLineCharsInOutput += Environment.NewLine.Length; // for \n after the command line
+        if (commandLineCharsInOutput > 0)
+        {
+            _commandLineCharsInOutput += Environment.NewLine.Length; // for \n after the command line
+        }
     }
 
     private string? FilterOutConsoleCommandLine(string outputChunk)

@@ -21,8 +21,9 @@ internal sealed class ConsoleEmulatorsRegistry(
     /// </summary>
     public IConsoleCommandRunner CreateCommandController()
     {
-        // A bridged git process (native git under Wine) has no console for an emulator to host; the plain runner streams its output.
-        if (!useConsoleEmulation.Value || NativeGitBridge.IsEnabled)
+        // A bridged process (native git under Wine) has no console of its own; the terminal relay gives it one for the
+        // emulator to host. Without the relay the plain runner streams its output.
+        if (!useConsoleEmulation.Value || (NativeGitBridge.IsEnabled && NativeGitBridge.TerminalRelay is null))
         {
             return new PlainTextConsoleCommandRunner();
         }
