@@ -19,9 +19,7 @@ public class LinuxShell : ShellDescriptor
         Icon = Images.Console;
         ExecutableName = "bridge-tty.exe";
 
-        if (NativeGitBridge.IsEnabled
-            && Environment.GetEnvironmentVariable("GITEXT_GIT_BRIDGE_TTY") is { Length: > 0 } relay
-            && File.Exists(relay))
+        if (NativeGitBridge.TerminalRelay is { } relay)
         {
             ExecutablePath = relay;
             ExecutableCommandLine = relay.Quote();

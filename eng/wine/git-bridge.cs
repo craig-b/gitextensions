@@ -413,7 +413,7 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
     {
         string? cwd = request.Cwd is { Length: > 0 } ? drives.ToUnix(request.Cwd) : null;
         List<string> args = [.. (request.Args ?? []).Select(drives.ToUnix)];
-        bool isGit = string.IsNullOrEmpty(request.Program);
+        bool isGit = request.Program is null or "" or "git";
         string? subcommand = isGit ? OutputTranslation.Subcommand(args) : null;
         if (subcommand is "mergetool" or "difftool")
         {
@@ -508,12 +508,21 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
 
         string? program;
         List<string> args = [.. (request.Args ?? []).Select(drives.ToUnix)];
+        bool isGit = request.Program == "git";
         if (string.IsNullOrEmpty(request.Program))
         {
             program = Environment.GetEnvironmentVariable("SHELL") is { Length: > 0 } shell ? shell : "/bin/sh";
             if (args.Count == 0)
             {
                 args.Add("-l");
+            }
+        }
+        else if (isGit)
+        {
+            program = settings.Git;
+            if (OutputTranslation.Subcommand(args) is ("mergetool" or "difftool") and string tool)
+            {
+                args.InsertRange(0, ["-c", $"{tool}.prompt=false"]);
             }
         }
         else
@@ -547,6 +556,12 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
 
         startInfo.Environment["GITEXT_PTY"] = pty.SlavePath;
         startInfo.Environment["TERM"] = "xterm-256color";
+        if (isGit)
+        {
+            // the app reads some of what git says in its progress dialogs; the user's own shell is left alone
+            startInfo.Environment["LC_MESSAGES"] = "C";
+        }
+
         foreach ((string name, string value) in request.Env ?? [])
         {
             startInfo.Environment[name] = drives.ToUnix(value);

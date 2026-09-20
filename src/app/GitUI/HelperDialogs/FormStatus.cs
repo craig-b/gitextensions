@@ -210,13 +210,16 @@ public partial class FormStatus : GitExtensionsDialog
         SetIcon(Images.StatusBadgeWaiting);
         ConsoleCommandRunner.ResetConsole();
         OutputLog.Clear();
-        if (InteractiveInput)
+
+        // A terminal takes the answers itself; the plain runner needs the input line for them.
+        bool inputLine = InteractiveInput && ConsoleCommandRunner is IPlainTextConsoleCommandRunner;
+        if (inputLine)
         {
             PasswordInput.UsePlainText();
         }
 
-        ShowPassword.Visible = !InteractiveInput;
-        PasswordInput.Visible = InteractiveInput || ShowPassword.CheckState != CheckState.Unchecked;
+        ShowPassword.Visible = !inputLine;
+        PasswordInput.Visible = inputLine || ShowPassword.CheckState != CheckState.Unchecked;
         ProgressBar.Visible = true;
         Ok.Enabled = false;
         ActiveControl = PasswordInput.Visible ? PasswordInput : null;

@@ -44,6 +44,16 @@ public static class NativeGitBridge
 
     public static bool IsEnabled => EnvUtils.RunningUnderWine && _endpoint.Value is not null;
 
+    private static readonly Lazy<string?> _terminalRelay = new(() =>
+        IsEnabled && Environment.GetEnvironmentVariable("GITEXT_GIT_BRIDGE_TTY") is { Length: > 0 } relay && File.Exists(relay) ? relay : null);
+
+    /// <summary>
+    ///  The Windows console program (eng/wine/bridge-tty.c) that puts a daemon terminal session into a console, for
+    ///  ConEmu to host: the Console tab's shell, and the progress dialogs' commands when the emulator is on.
+    ///  Null when the launcher did not pass its path in <c>GITEXT_GIT_BRIDGE_TTY</c>.
+    /// </summary>
+    public static string? TerminalRelay => _terminalRelay.Value;
+
     public static bool IsGit(string fileName)
         => Path.GetFileName(fileName) is { } name
            && (name.Equals("git.exe", StringComparison.OrdinalIgnoreCase) || name.Equals("git", StringComparison.OrdinalIgnoreCase));

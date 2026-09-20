@@ -219,6 +219,59 @@ static void buffer_append_json_string(buffer_t *b, const char *s)
     buffer_append_str(b, "\"");
 }
 
+/*
+ * The git variables the app sets for a command, such as the sequence editor that rewrites a rebase todo, go to the
+ * daemon; the ones that carry Windows paths stay behind, as in the app's own client. The user's shell in the Console
+ * tab sees none of them, since the app sets none when it starts a shell.
+ */
+static void append_forwarded_environment(buffer_t *b)
+{
+    static const char *const excluded[] = { "GIT_SSH", "GIT_EDITOR", "GIT_ASKPASS", "GIT_EXEC_PATH", "GIT_TEMPLATE_DIR", "GIT_CONFIG_SYSTEM", NULL };
+    wchar_t *block = GetEnvironmentStringsW();
+    int first = 1;
+    for (wchar_t *entry = block; entry && *entry; entry += wcslen(entry) + 1)
+    {
+        if (*entry == L'=' || (_wcsnicmp(entry, L"GIT_", 4) != 0 && _wcsnicmp(entry, L"DFT_", 4) != 0))
+        {
+            continue;
+        }
+        wchar_t *equals = wcschr(entry, L'=');
+        if (!equals)
+        {
+            continue;
+        }
+        *equals = 0;
+        char *name = utf16_to_utf8(entry);
+        char *value = utf16_to_utf8(equals + 1);
+        *equals = L'=';
+        int skip = 0;
+        for (const char *const *e = excluded; *e; e++)
+        {
+            if (_stricmp(name, *e) == 0)
+            {
+                skip = 1;
+            }
+        }
+        if (!skip)
+        {
+            if (!first)
+            {
+                buffer_append_str(b, ",");
+            }
+            first = 0;
+            buffer_append_json_string(b, name);
+            buffer_append_str(b, ":");
+            buffer_append_json_string(b, value);
+        }
+        free(name);
+        free(value);
+    }
+    if (block)
+    {
+        FreeEnvironmentStringsW(block);
+    }
+}
+
 static void send_header(int argc, wchar_t **argv)
 {
     const char *token = getenv("GITEXT_GIT_BRIDGE_TOKEN");
@@ -243,6 +296,13 @@ static void send_header(int argc, wchar_t **argv)
     if (argc > 1)
     {
         char *program = utf16_to_utf8(argv[1]);
+        const char *base = strrchr(program, '\\');
+        base = base ? base + 1 : program;
+        /* the app names its git.exe; the daemon's git is meant */
+        if (_stricmp(base, "git.exe") == 0 || _stricmp(base, "git") == 0)
+        {
+            strcpy(program, "git");
+        }
         buffer_append_str(&b, ",\"program\":");
         buffer_append_json_string(&b, program);
         free(program);
@@ -258,7 +318,9 @@ static void send_header(int argc, wchar_t **argv)
         buffer_append_json_string(&b, arg);
         free(arg);
     }
-    snprintf(size, sizeof size, "],\"env\":{},\"stdin\":true,\"pty\":true,\"cols\":%u,\"rows\":%u}\n", cols, rows);
+    buffer_append_str(&b, "],\"env\":{");
+    append_forwarded_environment(&b);
+    snprintf(size, sizeof size, "},\"stdin\":true,\"pty\":true,\"cols\":%u,\"rows\":%u}\n", cols, rows);
     buffer_append_str(&b, size);
     send_all(b.data, (int)b.length);
     free(b.data);

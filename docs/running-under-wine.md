@@ -320,12 +320,17 @@ app fires when it opens a repository took 56 ms together.
   The daemon sets `GIT_EDITOR` to `git-bridge-editor`, which converts the file
   path and runs the app's own editor under Wine, and `LC_MESSAGES=C` so the
   messages the app parses stay in English.
-- **Progress dialogs.** `FormProcess` runs git through the plain-text runner
-  when the bridge is on, which streams stdout and stderr from the socket and
-  passes the dialog's own variables to the daemon unfiltered, so the sed
-  expression that rewrites a rebase todo for Edit commit runs on Linux sed.
-  The daemon's own editor and message-language defaults are applied first,
-  so those variables win.
+- **Progress dialogs.** With the console emulator on, `FormProcess` hosts
+  the command in ConEmu as it does on Windows, through the terminal relay
+  described below, so the command runs on a real pseudo-terminal: a terminal
+  sequence editor such as the interactive rebase tool, a terminal commit
+  editor and coloured progress all work, and the relay forwards the dialog's
+  own `GIT_*` variables, such as the sed expression that rewrites a rebase todo
+  for Edit commit. Git in a dialog keeps `LC_MESSAGES=C` because the app reads
+  some of what it says; the editors come from your Linux git configuration,
+  not the app's. With the emulator off, or without the relay, the plain-text
+  runner streams stdout and stderr from the socket instead, and the daemon's
+  own editor default applies there.
 - **Tools with windows.** The app gives `mergetool` and `difftool` a console
   window; the bridge takes them anyway, since the tools open their own windows
   and native git then launches native tools. The daemon adds

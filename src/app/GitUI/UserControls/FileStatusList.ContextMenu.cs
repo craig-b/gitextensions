@@ -667,8 +667,9 @@ partial class FileStatusList
 
     /// <summary>
     ///  Under the native git bridge there is no console window to host <c>git add --patch</c> or <c>git checkout -p</c>,
-    ///  so the process dialog is the terminal: hunks and prompts stream into it, answers are typed into its input line.
-    ///  Single-key reading and colours are off because the dialog is a pipe, not a terminal.
+    ///  so the process dialog is the terminal. With the console emulator on it is a real one through the relay;
+    ///  otherwise hunks and prompts stream into the plain output and answers are typed into its input line, with
+    ///  single-key reading and colours off because that dialog is a pipe.
     /// </summary>
     /// <returns>Whether the bridge handled the command; otherwise the caller opens the console window.</returns>
     private bool RunPatchDialog(string command, GitItemStatus item)
@@ -678,14 +679,17 @@ partial class FileStatusList
             return false;
         }
 
-        GitArgumentBuilder args = new(command)
+        bool pipe = !AppSettings.UseConsoleEmulatorForCommands.Value || NativeGitBridge.TerminalRelay is null;
+        GitArgumentBuilder args = new(command);
+        if (pipe)
         {
-            new GitConfigItem("interactive.singleKey", "false"),
-            new GitConfigItem("color.ui", "false"),
-            { command == "add", "--patch", "-p" },
-            "--",
-            item.Name.Quote()
-        };
+            args.Add(new GitConfigItem("interactive.singleKey", "false"));
+            args.Add(new GitConfigItem("color.ui", "false"));
+        }
+
+        args.Add(command == "add" ? "--patch" : "-p");
+        args.Add("--");
+        args.Add(item.Name.Quote());
 
         FormProcess.ShowInteractiveDialog(this, UICommands, args, Module.WorkingDir);
         RequestRefresh();
