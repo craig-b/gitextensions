@@ -283,9 +283,12 @@ starts in a few milliseconds. One git command is then a localhost round trip
 of a few milliseconds instead of a 0.3 s process start; the nine commands the
 app fires when it opens a repository took 56 ms together.
 
-- **Wiring.** The launcher picks a free port and a random token, starts the
-  daemon with them in `GITEXT_GIT_BRIDGE_PORT` and `GITEXT_GIT_BRIDGE_TOKEN`,
-  runs the app, and kills the daemon afterwards. The daemon also exits when its
+- **Wiring.** The launcher starts the daemon with its output on a pipe; the
+  daemon binds a free port, generates a token, and prints both as its first
+  line. The launcher reads that line, exports `GITEXT_GIT_BRIDGE_PORT` and
+  `GITEXT_GIT_BRIDGE_TOKEN` for the app, runs it, and kills the daemon
+  afterwards. Setting either variable before the daemon starts makes it use
+  that value instead. The daemon also exits when its
   parent goes away. The daemon puts itself in its own session at startup, so
   no git it runs has a controlling terminal to prompt on, and a kill takes
   git's whole process tree with it. The app bridges only the git executable, only when it would
