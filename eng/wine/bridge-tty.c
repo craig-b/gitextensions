@@ -345,6 +345,17 @@ static int recv_all(void *data, int length)
     return 1;
 }
 
+static unsigned long long g_frames, g_bytes, g_writes, g_write_ms;
+
+static void log_stats(void)
+{
+    if (g_log)
+    {
+        fprintf(g_log, "%lu stats frames=%llu bytes=%llu writes=%llu write_ms=%llu\n", (unsigned long)GetTickCount(), g_frames, g_bytes, g_writes, g_write_ms);
+        fflush(g_log);
+    }
+}
+
 static DWORD WINAPI output_thread(LPVOID unused)
 {
     (void)unused;
@@ -378,13 +389,22 @@ static DWORD WINAPI output_thread(LPVOID unused)
         case FRAME_ERROR:
         {
             unsigned offset = 0;
+            g_frames++;
+            g_bytes += length;
+            if (g_log)
+            {
+                fprintf(g_log, "%lu frame %u bytes%s\n", (unsigned long)GetTickCount(), length, memchr(payload, 0x1b, length) ? " esc" : "");
+            }
             while (offset < length)
             {
                 DWORD written = 0;
+                ULONGLONG t0 = GetTickCount64();
                 if (!WriteFile(g_console_out, payload + offset, length - offset, &written, NULL))
                 {
                     ExitProcess(1);
                 }
+                g_write_ms += GetTickCount64() - t0;
+                g_writes++;
                 offset += written;
             }
             if (header[0] == FRAME_ERROR)
@@ -396,6 +416,7 @@ static DWORD WINAPI output_thread(LPVOID unused)
         case FRAME_EXIT:
         {
             int code = length >= 4 ? (int)(payload[0] | (payload[1] << 8) | (payload[2] << 16) | ((unsigned)payload[3] << 24)) : 1;
+            log_stats();
             ExitProcess((UINT)code);
         }
         default:

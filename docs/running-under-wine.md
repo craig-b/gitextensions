@@ -357,6 +357,13 @@ app fires when it opens a repository took 56 ms together.
   tab falls back to the BusyBox shell. The daemon resets the signal
   dispositions it inherits from the launcher's background job, or Ctrl+C
   would be ignored in the session.
+- **Full-screen programs pause on exit.** nano, less and vim switch to the
+  alternate screen, which ConEmu implements by dumping the whole console
+  buffer and writing it back when the program quits. ConEmu's code default
+  for that buffer is 32,766 rows and the copy took about three seconds under
+  Wine. The app sets the buffer to 1000 rows under Wine, ConEmu's own dialog
+  default, which keeps the switch below notice and still leaves a thousand
+  lines of scrollback.
 - **What still runs the Windows git.** `notes edit` with a foreign editor,
   and anything you configure with an explicit Windows extension. Those never write the index in normal use, so the tree is in
   practice owned by native git. Do not commit files with the execute bit: the

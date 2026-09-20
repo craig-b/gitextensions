@@ -60,6 +60,8 @@ internal sealed class ConEmuConsoleShellRunner(IShellProvider shellProvider, Con
             }
         }
 
+        ConEmuWineSettings.Apply(startInfo);
+
         try
         {
             Validates.NotNull(settings.Font);
