@@ -272,7 +272,17 @@ app fires when it opens a repository took 56 ms together.
   argument list, forwarded environment and whether stdin follows, then framed
   bytes both ways (a type byte plus a little-endian length). The argument
   string is split with `CommandLineToArgvW`, the rules git.exe would have
-  applied. Closing the connection kills the git process.
+  applied. Closing the connection kills the process. The header names a
+  program only when it is not git; the daemon looks a bare name up on the
+  Linux `PATH` and reports `command not found` with exit code 127 like a
+  shell when there is none.
+- **Everything else is native too.** Under the bridge the app treats any
+  program as a Linux program unless its name ends in `.exe`, `.bat`, `.cmd`
+  or `.com`. User scripts, external tools, `gitk` and `git gui` therefore run
+  on the Linux side with the same path translation as git; write them as you
+  would on Linux, with bare command names or `Z:` paths. Programs that open
+  their own window need no console, so the "run in console" restriction below
+  applies to git only.
 - **Paths.** The daemon rewrites every `X:\\...` or `X:/...` span in the
   working directory, the arguments and the forwarded environment values
   through the prefix's `dosdevices` links, including `--opt=X:\\...`,
@@ -300,7 +310,8 @@ app fires when it opens a repository took 56 ms together.
   merge resolution tool" over a socket.
 - **What still runs the Windows git.** Calls that need an interactive console
   (`add --patch`, `checkout -p`, `notes edit` with a foreign editor) and the
-  Console tab. Those never write the index in normal use, so the tree is in
+  Console tab, plus anything you configure with an explicit Windows
+  extension. Those never write the index in normal use, so the tree is in
   practice owned by native git. Do not commit files with the execute bit: the
   Windows git cannot see it and reports them as modified. Direct `CreateProcess` of a Linux binary is not an alternative:
   Wine's `fork_and_exec` in `ntdll/unix/process.c` returns no process handle,
@@ -389,11 +400,12 @@ the deployment; keep this table current when it changes.
 | Copy path(s) | works | "native" is the Linux path in code (Wine only): drive letters resolved through `winepath -u`, once per drive; the Windows form is its own item; WSL and Cygwin are hidden |
 | Show in folder | expected to work | Wine's explorer implements `/select,` |
 | Batch user scripts (`cmd`) | works | Wine cmd handles the generated `.cmd` |
-| Git GUI, GitK (Tools menu) | missing | MinGit ships neither, and no Tcl/Tk |
+| Git GUI, GitK (Tools menu) | work | native `gitk` and `git gui` through the bridge; they need Tk on the Linux side (git's optional dependency) |
+| User scripts and external tools | run natively | a program without a Windows extension is a Linux program to the bridge; arguments with `Z:` paths are translated |
 | GPG tab on signed commits | expected to work | native git finds the Linux `gpg` through the bridge |
 | PowerShell user scripts | silently do nothing | Wine's `powershell.exe` is a stub that exits 0 |
 | Convert workspace file to LF / CRLF scripts | works | edited in the portable settings: command `sh.exe`, arguments `dos2unix` / `unix2dos` without `.exe` (BusyBox resolves applets by bare name) |
-| Open in VS Code script | fails | calls `bash`, and there is no `code` in the prefix |
+| Open in VS Code script | works | `bash` runs natively, so it finds the Linux `code` |
 | Repository hooks | work | run by native git under your Linux shell |
 | Gource, AutoCompileSubmodules plugins | missing programs | need `gource.exe` / msbuild in the prefix |
 | Merge tool, diff tool | work | native tools through the bridge; set them in your Linux git config (section 6) |

@@ -887,8 +887,9 @@ public sealed partial class GitModule : IGitModule
 
     public void RunGitK()
     {
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || NativeGitBridge.IsEnabled)
         {
+            // Native gitk, over the bridge under Wine.
             new Executable("gitk", WorkingDir).Start(createWindow: true);
         }
         else
@@ -907,8 +908,9 @@ public sealed partial class GitModule : IGitModule
     public void RunGui()
     {
         ArgumentBuilder args;
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() || NativeGitBridge.IsEnabled)
         {
+            // Native git gui, over the bridge under Wine.
             args = new GitArgumentBuilder("gui");
             _ = GitExecutable.Start(args, createWindow: true);
         }
