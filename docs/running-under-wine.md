@@ -108,6 +108,22 @@ Things that bite:
   whether the entry resolved to a file. Setting the application font to
   DejaVu Sans in the app's settings also shows the arrows, but changes the
   look of the whole grid.
+- **Consolas does not exist, and its stand-in is not monospace.** The app
+  defaults the console font, the diff font and the monospace font to Consolas.
+  Wine substitutes whatever it finds, which is a proportional face: GDI then
+  measures a 5-pixel average cell while the glyphs drawn are 9 pixels wide.
+  ConEmu believes the console has hundreds of columns and squeezes every
+  glyph into the cell, which is the "smushed" text in the Console tab and, in
+  the past, in the progress dialogs it hosted. Give Consolas a real monospace
+  substitute in the prefix and every request for it agrees with itself:
+
+  ```
+  wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes' \
+    /v Consolas /t REG_SZ /d 'DejaVu Sans Mono' /f
+  ```
+
+  Pick a different console font in Settings, Console style, if you prefer
+  one; the substitute only covers the default.
 - **Existing installs elsewhere.** A copy installed through Bottles or another
   prefix has its own prefix, config and menu entry. Nothing configured in your
   prefix applies to it, and the two look identical in a window list.
