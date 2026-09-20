@@ -1,0 +1,10 @@
+#!/bin/sh
+# Opens the user's terminal emulator in the current directory. Git Extensions under Wine runs this through the
+# git bridge for "Linux terminal" in the Tools menu, which is where "Git bash" is on Windows.
+for t in "${TERMINAL:-}" xdg-terminal-exec x-terminal-emulator kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do
+  if [ -n "$t" ] && command -v "$t" >/dev/null 2>&1; then
+    exec "$t"
+  fi
+done
+echo "open-terminal: no terminal emulator found; set TERMINAL to yours" >&2
+exit 127
