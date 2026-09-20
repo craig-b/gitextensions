@@ -516,7 +516,11 @@ stamped from the tag, so `wine-v7.2.1.7-3` builds 7.2.1.7 and the archive
 names carry the commit hash. Nothing in it comes from an official archive and
 nothing needs Windows. The launcher, `eng/wine/gitext-wine`, finds the app,
 the daemon and the scripts next to itself, so the tarball unpacks into one
-directory and a symlink on `PATH` is the install.
+directory and a symlink on `PATH` is the install. The tarball also carries
+the desktop entry (`gitext-wine.desktop`, which declares `inode/directory` so
+file managers offer "Open with Git Extensions" on folders) and the logo in
+the hicolor sizes; they go to `~/.local/share/applications` and
+`~/.local/share/icons/hicolor/<size>x<size>/apps/gitext-wine.png`.
 
 ### The refresh script
 
