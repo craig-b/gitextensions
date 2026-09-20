@@ -67,7 +67,10 @@ public partial class FormBrowseRepoSettingsPage : SettingsPageWithHeader
             AppSettings.OutputHistoryPanelVisible.Value = !chkShowOutputHistoryAsTab.Checked && outputHistoryDepth > 0;
         }
 
-        AppSettings.ConEmuTerminal.Value = ((IShellDescriptor)cboTerminal.SelectedItem!).Name.ToLowerInvariant();
+        if (cboTerminal.SelectedItem is IShellDescriptor shell)
+        {
+            AppSettings.ConEmuTerminal.Value = shell.Name.ToLowerInvariant();
+        }
 
         base.PageToSettings();
     }
@@ -83,15 +86,14 @@ public partial class FormBrowseRepoSettingsPage : SettingsPageWithHeader
         chkShowOutputHistoryAsTab.Checked = AppSettings.ShowOutputHistoryAsTab.Value;
         _NO_TRANSLATE_OutputHistoryDepth.Value = Math.Clamp(AppSettings.OutputHistoryDepth.Value, _NO_TRANSLATE_OutputHistoryDepth.Minimum, _NO_TRANSLATE_OutputHistoryDepth.Maximum);
 
+        cboTerminal.Items.Clear();
         foreach (IShellDescriptor shell in _shellProvider.GetShells())
         {
             cboTerminal.Items.Add(shell);
-
-            if (string.Equals(shell.Name, AppSettings.ConEmuTerminal.Value, StringComparison.InvariantCultureIgnoreCase))
-            {
-                cboTerminal.SelectedItem = shell;
-            }
         }
+
+        // The stored name may belong to a shell no longer offered; the provider then answers with its default.
+        cboTerminal.SelectedItem = _shellProvider.GetShell(AppSettings.ConEmuTerminal.Value);
 
         base.SettingsToPage();
     }
