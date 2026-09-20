@@ -34,7 +34,8 @@ public interface IBridgedConsoleProcess : IProcess
 ///  <para>
 ///   Protocol: one JSON header line, then frames of a byte type and a little-endian length.
 ///   Client to daemon: 0 stdin data, 1 stdin EOF, 2 kill. Daemon to client: 1 stdout, 2 stderr,
-///   3 exit code, 4 error text, 5 process id.
+///   3 exit code, 4 error text, 5 process id. The header names the program only when it is not
+///   git; the daemon then looks it up on the Linux PATH, so user tools and scripts run natively too.
 ///  </para>
 /// </remarks>
 public static class NativeGitBridge
@@ -48,12 +49,32 @@ public static class NativeGitBridge
            && (name.Equals("git.exe", StringComparison.OrdinalIgnoreCase) || name.Equals("git", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    ///  Whether a git command the app would give a console window can go over the bridge anyway:
-    ///  the merge and diff tools open their own windows and need no console, and native git then
-    ///  launches native tools. Anything interactive on the console (add --patch) stays with Windows git.
+    ///  Whether a program runs on the Linux side: git always, and everything else unless it is
+    ///  explicitly a Windows program by extension. User tools and scripts are Linux programs by default.
     /// </summary>
-    public static bool AllowsWindow(string arguments)
+    public static bool IsBridged(string fileName)
+        => IsGit(fileName) || !IsWindowsProgram(fileName);
+
+    private static bool IsWindowsProgram(string fileName)
+        => Path.GetExtension(fileName) is { Length: > 0 } extension
+           && (extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".bat", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".com", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    ///  Whether a command the app would give a console window can go over the bridge anyway.
+    ///  A Linux program other than git opens its own window or needs none. For git, the merge and
+    ///  diff tools and the Tk GUIs open their own windows, and native git then launches native tools.
+    ///  Anything interactive on the console (add --patch) stays with Windows git.
+    /// </summary>
+    public static bool AllowsWindow(string fileName, string arguments)
     {
+        if (!IsGit(fileName))
+        {
+            return true;
+        }
+
         bool skipNext = false;
         foreach (string token in SplitArguments(arguments))
         {
@@ -67,7 +88,7 @@ public static class NativeGitBridge
             }
             else if (!token.StartsWith('-'))
             {
-                return token is "mergetool" or "difftool";
+                return token is "mergetool" or "difftool" or "gui" or "citool";
             }
         }
 
@@ -238,6 +259,7 @@ public static class NativeGitBridge
                 {
                     token,
                     cwd = workDir,
+                    program = IsGit(fileName) ? null : fileName,
                     args = SplitArguments($"{prefixArguments}{arguments}"),
                     env = ForwardedEnvironment(extraEnvironment),
                     stdin = redirectInput

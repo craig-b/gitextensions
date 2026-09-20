@@ -10,10 +10,12 @@
 
 // Runs native git on behalf of Git Extensions running under Wine.
 //
-// The app connects to 127.0.0.1:$GITEXT_GIT_BRIDGE_PORT once per git command and sends one
-// JSON header line: {"token", "cwd", "args", "env", "stdin"}. Paths in cwd and args arrive in
-// Windows form (Z:\var\...) and are translated through the prefix's dosdevices links. Frames
-// follow, both ways, as <byte type><uint32 length> plus payload (little endian).
+// The app connects to 127.0.0.1:$GITEXT_GIT_BRIDGE_PORT once per command and sends one JSON
+// header line: {"token", "cwd", "program", "args", "env", "stdin"}. The program is git when
+// absent, otherwise a name looked up on the daemon's PATH or a path; user tools and scripts
+// come this way too. Paths in cwd, program and args arrive in Windows form (Z:\var\...) and are
+// translated through the prefix's dosdevices links. Frames follow, both ways, as
+// <byte type><uint32 length> plus payload (little endian).
 //
 //   client -> daemon: 0 stdin data, 1 stdin EOF, 2 kill
 //   daemon -> client: 1 stdout, 2 stderr, 3 exit (int32), 4 error text, 5 pid (int32)
@@ -104,7 +106,7 @@ internal sealed record BridgeSettings(string WinePrefix, int Port, string Token,
             WinePrefix: Require("WINEPREFIX"),
             Port: int.Parse(Require("GITEXT_GIT_BRIDGE_PORT")),
             Token: Require("GITEXT_GIT_BRIDGE_TOKEN"),
-            Git: ResolveExecutable(Optional("GITEXT_GIT_BRIDGE_GIT") ?? "git"),
+            Git: Programs.Resolve(Optional("GITEXT_GIT_BRIDGE_GIT") ?? "git") ?? "git",
             Editor: Optional("GITEXT_GIT_BRIDGE_EDITOR"),
             LogPath: Optional("GITEXT_GIT_BRIDGE_LOG"));
 
@@ -113,30 +115,35 @@ internal sealed record BridgeSettings(string WinePrefix, int Port, string Token,
 
     private static string? Optional(string name)
         => Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value : null;
+}
 
-    /// <summary>Searches PATH once, so that every spawn does not; a name that is not found is left for exec to complain about.</summary>
-    private static string ResolveExecutable(string name)
+internal static class Programs
+{
+    private static readonly string[] _path = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>A path as given, or a bare name found on PATH; null when there is no such program.</summary>
+    public static string? Resolve(string program)
     {
-        if (name.Contains('/'))
+        if (program.Contains('/'))
         {
-            return name;
+            return File.Exists(program) ? program : null;
         }
 
-        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries))
+        foreach (string dir in _path)
         {
-            string candidate = Path.Combine(dir, name);
+            string candidate = Path.Combine(dir, program);
             if (File.Exists(candidate))
             {
                 return candidate;
             }
         }
 
-        return name;
+        return null;
     }
 }
 
 /// <summary>The request header line the app sends.</summary>
-internal sealed record Request(string? Token, string? Cwd, string[]? Args, Dictionary<string, string>? Env, bool Stdin);
+internal sealed record Request(string? Token, string? Cwd, string? Program, string[]? Args, Dictionary<string, string>? Env, bool Stdin);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Request))]
@@ -387,14 +394,24 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
     {
         string? cwd = request.Cwd is { Length: > 0 } ? drives.ToUnix(request.Cwd) : null;
         List<string> args = [.. (request.Args ?? []).Select(drives.ToUnix)];
-        string? subcommand = OutputTranslation.Subcommand(args);
+        bool isGit = string.IsNullOrEmpty(request.Program);
+        string? subcommand = isGit ? OutputTranslation.Subcommand(args) : null;
         if (subcommand is "mergetool" or "difftool")
         {
             // nobody can answer "Hit return to start merge resolution tool" over the bridge
             args.InsertRange(0, ["-c", $"{subcommand}.prompt=false"]);
         }
 
-        log.Write($"run cwd={cwd} args=[{string.Join(", ", args)}]");
+        string? program = isGit ? settings.Git : Programs.Resolve(drives.ToUnix(request.Program!));
+        log.Write($"run cwd={cwd} program={program ?? request.Program} args=[{string.Join(", ", args)}]");
+
+        if (program is null)
+        {
+            // what a shell says; the app shows the text and handles the exit code
+            await SendFrameAsync(TextFrame(Outbound.Stderr, $"{request.Program}: command not found\n"));
+            await SendFrameAsync(Int32Frame(Outbound.Exit, 127));
+            return;
+        }
 
         if (cwd is not null && !Directory.Exists(cwd))
         {
@@ -405,7 +422,7 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
         }
 
         // when the daemon could not detach itself, setsid does it per git; it execs git in place, so the pid stays git's
-        ProcessStartInfo startInfo = new(detached ? settings.Git : "setsid")
+        ProcessStartInfo startInfo = new(detached ? program : "setsid")
         {
             WorkingDirectory = cwd ?? Environment.CurrentDirectory,
             RedirectStandardInput = true,
@@ -415,7 +432,7 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
         };
         if (!detached)
         {
-            startInfo.ArgumentList.Add(settings.Git);
+            startInfo.ArgumentList.Add(program);
         }
 
         foreach (string arg in args)
@@ -436,7 +453,7 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
             startInfo.Environment[name] = drives.ToUnix(value);
         }
 
-        Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("git did not start");
+        Process process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{program} did not start");
         _process = process;
         if (!request.Stdin)
         {
@@ -447,7 +464,7 @@ internal sealed class Session(Socket socket, BridgeSettings settings, DriveMap d
 
         Task feeder = FeedStdinAsync(reader, process, request.Stdin);
         await Task.WhenAll(
-            PumpAsync(process.StandardOutput.BaseStream, Outbound.Stdout, OutputTranslation.For(args, subcommand, drives)),
+            PumpAsync(process.StandardOutput.BaseStream, Outbound.Stdout, isGit ? OutputTranslation.For(args, subcommand, drives) : null),
             PumpAsync(process.StandardError.BaseStream, Outbound.Stderr, translate: null));
         await process.WaitForExitAsync();
         await SendFrameAsync(Int32Frame(Outbound.Exit, process.ExitCode));

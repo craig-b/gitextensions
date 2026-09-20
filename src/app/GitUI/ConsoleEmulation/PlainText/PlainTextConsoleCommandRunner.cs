@@ -153,7 +153,7 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
     {
         WriteOutputText($"{command.Quote()} {arguments}{Environment.NewLine}");
 
-        if (NativeGitBridge.IsEnabled && NativeGitBridge.IsGit(command))
+        if (NativeGitBridge.IsEnabled && NativeGitBridge.IsBridged(command))
         {
             StartBridgedCommand(command, arguments, workDir, envVariables);
             return;
@@ -277,7 +277,7 @@ public sealed class PlainTextConsoleCommandRunner : ContainerControl, IPlainText
     }
 
     /// <summary>
-    ///  Runs git through the native git bridge (Wine): the process logs itself, output is streamed from the socket.
+    ///  Runs a command through the native git bridge (Wine): the process logs itself, output is streamed from the socket.
     /// </summary>
     private void StartBridgedCommand(string command, string arguments, string workDir, Dictionary<string, string> envVariables)
     {
