@@ -141,11 +141,17 @@ Things that bite:
 
   ```
   wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes' \
-    /v Consolas /t REG_SZ /d 'DejaVu Sans Mono' /f
+    /v Consolas /t REG_SZ /d 'Hack' /f
   ```
 
-  Pick a different console font in Settings, Console style, if you prefer
-  one; the substitute only covers the default.
+  Hack over DejaVu Sans Mono because it ships the Powerline glyphs (U+E0A0
+  to U+E0B3) that shell prompts draw their branch symbol and separators with;
+  with DejaVu the branch symbol is a box. Use DejaVu Sans Mono when Hack is
+  not installed, and put whichever you choose in `fonts.conf`. Pick a
+  different console font in Settings, Console style, if you prefer one; the
+  substitute only covers the default. Nerd Font icons are a different matter:
+  no font here has them, so a prompt that uses them shows boxes in every
+  terminal on this machine, not only under Wine.
 - **Existing installs elsewhere.** A copy installed through Bottles or another
   prefix has its own prefix, config and menu entry. Nothing configured in your
   prefix applies to it, and the two look identical in a window list.
