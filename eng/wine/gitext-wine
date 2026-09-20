@@ -6,6 +6,8 @@
 set -u
 ROOT=$(dirname "$(readlink -f "$0")")
 APP="$ROOT/app"
+# the installer records a non-default prefix here
+[ -f "$ROOT/gitext-wine.env" ] && . "$ROOT/gitext-wine.env"
 export WINEPREFIX="${GITEXT_WINEPREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/wineprefixes/gitext}"
 export WINEDEBUG="${WINEDEBUG:--all}"
 # Every Windows process under Wine enumerates fontconfig's fonts at startup; the install ships a slim set.

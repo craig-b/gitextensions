@@ -86,7 +86,7 @@ jobs:
           dotnet publish eng/wine/git-bridge.cs -o "$out/git-bridge" --nologo -v q
           rm -f "$out/git-bridge/"*.dbg
           x86_64-w64-mingw32-gcc -O2 -municode -o "$out/bridge-tty.exe" eng/wine/bridge-tty.c -lws2_32
-          install -m755 eng/wine/gitext-wine eng/wine/git-bridge-editor eng/wine/open-terminal "$out/"
+          install -m755 eng/wine/gitext-wine eng/wine/git-bridge-editor eng/wine/open-terminal eng/wine/install.sh "$out/"
           install -m644 eng/wine/gitext-wine.desktop docs/running-under-wine.md "$out/"
           mkdir -p "$out/icons"
           for size in 16 24 32 48 64 128 256 512; do
