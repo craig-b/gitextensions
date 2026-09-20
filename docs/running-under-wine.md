@@ -522,7 +522,35 @@ file managers offer "Open with Git Extensions" on folders) and the logo in
 the hicolor sizes; they go to `~/.local/share/applications` and
 `~/.local/share/icons/hicolor/<size>x<size>/apps/gitext-wine.png`.
 
-### The refresh script
+### Installing from a release
+
+`eng/wine/install.sh`, also shipped in the Linux tarball, does the whole
+setup from a release and needs only Wine 10 or later, `curl` or `wget`,
+`unzip` or `bsdtar`, `tar`, fontconfig and `sha256sum`; nothing needs root:
+
+```
+curl -fsSL https://raw.githubusercontent.com/craig-b/gitextensions/wine-support/eng/wine/install.sh | sh
+```
+
+It finds the latest `wine-v*` release through the `releases/latest` redirect
+and the fixed-name `SHA256SUMS` file, so it never touches the GitHub API;
+downloads and verifies both archives into `~/.cache/gitext-wine`; unpacks
+them into `~/.local/opt/gitext-wine`, keeping your settings and window
+positions across updates; writes `fonts.conf` from the directories fontconfig
+reports for DejaVu, Liberation and Hack; creates the prefix with the Mono and
+Gecko prompts suppressed and the slim fonts visible from the first Wine
+command; resets the font registry keys, adds the Tahoma glyph link and the
+Consolas substitute (Hack when present, else DejaVu Sans Mono); unpacks the
+.NET desktop runtime from Microsoft's zip into `Program Files\dotnet`, where
+the apphost looks by default, so no installer runs under Wine; links the
+launcher into `~/.local/bin`; and writes the menu entry and icons. Re-running
+it updates to the latest release or repairs what is missing; `install.sh
+prefix` redoes only the prefix; `install.sh uninstall` removes everything but
+the prefix, `--purge` that too. `--tag`, `--dir`, `--prefix`, `--bin`,
+`--from DIR` (offline, from a directory holding the archives) and
+`--no-desktop` cover the rest.
+
+### The refresh script, for development
 
 
 Keep the whole rebuild-and-overlay sequence in one script: stamp the version,
