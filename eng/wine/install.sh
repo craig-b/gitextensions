@@ -92,9 +92,19 @@ check_tools() {
   have readlink || die "need readlink"
 }
 
-app_running() { # Wine shortens command lines, so match on the working directory the launcher gives the app
-  for pid in $(pgrep -f 'GitExtensions.exe' 2>/dev/null); do
-    [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$INSTALL_DIR/app" ] && return 0
+# True while any process still holds something in the install. Matching on the name and the working
+# directory was not enough: pgrep is not among the tools checked for above, so where it is missing the
+# guard used to vanish silently and let the install overwrite a running app; Wine shortens command
+# lines; and an instance started by git-bridge-editor has the repository as its working directory, not
+# the app. Asking /proc what is mapped, executing and current catches every one of those, including
+# the bridge daemon, whose running binary is what makes the copy below fail with ETXTBSY.
+app_running() {
+  for d in /proc/[0-9]*; do
+    [ "${d#/proc/}" = "$$" ] && continue
+    for link in exe cwd root; do
+      case "$(readlink "$d/$link" 2>/dev/null)" in "$INSTALL_DIR"/*) return 0 ;; esac
+    done
+    grep -qsF " $INSTALL_DIR/" "$d/maps" && return 0
   done
   return 1
 }
@@ -144,7 +154,16 @@ install_files() {
 
   say "unpacking the Linux pieces"
   tar -xzf "$LINUX_TAR" -C "$tmp"
-  cp -R "$tmp/gitext-wine/." "$INSTALL_DIR/"
+  # Copy beside each file and rename over it, rather than copying onto it. cp opens the destination
+  # truncating, which fails with ETXTBSY on a running binary (the bridge daemon) and corrupts a running
+  # /bin/sh script (this script, the launcher), since sh reads its source by offset as it goes.
+  # rename(2) over a running file is always safe: it replaces the name, never the open inode.
+  (cd "$tmp/gitext-wine" && find . -type f -print) | while IFS= read -r rel; do
+    rel=${rel#./}
+    mkdir -p "$INSTALL_DIR/$(dirname "$rel")"
+    cp -p "$tmp/gitext-wine/$rel" "$INSTALL_DIR/$rel.new"
+    mv -f "$INSTALL_DIR/$rel.new" "$INSTALL_DIR/$rel"
+  done
 
   say "unpacking the app"
   rm -rf "$INSTALL_DIR/app.new"
@@ -156,7 +175,13 @@ install_files() {
   done
   rm -rf "$INSTALL_DIR/app.old"
   [ -d "$INSTALL_DIR/app" ] && mv "$INSTALL_DIR/app" "$INSTALL_DIR/app.old"
-  mv "$INSTALL_DIR/app.new" "$INSTALL_DIR/app"
+  # Between these two renames there is no app directory at all. Put the old one back if the second
+  # fails, because a plain re-run cannot recover from it: it deletes app.new, finds no app to copy the
+  # settings out of, and then deletes app.old with them still in it.
+  if ! mv "$INSTALL_DIR/app.new" "$INSTALL_DIR/app"; then
+    [ -d "$INSTALL_DIR/app.old" ] && mv "$INSTALL_DIR/app.old" "$INSTALL_DIR/app"
+    die "could not put the new app in place; the previous one is still installed"
+  fi
   rm -rf "$INSTALL_DIR/app.old"
 
   seed_settings
@@ -195,6 +220,18 @@ install_launcher() {
   mkdir -p "$BIN_DIR"
   ln -sf "$INSTALL_DIR/gitext-wine" "$BIN_DIR/gitext-wine"
   case ":$PATH:" in *":$BIN_DIR:"*) ;; *) say "note: $BIN_DIR is not on PATH in this shell; log in again or add it" ;; esac
+}
+
+# An update has to reproduce the choices this install was made with. Only the prefix was recorded,
+# and only for the launcher, so updating an install made with --dir used to put a second copy in the
+# default location and leave this one untouched. Record all of them where an updater can read them.
+record_install() {
+  cat > "$INSTALL_DIR/install.env" <<EOF
+GITEXT_INSTALL_DIR=$INSTALL_DIR
+GITEXT_WINEPREFIX=$PREFIX
+GITEXT_BIN_DIR=$BIN_DIR
+GITEXT_DESKTOP=$DESKTOP
+EOF
 }
 
 install_desktop() {
@@ -343,6 +380,7 @@ do_install() {
   step "Launcher and menu"
   install_launcher
   install_desktop
+  record_install
   step "Done"
   say "Git Extensions $TAG for Wine is installed."
   say "  run:      gitext-wine [browse] [repository]"
