@@ -36,7 +36,6 @@ partial class FormUpdates
         btnUpdateNow = new Button();
         linkDirectDownload = new LinkLabel();
         tlpnlContent = new TableLayoutPanel();
-        linkRequiredDotNetRuntime = new SettingsLinkLabel();
         MainPanel.SuspendLayout();
         tlpnlContent.SuspendLayout();
         SuspendLayout();
@@ -115,44 +114,6 @@ partial class FormUpdates
         // 
         // tlpnlContent
         // 
-        tlpnlContent.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        tlpnlContent.ColumnStyles.Add(new ColumnStyle());
-        tlpnlContent.Controls.Add(UpdateLabel, 0, 0);
-        tlpnlContent.Controls.Add(progressBar1, 0, 1);
-        tlpnlContent.Controls.Add(linkRequiredDotNetRuntime, 0, 3);
-        tlpnlContent.Controls.Add(linkChangeLog, 0, 5);
-        tlpnlContent.Dock = DockStyle.Fill;
-        tlpnlContent.Location = new Point(12, 12);
-        tlpnlContent.Margin = new Padding(0);
-        tlpnlContent.Name = "tlpnlContent";
-        tlpnlContent.RowCount = 6;
-        tlpnlContent.RowStyles.Add(new RowStyle());
-        tlpnlContent.RowStyles.Add(new RowStyle());
-        tlpnlContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 8F));
-        tlpnlContent.RowStyles.Add(new RowStyle());
-        tlpnlContent.RowStyles.Add(new RowStyle());
-        tlpnlContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        tlpnlContent.Size = new Size(438, 79);
-        tlpnlContent.TabIndex = 3;
-        // 
-        // linkRequiredDotNetRuntime
-        // 
-        linkRequiredDotNetRuntime.AutoSize = true;
-        linkRequiredDotNetRuntime.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        linkRequiredDotNetRuntime.Dock = DockStyle.Fill;
-        linkRequiredDotNetRuntime.LinkArea = new LinkArea(0, 0);
-        linkRequiredDotNetRuntime.Location = new Point(4, 52);
-        linkRequiredDotNetRuntime.ManualSectionAnchorName = null;
-        linkRequiredDotNetRuntime.Margin = new Padding(4, 3, 4, 3);
-        linkRequiredDotNetRuntime.Name = "linkRequiredDotNetRuntime";
-        linkRequiredDotNetRuntime.Size = new Size(430, 18);
-        linkRequiredDotNetRuntime.TabIndex = 2;
-        linkRequiredDotNetRuntime.Text = "Required: .NET {0} Desktop Runtime {1} or later {2}.x";
-        linkRequiredDotNetRuntime.ToolTipIcon = UserControls.Settings.ToolTipIcon.Information;
-        linkRequiredDotNetRuntime.ToolTipText = "Download latest .NET Desktop Runtime. See docs on how to install .NET runtime without administrative privileges.";
-        linkRequiredDotNetRuntime.InfoClicked += linkRequiredDotNetRuntime_InfoClicked;
-        linkRequiredDotNetRuntime.LinkClicked += linkRequiredDotNetRuntime_LinkClicked;
-        // 
         // FormUpdates
         // 
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -179,5 +140,4 @@ partial class FormUpdates
     private Button btnUpdateNow;
     private LinkLabel linkDirectDownload;
     private TableLayoutPanel tlpnlContent;
-    private SettingsLinkLabel linkRequiredDotNetRuntime;
 }

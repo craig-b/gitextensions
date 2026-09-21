@@ -960,7 +960,7 @@ public sealed partial class FormBrowse : GitModuleForm, IBrowseRepo
             if (AppSettings.CheckForUpdates && AppSettings.LastUpdateCheck.AddDays(7) < DateTime.Now)
             {
                 AppSettings.LastUpdateCheck = DateTime.Now;
-                FormUpdates updateForm = new(AppSettings.AppVersion);
+                FormUpdates updateForm = new(AppSettings.AppVersion, Module.WorkingDir);
                 updateForm.SearchForUpdatesAndShow(ownerWindow: this, alwaysShow: false);
             }
 

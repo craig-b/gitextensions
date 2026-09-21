@@ -1811,6 +1811,16 @@ public static partial class AppSettings
         set => SetBool("CheckForUpdates", value);
     }
 
+    /// <summary>
+    /// The owner/repository the update check reads releases from. Empty means the fork this build
+    /// came from; a fork of it can point the check at its own releases without a rebuild.
+    /// </summary>
+    public static string UpdateRepository
+    {
+        get => GetString("UpdateRepository", "");
+        set => SetString("UpdateRepository", value);
+    }
+
     public static bool CheckForReleaseCandidates
     {
         get => GetBool("CheckForReleaseCandidates", false);

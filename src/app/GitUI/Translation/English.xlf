@@ -7730,16 +7730,18 @@ Therefore the Cancel button does NOT revert any changes made.</source>
         <source>Searching for updates</source>
         <target />
       </trans-unit>
-      <trans-unit id="_downloadingUpdate.Text">
-        <source>Downloading update...</source>
+      <trans-unit id="_checkFailed.Text">
+        <source>Could not check for updates.</source>
         <target />
       </trans-unit>
-      <trans-unit id="_errorHeading.Text">
-        <source>Download Failed</source>
+      <trans-unit id="_confirmHeading.Text">
+        <source>Update and restart</source>
         <target />
       </trans-unit>
-      <trans-unit id="_errorMessage.Text">
-        <source>Failed to download an update.</source>
+      <trans-unit id="_confirmMessage.Text">
+        <source>Git Extensions will close, update to {0} and open again.
+
+Close any other Git Extensions windows now: the update waits for them, and gives up without changing anything if they stay open.</source>
         <target />
       </trans-unit>
       <trans-unit id="_newVersionAvailable.Text">
@@ -7748,6 +7750,18 @@ Therefore the Cancel button does NOT revert any changes made.</source>
       </trans-unit>
       <trans-unit id="_noUpdatesFound.Text">
         <source>No updates found</source>
+        <target />
+      </trans-unit>
+      <trans-unit id="_notFromRelease.Text">
+        <source>This copy was not installed from a release. The latest release is {0}.</source>
+        <target />
+      </trans-unit>
+      <trans-unit id="_updateFailedToStart.Text">
+        <source>The update could not be started.</source>
+        <target />
+      </trans-unit>
+      <trans-unit id="_updating.Text">
+        <source>Closing Git Extensions to install {0}...</source>
         <target />
       </trans-unit>
       <trans-unit id="btnUpdateNow.Text">
@@ -7760,14 +7774,6 @@ Therefore the Cancel button does NOT revert any changes made.</source>
       </trans-unit>
       <trans-unit id="linkDirectDownload.Text">
         <source>&amp;Direct Download</source>
-        <target />
-      </trans-unit>
-      <trans-unit id="linkRequiredDotNetRuntime.Text">
-        <source>Required: .NET {0} Desktop Runtime {1} or later {2}.x</source>
-        <target />
-      </trans-unit>
-      <trans-unit id="linkRequiredDotNetRuntime.ToolTipText">
-        <source>Download latest .NET Desktop Runtime. See docs on how to install .NET runtime without administrative privileges.</source>
         <target />
       </trans-unit>
     </body>

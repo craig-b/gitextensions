@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using CommonTestUtils;
+﻿using CommonTestUtils;
 using GitUI;
 using GitUI.CommandsDialogs.BrowseDialog;
 
@@ -28,99 +27,75 @@ public class FormUpdatesTests
     }
 
     [Test]
-    public void Should_hide_NET_runtime_link_if_no_required_version()
+    public async Task Should_offer_the_update_only_where_it_can_be_carried_out()
     {
-        RunFormTest(
-            form =>
-            {
-                FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+        await RunFormTestAsync(async form =>
+        {
+            FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+            accessor.State = UpdateState.UpdateAvailable;
+            accessor.LatestTag = "wine-v12";
+            accessor.UpdateProgram = @"Z:\opt\gitext-wine\update";
+            await accessor.RenderAsync();
 
-                accessor.DisplayNetRuntimeLink("Required: .NET {0} Desktop Runtime {1} or later {2}.x", requiredNetRuntimeVersion: null!);
-                accessor.linkRequiredNetRuntime.Visible.Should().BeFalse();
-            });
+            accessor.UpdateNowButton.Visible.Should().BeTrue();
+            accessor.DirectDownloadLink.Visible.Should().BeTrue();
+            accessor.LabelText.Should().Contain("wine-v12");
+        });
     }
 
-    [TestCaseSource(nameof(NetRuntimeLinkTextTestCases))]
-    public void Should_NET_runtime_link_text_be_correct(Version runtimeVersion, string format, string expectedText, LinkArea expectedLinkArea)
+    [Test]
+    public async Task Should_offer_only_the_download_where_there_is_no_helper()
     {
-        RunFormTest(
-            form =>
-            {
-                FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+        await RunFormTestAsync(async form =>
+        {
+            FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+            accessor.State = UpdateState.UpdateAvailable;
+            accessor.LatestTag = "wine-v12";
+            accessor.UpdateProgram = string.Empty;
+            await accessor.RenderAsync();
 
-                accessor.DisplayNetRuntimeLink(format, runtimeVersion);
-
-                accessor.linkRequiredNetRuntime.Visible.Should().BeTrue();
-                accessor.linkRequiredNetRuntime.Text.Should().Be(expectedText);
-                accessor.linkRequiredNetRuntime.LinkArea.Should().Be(expectedLinkArea);
-            });
+            accessor.UpdateNowButton.Visible.Should().BeFalse();
+            accessor.DirectDownloadLink.Visible.Should().BeTrue();
+        });
     }
 
-    private static IEnumerable<TestCaseData> NetRuntimeLinkTextTestCases()
+    [Test]
+    public async Task Should_say_so_when_the_check_could_not_run()
     {
-        yield return new TestCaseData(
-            new Version(8, 10, 134),
-            "Required: .NET {0} Desktop Runtime {1} or later {2}.x",
-            "Required: .NET 8.10 Desktop Runtime 8.10.134 or later 8.x",
-            new LinkArea(36, 8));
+        await RunFormTestAsync(async form =>
+        {
+            FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+            accessor.State = UpdateState.CheckFailed;
+            await accessor.RenderAsync();
 
-        yield return new TestCaseData(
-            new Version(10, 0, 2),
-            "Требуется: .NET {0} Desktop Runtime {1} или более поздняя версия {2}.x",
-            "Требуется: .NET 10.0 Desktop Runtime 10.0.2 или более поздняя версия 10.x",
-            new LinkArea(37, 6));
-
-        yield return new TestCaseData(
-            new Version(7, 11, 10),
-            "Erforderlich: .NET {0} Desktop Runtime {1} oder höher {2}.x",
-            "Erforderlich: .NET 7.11 Desktop Runtime 7.11.10 oder höher 7.x",
-            new LinkArea(40, 7));
+            // The check this replaced left the dialog searching forever when it could not reach
+            // GitHub, so the terminal state is the point of this test.
+            accessor.UpdateNowButton.Visible.Should().BeFalse();
+            accessor.LabelText.Should().NotBeEmpty();
+        });
     }
 
-    [TestCaseSource(nameof(NetRuntimeLinkTestCases))]
-    public void Should_NET_runtime_link_url_be_correct(Version runtimeVersion, string expectedUrl)
+    [Test]
+    public async Task Should_not_offer_an_update_to_a_build_that_is_not_a_release()
     {
-        RunFormTest(
-            form =>
-            {
-                FormUpdates.TestAccessor accessor = form.GetTestAccessor();
-                accessor.DisplayNetRuntimeLink("Required: .NET {0} Desktop Runtime {1} or later {2}.x", runtimeVersion);
+        await RunFormTestAsync(async form =>
+        {
+            FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+            accessor.State = UpdateState.NotFromRelease;
+            accessor.LatestTag = "wine-v12";
+            accessor.UpdateProgram = @"Z:\opt\gitext-wine\update";
+            await accessor.RenderAsync();
 
-                accessor.NetRuntimeDownloadUrl.Should().Be(expectedUrl);
-            });
+            // A development overlay compares as older than every release; offering it an update
+            // that cannot apply would mean a dialog on every weekly check.
+            accessor.UpdateNowButton.Visible.Should().BeFalse();
+            accessor.LabelText.Should().Contain("wine-v12");
+        });
     }
 
-    private static IEnumerable<TestCaseData> NetRuntimeLinkTestCases()
+    private async Task RunFormTestAsync(Func<FormUpdates, Task> testDriverAsync)
     {
-        // FormUpdates builds the URL from RuntimeInformation.OSArchitecture (lowercased), so the expected URL must use the
-        // same architecture; hard-coding "x64" made these cases fail on the arm64 CI runner where the URL is correctly "arm64".
-        string arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
-
-        yield return new TestCaseData(
-            new Version(8, 10, 134),
-            $"https://aka.ms/dotnet-core-applaunch?missing_runtime=true&arch={arch}&rid=win-{arch}&apphost_version=8.10.134&gui=true");
-
-        yield return new TestCaseData(
-            new Version(10, 0, 2),
-            $"https://aka.ms/dotnet-core-applaunch?missing_runtime=true&arch={arch}&rid=win-{arch}&apphost_version=10.0.2&gui=true");
-
-        yield return new TestCaseData(
-            new Version(7, 11, 10),
-            $"https://aka.ms/dotnet-core-applaunch?missing_runtime=true&arch={arch}&rid=win-{arch}&apphost_version=7.11.10&gui=true");
-    }
-
-    private void RunFormTest(Action<FormUpdates> testDriver)
-    {
-        RunFormTest(
-            form =>
-            {
-                testDriver(form);
-                return Task.CompletedTask;
-            });
-    }
-
-    private void RunFormTest(Func<FormUpdates, Task> testDriverAsync)
-    {
+        await Task.CompletedTask;
         UITest.RunForm(
             () =>
             {
