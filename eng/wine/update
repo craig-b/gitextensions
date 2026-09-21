@@ -1,0 +1,235 @@
+#!/bin/sh
+# Updates an installed Git Extensions for Wine to a release, on the app's behalf.
+#
+# The app starts this over the git bridge and then exits, so the two hard parts are lifetime and
+# self-replacement. The bridge daemon kills the whole process tree of anything it started as soon as
+# the connection closes, and the app closes it deliberately on the way out, so the work cannot run
+# where it was started: setsid is not enough, because the tree is walked by parent and setsid changes
+# only the session. And install.sh lays the release down over the whole install, this file and
+# install.sh included, so the work cannot run from the install either. Hence two stages: the first
+# copies both scripts out, forks the second away from the process tree and returns at once; the
+# second waits for the install to fall idle, runs install.sh from the copy, and starts the app again.
+#
+# Nothing irreversible happens before the wait, so losing the race with the daemon's kill costs
+# nothing. Everything after it is written to be safe to re-run.
+#
+#   update --tag wine-v<n> [--repo DIR]   started by the app; returns once the worker is detached
+#   update --worker ...                   the detached stage, not for hand use
+
+set -eu
+
+SELF=$(readlink -f "$0")
+ROOT=$(dirname "$SELF")
+TAG=
+REPO=
+STAGE=
+LOCK=
+WORKER=0
+WAIT=${GITEXT_UPDATE_WAIT:-300}
+
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/gitext-wine
+LOG=$CACHE/update.log
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tag) TAG=$2; shift ;;
+    --repo) REPO=$2; shift ;;
+    --worker) WORKER=1 ;;
+    --root) ROOT=$2; shift ;;
+    --stage) STAGE=$2; shift ;;
+    --lock) LOCK=$2; shift ;;
+    *) printf 'update: unknown argument %s\n' "$1" >&2; exit 1 ;;
+  esac
+  shift
+done
+
+have() { command -v "$1" >/dev/null 2>&1; }
+say() { printf '%s\n' "$*"; }
+die() { printf 'update: %s\n' "$*" >&2; exit 1; }
+
+notify() { # best effort; the update never depends on it
+  have notify-send || return 0
+  notify-send -a "Git Extensions" "$1" "$2" >/dev/null 2>&1 || true
+}
+
+# True while any process still holds something in the install. The same question install.sh asks, and
+# it must stay the same: this is the interlock that keeps install.sh's wineserver -k from killing a
+# window the user is still writing a commit message in. A process whose binary was already replaced
+# reads as "<path> (deleted)", which still starts with the install directory and so still matches.
+in_use() {
+  # One pass over every maps file, then one over the symlinks, rather than a grep and three readlinks
+  # per process: with several hundred processes the forks dominate and a poll takes seconds, which is
+  # how a wait bound stops meaning what it says.
+  grep -lsF -- " $ROOT/" /proc/[0-9]*/maps >/dev/null 2>&1 && return 0
+  ls -l /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/root 2>/dev/null | grep -qF " -> $ROOT/" && return 0
+  return 1
+}
+
+windows() { # a count for telling the user what is being waited for
+  grep -lsF -- " $ROOT/app/" /proc/[0-9]*/maps 2>/dev/null | wc -l | tr -d ' '
+}
+
+# ---- stage one: hand the work to something the daemon cannot kill ------------------------------
+
+handover() {
+  case "$TAG" in
+    wine-v*) ;;
+    *) die "expected a wine-v* tag, got '${TAG:-nothing}'" ;;
+  esac
+  [ -r "$SELF" ] || die "cannot read $SELF"
+  [ -r "$ROOT/install.sh" ] || die "$ROOT was not installed from a release; install.sh is not there"
+  [ -s "$ROOT/app/GitExtensions.exe" ] || die "no application in $ROOT/app"
+
+  mkdir -p "$CACHE"
+  lock=$CACHE/update.lock
+  if ! mkdir "$lock" 2>/dev/null; then
+    pid=$(cat "$lock/pid" 2>/dev/null || printf '')
+    if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+      die "an update is already running"
+    fi
+    rm -rf "$lock"
+    mkdir "$lock" || die "cannot take the update lock at $lock"
+  fi
+
+  stage=$(mktemp -d "${TMPDIR:-/tmp}/gitext-update.XXXXXX")
+  cp "$SELF" "$stage/update"
+  cp "$ROOT/install.sh" "$stage/install.sh"
+  chmod 755 "$stage/update" "$stage/install.sh"
+
+  [ -f "$LOG" ] && mv -f "$LOG" "$LOG.1"
+
+  # The fork is what matters. setsid alone keeps the parent, and the daemon kills by walking parents,
+  # so the worker has to be reparented away. The redirections matter as much: the daemon reads our
+  # output to end of file before it lets the app go, so a worker still holding those pipes would hang
+  # the app on exit.
+  if setsid --fork true >/dev/null 2>&1; then
+    setsid --fork "$stage/update" --worker --root "$ROOT" --tag "$TAG" \
+      --stage "$stage" --lock "$lock" ${REPO:+--repo "$REPO"} \
+      </dev/null >>"$LOG" 2>&1
+  else
+    ( setsid "$stage/update" --worker --root "$ROOT" --tag "$TAG" \
+        --stage "$stage" --lock "$lock" ${REPO:+--repo "$REPO"} \
+        </dev/null >>"$LOG" 2>&1 & ) &
+  fi
+
+  # Do not return until the worker has recorded itself, so the app knows the update survived its own
+  # exit rather than hoping so.
+  i=0
+  while [ ! -s "$lock/pid" ]; do
+    i=$((i + 1))
+    [ "$i" -gt 100 ] && die "the update process did not start"
+    sleep 0.1
+  done
+
+  say "update to $TAG started; log: $LOG"
+}
+
+# ---- stage two: wait, update, check, restart ---------------------------------------------------
+
+worker() {
+  cd "$HOME"
+  printf '%s\n' "$$" > "$LOCK/pid"
+  trap 'rm -rf "$STAGE"; rm -rf "$LOCK"' EXIT INT TERM
+
+  # All of this came from the bridge daemon, which the dying launcher started. Left set, it would
+  # hand install.sh a prefix it did not choose and the restarted app a bridge that no longer exists.
+  unset WINEPREFIX WINEDEBUG WINEDLLOVERRIDES FONTCONFIG_FILE GITEXT_APP \
+        GITEXT_GIT_BRIDGE_PORT GITEXT_GIT_BRIDGE_TOKEN GITEXT_GIT_BRIDGE_TTY GITEXT_GIT_BRIDGE_EDITOR
+
+  # install.env records what this install was made with; without it an install made with --dir would
+  # be updated into the default location instead.
+  opts=""
+  if [ -f "$ROOT/install.env" ]; then
+    # shellcheck disable=SC1091
+    . "$ROOT/install.env"
+    [ -n "${GITEXT_WINEPREFIX:-}" ] && opts="$opts --prefix $GITEXT_WINEPREFIX"
+    [ -n "${GITEXT_BIN_DIR:-}" ] && opts="$opts --bin $GITEXT_BIN_DIR"
+    [ "${GITEXT_DESKTOP:-1}" = 0 ] && opts="$opts --no-desktop"
+  fi
+
+  say "==> Update to $TAG started $(date '+%Y-%m-%d %H:%M:%S')"
+  say "    install: $ROOT"
+  notify "Updating Git Extensions" "Installing $TAG."
+
+  started=$(date +%s)
+  told=0
+  while in_use; do
+    waited=$(( $(date +%s) - started ))
+    if [ "$waited" -ge "$WAIT" ]; then
+      say "==> Postponed: something is still using $ROOT after ${waited}s; nothing was changed"
+      notify "Update postponed" "Git Extensions is still running. Nothing was changed."
+      restart
+      exit 0
+    fi
+    if [ "$waited" -ge 20 ] && [ "$told" = 0 ]; then
+      told=1
+      say "waiting for $(windows) Git Extensions window(s) to close"
+      notify "Update waiting" "Close the other Git Extensions window(s) to let the update run."
+    fi
+    sleep 2
+  done
+  say "the install is idle after $(( $(date +%s) - started ))s"
+
+  # An update interrupted earlier can have left no app directory at all.
+  if [ ! -d "$ROOT/app" ] && [ -d "$ROOT/app.old" ]; then
+    say "==> Restoring the application left behind by an interrupted update"
+    mv "$ROOT/app.old" "$ROOT/app"
+  fi
+
+  was=$(cat "$ROOT/VERSION" 2>/dev/null || printf 'unknown')
+  say "==> Installed: $was"
+
+  # The user can open a window while we wait, so ask once more with nothing in between.
+  if in_use; then
+    say "==> Postponed: Git Extensions was started again; nothing was changed"
+    notify "Update postponed" "Git Extensions was reopened. Nothing was changed."
+    exit 0
+  fi
+
+  say "==> Running install.sh (the first .NET download takes a few minutes and prints nothing)"
+  rc=0
+  # shellcheck disable=SC2086
+  sh "$STAGE/install.sh" --dir "$ROOT" --tag "$TAG" $opts install || rc=$?
+
+  whole=1
+  [ -x "$ROOT/gitext-wine" ] || whole=0
+  [ -s "$ROOT/app/GitExtensions.exe" ] || whole=0
+  now=$(cat "$ROOT/VERSION" 2>/dev/null || printf 'unknown')
+
+  if [ "$rc" = 0 ] && [ "$whole" = 1 ]; then
+    say "==> Updated $was -> $now"
+    restart
+    exit 0
+  fi
+
+  if [ "$whole" = 1 ]; then
+    say "==> install.sh failed with $rc; the install is unchanged at $was"
+    notify "Update failed" "Git Extensions was not updated but still works. See $LOG"
+    restart
+    exit 1
+  fi
+
+  # Nothing whole to start, so start nothing and say exactly how to repair it.
+  say "==> install.sh failed with $rc and the install is incomplete"
+  say "    repair it with:"
+  say "      sh $ROOT/install.sh --dir $ROOT --force install"
+  notify "Update failed" "Git Extensions is not installed correctly. See $LOG"
+  exit 1
+}
+
+restart() {
+  [ -x "$ROOT/gitext-wine" ] || { say "no launcher to start"; return 0; }
+  [ -s "$ROOT/app/GitExtensions.exe" ] || { say "no application to start"; return 0; }
+  say "==> Starting Git Extensions"
+  if [ -n "$REPO" ]; then
+    ( setsid "$ROOT/gitext-wine" browse "$REPO" </dev/null >/dev/null 2>&1 & ) &
+  else
+    ( setsid "$ROOT/gitext-wine" </dev/null >/dev/null 2>&1 & ) &
+  fi
+}
+
+if [ "$WORKER" = 1 ]; then
+  worker
+else
+  handover
+fi

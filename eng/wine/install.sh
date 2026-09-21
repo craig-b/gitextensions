@@ -99,13 +99,12 @@ check_tools() {
 # the app. Asking /proc what is mapped, executing and current catches every one of those, including
 # the bridge daemon, whose running binary is what makes the copy below fail with ETXTBSY.
 app_running() {
-  for d in /proc/[0-9]*; do
-    [ "${d#/proc/}" = "$$" ] && continue
-    for link in exe cwd root; do
-      case "$(readlink "$d/$link" 2>/dev/null)" in "$INSTALL_DIR"/*) return 0 ;; esac
-    done
-    grep -qsF " $INSTALL_DIR/" "$d/maps" && return 0
-  done
+  ROOT=$INSTALL_DIR
+  # One pass over every maps file, then one over the symlinks, rather than a grep and three readlinks
+  # per process: with several hundred processes the forks dominate and a poll takes seconds, which is
+  # how a wait bound stops meaning what it says.
+  grep -lsF -- " $ROOT/" /proc/[0-9]*/maps >/dev/null 2>&1 && return 0
+  ls -l /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/root 2>/dev/null | grep -qF " -> $ROOT/" && return 0
   return 1
 }
 
