@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using GitCommands;
 using GitCommands.UserRepositoryHistory;
 using GitExtensions.Extensibility.Git;
@@ -76,7 +76,7 @@ internal sealed class RepositoryHistoryUIService : IRepositoryHistoryUIService
 
         if (repo.Path != caption)
         {
-            item.ToolTipText = repo.Path;
+            item.ToolTipText = PathUtil.GetDisplayPath(repo.Path);
         }
 
         if (_branchNameCache.GetCachedBranchName(repo.Path) is string cachedBranchName)

@@ -1,4 +1,5 @@
-﻿using GitExtensions.Extensibility.Git;
+﻿using GitCommands;
+using GitExtensions.Extensibility.Git;
 using GitExtUtils.GitUI;
 using GitUIPluginInterfaces;
 
@@ -62,7 +63,7 @@ public partial class CommitDiff : GitModuleControl
 
             commitInfo.Revision = revision;
 
-            Text = "Diff - " + revision.ObjectId.ToShortString() + " - " + revision.AuthorDate + " - " + revision.Author + " - " + Module.WorkingDir;
+            Text = "Diff - " + revision.ObjectId.ToShortString() + " - " + revision.AuthorDate + " - " + revision.Author + " - " + PathUtil.GetDisplayPath(Module.WorkingDir);
         }
     }
 

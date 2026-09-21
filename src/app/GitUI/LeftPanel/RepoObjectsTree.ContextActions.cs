@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using GitCommands;
+using GitCommands.Utils;
 using GitExtensions.Extensibility.Git;
 using GitExtUtils;
 using GitExtUtils.GitUI.Theming;
@@ -218,7 +219,11 @@ partial class RepoObjectsTree : IMenuItemFactory
         RegisterClick(mnubtnManageWorktreesFromRootNode, () => _worktreeTree.ManageWorktrees(this));
         RegisterClick<WorktreeNode>(mnubtnOpenWorktree, node => node.OpenWorktree());
         RegisterClick<WorktreeNode>(mnubtnDeleteWorktree, node => node.DeleteWorktree());
-        RegisterClick<WorktreeNode>(mnubtnCopyWorktreePath, node => ClipboardUtil.TrySetText(node.Worktree.Path));
+
+        // Copied to be used elsewhere, so it has to be a path that works elsewhere: the same choice
+        // CopyPathsToolStripMenuItem already makes for "copy full path" under Wine.
+        RegisterClick<WorktreeNode>(mnubtnCopyWorktreePath,
+            node => ClipboardUtil.TrySetText(EnvUtils.RunningUnderWine ? WinePaths.ToHostPath(node.Worktree.Path) : node.Worktree.Path));
         RegisterClick<WorktreeNode>(mnubtnShowWorktreeInFolder, node => OsShellUtil.OpenWithFileExplorer(node.Worktree.Path));
 
         // Expand / Collapse

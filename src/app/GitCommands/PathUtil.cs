@@ -1,6 +1,7 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
+using GitCommands.Utils;
 
 namespace GitCommands;
 
@@ -495,6 +496,11 @@ public static partial class PathUtil
 
     public static string GetDisplayPath(string path)
     {
+        if (EnvUtils.RunningUnderWine)
+        {
+            return GetWineDisplayPath(path);
+        }
+
         if (IsInUserProfile(path))
         {
             int length = path.Length - UserProfilePath.Length;
@@ -507,6 +513,42 @@ public static partial class PathUtil
         }
 
         return path;
+    }
+
+    /// <summary>
+    ///  The host's form of a path, for showing to someone whose machine is the host.
+    /// </summary>
+    /// <remarks>
+    ///  Drive letters belong to the Wine prefix, not to the user: what the app calls
+    ///  <c>Z:\var\git\x</c> is <c>/var/git/x</c> everywhere else on their machine, and the only form
+    ///  they can paste anywhere. The home abbreviation above never applied here either, because
+    ///  <see cref="UserProfilePath"/> resolves to a directory inside the prefix rather than the real
+    ///  home; Wine publishes the real one as WINE_HOST_HOME, so the abbreviation works again.
+    /// </remarks>
+    private static string GetWineDisplayPath(string path)
+        => AbbreviateHostHome(WinePaths.ToHostPath(path), Environment.GetEnvironmentVariable("WINE_HOST_HOME"));
+
+    /// <summary>
+    ///  Shortens a host path under <paramref name="home"/> to a leading <c>~</c>.
+    /// </summary>
+    internal static string AbbreviateHostHome(string hostPath, string? home)
+    {
+        home = home?.TrimEnd('/');
+        if (!string.IsNullOrEmpty(home))
+        {
+            if (hostPath == home)
+            {
+                return "~";
+            }
+
+            // The separator is required: /home/craig2 is not inside /home/craig.
+            if (hostPath.StartsWith(home + "/", StringComparison.Ordinal))
+            {
+                return $"~{hostPath[home.Length..].TrimEnd('/')}";
+            }
+        }
+
+        return hostPath.Length > 1 ? hostPath.TrimEnd('/') : hostPath;
     }
 
     public static IEnumerable<string> FindAncestors(string path)

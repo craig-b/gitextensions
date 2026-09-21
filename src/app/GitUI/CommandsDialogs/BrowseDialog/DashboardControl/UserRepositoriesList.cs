@@ -372,7 +372,7 @@ public partial class UserRepositoriesList : GitExtensionsControl
                     ImageIndex = 0,
                     UseItemStyleForSubItems = false,
                     Tag = recent.Repo,
-                    ToolTipText = recent.Repo.Path
+                    ToolTipText = PathUtil.GetDisplayPath(recent.Repo.Path)
                 };
                 listView1.Items.Add(item);
 

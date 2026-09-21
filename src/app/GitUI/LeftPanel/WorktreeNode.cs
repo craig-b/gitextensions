@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using GitCommands;
 using GitExtensions.Extensibility.Git;
 using GitUI.Properties;
 
@@ -79,9 +80,12 @@ internal sealed class WorktreeNode(Tree tree, GitWorktree worktree, bool isCurre
                 : Worktree.HeadType is GitWorktreeHeadType.Detached ? $"detached at {shortSha}"
                 : Worktree.Branch ?? "unknown";
 
+            // Display only. NodeName() below must keep the raw path: it is the tree's lookup key.
+            string path = PathUtil.GetDisplayPath(Worktree.Path);
+
             return shortSha is not null
-                ? $"{Worktree.Path}{status}\nBranch: {branchLine}\nHEAD: {shortSha}"
-                : $"{Worktree.Path}{status}\nBranch: {branchLine}";
+                ? $"{path}{status}\nBranch: {branchLine}\nHEAD: {shortSha}"
+                : $"{path}{status}\nBranch: {branchLine}";
         }
     }
 
