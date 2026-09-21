@@ -39,6 +39,18 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # This branch is a patch series rebased onto upstream, so the base it was rebased onto is what
+      # the release is made of, and what bounds the release notes below.
+      - name: Locate the upstream base
+        id: upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/gitextensions/gitextensions.git
+          git fetch --quiet --no-tags upstream master
+          base=$(git merge-base HEAD upstream/master)
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "Based on upstream $(git rev-parse --short "$base")"
+
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -127,6 +139,26 @@ jobs:
             artifacts/wine/SHA256SUMS
           retention-days: 14
 
+      # A release is upstream at some commit plus this branch's Wine patches, so the notes are that
+      # patch series. GitHub's generated notes infer a range from the previous tag, which stops
+      # meaning anything once the branch has been rebased and the previous tag is no longer an
+      # ancestor; deriving the range from the upstream base survives every rewrite.
+      - name: Write the release notes
+        if: startsWith(github.ref, 'refs/tags/wine-v')
+        run: |
+          set -euo pipefail
+          base="${{ steps.upstream.outputs.base }}"
+          {
+            echo "Built on Linux for running under Wine. Setup and background: docs/running-under-wine.md in the Linux tarball."
+            echo
+            echo "Based on upstream [\`$(git rev-parse --short "$base")\`](https://github.com/gitextensions/gitextensions/commit/$base) ($(git log -1 --format=%cs "$base"))."
+            echo
+            echo "### Wine patches in this build"
+            echo
+            git log --reverse --format='- %s' "$base..HEAD"
+          } > artifacts/wine/notes.md
+          cat artifacts/wine/notes.md
+
       - name: Release
         if: startsWith(github.ref, 'refs/tags/wine-v')
         env:
@@ -134,8 +166,7 @@ jobs:
         run: |
           gh release create "${GITHUB_REF#refs/tags/}" \
             --title "Git Extensions for Wine ${{ steps.version.outputs.version }}" \
-            --generate-notes \
-            --notes "Built on Linux for running under Wine. Setup and background: docs/running-under-wine.md in the Linux tarball." \
+            --notes-file artifacts/wine/notes.md \
             "${{ steps.names.outputs.app }}" \
             "${{ steps.names.outputs.linux }}" \
             artifacts/wine/SHA256SUMS
