@@ -220,7 +220,7 @@ worker() {
 restart() {
   [ -x "$ROOT/gitext-wine" ] || { say "no launcher to start"; return 0; }
   [ -s "$ROOT/app/GitExtensions.exe" ] || { say "no application to start"; return 0; }
-  say "==> Starting Git Extensions"
+  say "==> Starting Git Extensions${REPO:+ in $REPO}"
   if [ -n "$REPO" ]; then
     ( setsid "$ROOT/gitext-wine" browse "$REPO" </dev/null >/dev/null 2>&1 & ) &
   else

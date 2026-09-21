@@ -69,9 +69,14 @@ internal static class WineUpdater
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
 
-        ArgumentString arguments = repository is null
+        // A module's working directory always ends with a separator, and quoting does not escape a
+        // trailing backslash, so "Z:\path\" reaches CommandLineToArgvW as an escaped quote: the
+        // argument never closes and the path arrives with a quote stuck on the end. Trim it first.
+        string? repoArgument = repository?.TrimEnd('\\', '/');
+
+        ArgumentString arguments = string.IsNullOrEmpty(repoArgument)
             ? $"--tag {tag.Quote()}"
-            : $"--tag {tag.Quote()} --repo {repository.Quote()}";
+            : $"--tag {tag.Quote()} --repo {repoArgument.Quote()}";
 
         try
         {
