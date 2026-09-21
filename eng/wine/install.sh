@@ -20,7 +20,7 @@ Commands
   uninstall     remove the install, the launcher, the menu entry and icons; --purge removes the prefix too
 
 Options
-  --tag TAG         install this release tag instead of the latest, e.g. wine-v3
+  --tag TAG         install this release tag instead of the latest, e.g. wine-v7.3.0.4
   --from DIR        install from a directory holding the two release archives and SHA256SUMS (offline)
   --dir DIR         install directory      (default: ~/.local/opt/gitext-wine)
   --prefix DIR      Wine prefix            (default: ~/.local/share/wineprefixes/gitext)

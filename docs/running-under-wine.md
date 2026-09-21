@@ -510,18 +510,25 @@ launcher's environment lists every command the bridge ran.
 `.github/workflows/wine-release.yml` builds the whole Wine distribution on a
 Linux runner: a push to `wine-support` builds the portable app archive and a
 Linux tarball (the daemon, the relay, the launcher and helper scripts, this
-guide) and keeps them as workflow artifacts; a tag `wine-v<n>` publishes them
-as a GitHub release with a checksum file.
+guide) and keeps them as workflow artifacts; a tag `wine-v<version>` publishes
+them as a GitHub release with a checksum file.
 
-The tag carries only `<n>`, the fork's build number. The rest of the version
-comes from `BUILD_VERSION_BASE` in `.github/workflows/_app-build-core.yml`,
-which is upstream's own source of truth for it, so a rebase onto upstream
-carries it forward instead of leaving a number behind that nobody remembers to
-change: `wine-v3` on a 7.3.0 base builds 7.3.0.3. A tag that is not a bare
-number fails the job rather than guessing. The numeric version stays four
-plain numbers, while the informational version and the archive names also
-carry `-dev` for as long as the upstream base is one upstream has not
-released, and `-wine` always, because the build is never plain upstream --
+The tag states the whole four-part version, `<upstream base>.<build number>`,
+and the job checks it rather than trusting it: the first three components must
+equal `BUILD_VERSION_BASE` in `.github/workflows/_app-build-core.yml`, which is
+upstream's own source of truth for them, and a tag that disagrees fails with
+the tag it should have been. That is what keeps the version from drifting,
+which an earlier scheme did quietly by hard-coding it. A tag that is not a
+four-part version fails too.
+
+An earlier attempt at the same problem put only the build number in the tag,
+`wine-v3`. It solved the drift and created a worse one: `v` means version, so
+each build read as a major release, and `wine-v4` for a one-line fix was
+nonsense. Stating the version and checking it gets both.
+
+The numeric version stays four plain numbers, while the informational version
+and the archive names also carry `-dev` for as long as the upstream base is one
+upstream has not released, and `-wine` always, because the build is never plain upstream --
 `7.3.0.3-dev-wine`. The release notes are generated from the patch series
 itself, the commits between the upstream base and the tag, because GitHub's
 generated notes infer a range from the previous tag and that stops meaning

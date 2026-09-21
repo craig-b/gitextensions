@@ -1,10 +1,11 @@
 # Builds the Wine distribution of Git Extensions entirely on Linux: the portable app archive (own
 # executables, plugins, translations, ConEmu) and the Linux-side pieces (the native git bridge daemon,
 # the terminal relay, the launcher and helper scripts). A push to wine-support builds and keeps the
-# archives as workflow artifacts; a wine-v<build number> tag publishes them as a GitHub release.
-# Builds are stamped <upstream version base>.<build number>, and the informational version and the
-# archive names carry -dev while that base is an upstream master upstream has not released, plus
-# -wine always, because the build is never plain upstream.
+# archives as workflow artifacts; a wine-v<version> tag publishes them as a GitHub release, where
+# <version> is <upstream version base>.<build number> and the base must match the one this branch is
+# built on or the job fails. The informational version and the archive names carry -dev while that
+# base is an upstream master upstream has not released, plus -wine always, because the build is never
+# plain upstream.
 # See docs/running-under-wine.md.
 name: Wine release
 
@@ -83,25 +84,33 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          # The first three components track upstream, so a rebase carries them forward on its own.
+          # The first three components come from upstream and move with it, so a rebase carries them
+          # forward on its own.
           vbase=$(grep -oP 'BUILD_VERSION_BASE:\s*\K[0-9.]+' "$GE_VERSION_BASE_FILE")
           [ -n "$vbase" ] || { echo "::error::no BUILD_VERSION_BASE in $GE_VERSION_BASE_FILE"; exit 1; }
-          # A tag wine-v<n> supplies the fourth: our build number, where upstream puts its run number.
+          # A tag states the whole version, and is checked against the base rather than trusted. That
+          # is what keeps it from drifting: the version a release claims cannot quietly stop matching
+          # the upstream it was built on, because the mismatch fails the job.
           if [[ "$GITHUB_REF" == refs/tags/wine-v* ]]; then
-            build="${GITHUB_REF#refs/tags/wine-v}"
-            [[ "$build" =~ ^[0-9]+$ ]] || { echo "::error::tag must be wine-v<build number>, got $build"; exit 1; }
+            version="${GITHUB_REF#refs/tags/wine-v}"
+            [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.([0-9]+)$ ]] \
+              || { echo "::error::tag must be wine-v<major>.<minor>.<patch>.<build>, got '$version'"; exit 1; }
+            if [ "${BASH_REMATCH[1]}" != "$vbase" ]; then
+              echo "::error::tag says ${BASH_REMATCH[1]} but this branch is built on $vbase; retag as wine-v$vbase.${BASH_REMATCH[2]}"
+              exit 1
+            fi
           else
-            build="0"
+            version="$vbase.0"
           fi
           # Only the assembly version has to be four bare numbers. The informational version says what
           # the build really is: an upstream base this fork has not seen released, plus the Wine patches.
           suffix="${{ steps.upstream.outputs.state }}-wine"
-          echo "version=$vbase.$build" >> "$GITHUB_OUTPUT"
-          echo "version-text=$vbase.$build$suffix" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version-text=$version$suffix" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           # Read by Project.Publish.targets so the packaged file names match the informational version.
           echo "ARTIFACT_BUILD_SUFFIX=$suffix" >> "$GITHUB_ENV"
-          echo "Building $vbase.$build$suffix at $(git rev-parse --short HEAD)"
+          echo "Building $version$suffix at $(git rev-parse --short HEAD)"
 
       - name: Stamp version
         working-directory: eng

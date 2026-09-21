@@ -13,7 +13,7 @@
 # Nothing irreversible happens before the wait, so losing the race with the daemon's kill costs
 # nothing. Everything after it is written to be safe to re-run.
 #
-#   update --tag wine-v<n> [--repo DIR]   started by the app; returns once the worker is detached
+#   update --tag wine-v<version> [--repo DIR]  started by the app; returns once the worker is detached
 #   update --worker ...                   the detached stage, not for hand use
 
 set -eu

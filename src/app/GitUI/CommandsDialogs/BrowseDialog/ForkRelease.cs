@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using GitCommands;
 
 namespace GitUI.CommandsDialogs.BrowseDialog;
@@ -28,10 +29,10 @@ internal enum UpdateState
 /// when that limit was reached it left the dialog searching forever. A redirect costs one request and
 /// cannot be throttled.
 ///
-/// Comparison is by release tag rather than by version. A tag is <c>wine-v&lt;n&gt;</c> where n is the
-/// build number, which is also the fourth component of the version the build is stamped with, and it
-/// is the only part that identifies a fork release; the first three track upstream and move on their
-/// own. Tags therefore compare as integers, and no version parsing is involved.
+/// A tag is <c>wine-v&lt;version&gt;</c> and states the whole four-part version the release is stamped
+/// with, which the release workflow checks against the upstream base rather than trusting. Comparing
+/// versions rather than a bare counter means a release is ordered correctly after the upstream base
+/// moves, so the build number can start again from one on a new base: 7.4.0.1 follows 7.3.0.9.
 /// </remarks>
 internal static class ForkRelease
 {
@@ -97,15 +98,20 @@ internal static class ForkRelease
         }
     }
 
-    public static bool IsReleaseTag(string? tag) => TryGetBuild(tag, out _);
+    public static bool IsReleaseTag(string? tag) => TryGetVersion(tag, out _);
 
-    /// <summary>Reads the build number out of a <c>wine-v&lt;n&gt;</c> tag.</summary>
-    public static bool TryGetBuild(string? tag, out int build)
+    /// <summary>Reads the version out of a <c>wine-v&lt;version&gt;</c> tag.</summary>
+    /// <remarks>
+    /// All four components are required, which is also what rejects the scheme used before the tag
+    /// stated the version: <c>wine-v7.2.1.7-2</c> is not a version and must not be read as one.
+    /// </remarks>
+    public static bool TryGetVersion(string? tag, [NotNullWhen(returnValue: true)] out Version? version)
     {
-        build = 0;
+        version = null;
         return tag is not null
             && tag.StartsWith(TagPrefix, StringComparison.Ordinal)
-            && int.TryParse(tag[TagPrefix.Length..], out build);
+            && Version.TryParse(tag[TagPrefix.Length..], out version)
+            && version.Revision >= 0;
     }
 
     /// <summary>
@@ -117,12 +123,12 @@ internal static class ForkRelease
     /// </param>
     public static UpdateState Decide(string? installedTag, string? latestTag)
     {
-        if (!TryGetBuild(latestTag, out int latest))
+        if (!TryGetVersion(latestTag, out Version? latest))
         {
             return UpdateState.CheckFailed;
         }
 
-        if (!TryGetBuild(installedTag, out int installed))
+        if (!TryGetVersion(installedTag, out Version? installed))
         {
             return UpdateState.NotFromRelease;
         }
