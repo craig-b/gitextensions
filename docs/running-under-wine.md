@@ -505,16 +505,28 @@ with the merge tool and open a file with the diff tool; fetch from a remote;
 the dashboard's recent repositories. `GITEXT_GIT_BRIDGE_LOG=<file>` in the
 launcher's environment lists every command the bridge ran.
 
-## 12. Releases and a refresh script
+## 12. Releases, updating, and a refresh script
 
 `.github/workflows/wine-release.yml` builds the whole Wine distribution on a
 Linux runner: a push to `wine-support` builds the portable app archive and a
 Linux tarball (the daemon, the relay, the launcher and helper scripts, this
-guide) and keeps them as workflow artifacts; a tag `wine-v<version>-<n>`
-publishes them as a GitHub release with a checksum file. The version is
-stamped from the tag, so `wine-v7.2.1.7-3` builds 7.2.1.7 and the archive
-names carry the commit hash. Nothing in it comes from an official archive and
-nothing needs Windows. The launcher, `eng/wine/gitext-wine`, finds the app,
+guide) and keeps them as workflow artifacts; a tag `wine-v<n>` publishes them
+as a GitHub release with a checksum file.
+
+The tag carries only `<n>`, the fork's build number. The rest of the version
+comes from `BUILD_VERSION_BASE` in `.github/workflows/_app-build-core.yml`,
+which is upstream's own source of truth for it, so a rebase onto upstream
+carries it forward instead of leaving a number behind that nobody remembers to
+change: `wine-v3` on a 7.3.0 base builds 7.3.0.3. A tag that is not a bare
+number fails the job rather than guessing. The numeric version stays four
+plain numbers, while the informational version and the archive names also
+carry `-dev` for as long as the upstream base is one upstream has not
+released, and `-wine` always, because the build is never plain upstream --
+`7.3.0.3-dev-wine`. The release notes are generated from the patch series
+itself, the commits between the upstream base and the tag, because GitHub's
+generated notes infer a range from the previous tag and that stops meaning
+anything once the branch has been rebased past it. Nothing in it comes from an
+official archive and nothing needs Windows. The launcher, `eng/wine/gitext-wine`, finds the app,
 the daemon and the scripts next to itself, so the tarball unpacks into one
 directory and a symlink on `PATH` is the install. The tarball also carries
 the desktop entry (`gitext-wine.desktop`, which declares `inode/directory` so
@@ -549,6 +561,42 @@ prefix` redoes only the prefix; `install.sh uninstall` removes everything but
 the prefix, `--purge` that too. `--tag`, `--dir`, `--prefix`, `--bin`,
 `--from DIR` (offline, from a directory holding the archives) and
 `--no-desktop` cover the rest.
+
+### Updating from inside the app
+
+Help &rarr; Check for updates asks this fork which release is newest, by
+following the redirect from `releases/latest` exactly as `install.sh` does. It
+is one request and no API call, which matters: the check this replaced spent
+five unauthenticated GitHub API calls against a limit of sixty an hour, and
+once that limit was reached it left the dialog searching for updates for good.
+The installed release is whatever `install.sh` wrote into `VERSION`, so the
+comparison is two build numbers.
+
+Where the install came from a release and the bridge is up, the dialog offers
+to perform the update. It hands off to `eng/wine/update` and closes, because
+`install.sh` refuses to run while the app is up -- it replaces the directory
+the app runs from, and its prefix step kills every Wine process in the prefix.
+The helper waits for every window to go, runs `install.sh` from a copy taken
+outside the install, and starts the app again.
+
+Two details make that work, and both are easy to get wrong. The bridge daemon
+kills the whole process tree of anything it starts as soon as its connection
+closes, and the app closes it on the way out, so the helper forks itself out
+of that tree rather than merely calling `setsid`, which changes the session
+but not the parent. And the update overlays every file in the install, this
+helper and `install.sh` among them, so both run from copies: overwriting a
+running `/bin/sh` script corrupts it, because the shell reads its source by
+offset as it goes.
+
+It will not kill a window to get on with the job. If something stays open it
+waits five minutes, then gives up having changed nothing, because the
+alternative is discarding a half-written commit message. If `install.sh` fails
+and leaves nothing whole it starts nothing and prints the command that repairs
+it. Progress goes to `~/.cache/gitext-wine/update.log`.
+
+An install made by `refresh.sh` has no `VERSION`, so it is reported as not
+being from a release and is never offered an update, which is right: it would
+compare as older than everything and no release could apply to it.
 
 ### The refresh script, for development
 
