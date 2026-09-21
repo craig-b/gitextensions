@@ -1,8 +1,10 @@
 # Builds the Wine distribution of Git Extensions entirely on Linux: the portable app archive (own
 # executables, plugins, translations, ConEmu) and the Linux-side pieces (the native git bridge daemon,
 # the terminal relay, the launcher and helper scripts). A push to wine-support builds and keeps the
-# archives as workflow artifacts; a wine-v<build number> tag publishes them as a GitHub release,
-# stamped <upstream version base>.<build number>.
+# archives as workflow artifacts; a wine-v<build number> tag publishes them as a GitHub release.
+# Builds are stamped <upstream version base>.<build number>, and the informational version and the
+# archive names carry -dev while that base is an upstream master upstream has not released, plus
+# -wine always, because the build is never plain upstream.
 # See docs/running-under-wine.md.
 name: Wine release
 
@@ -39,17 +41,26 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # This branch is a patch series rebased onto upstream, so the base it was rebased onto is what
-      # the release is made of, and what bounds the release notes below.
+      # This branch is a patch series rebased onto upstream, so its base is what the build is made of:
+      # it says whether the version being stamped is a released one, and it bounds the release notes.
       - name: Locate the upstream base
         id: upstream
         run: |
           set -euo pipefail
           git remote add upstream https://github.com/gitextensions/gitextensions.git
-          git fetch --quiet --no-tags upstream master
+          git fetch --quiet --tags upstream master
           base=$(git merge-base HEAD upstream/master)
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "Based on upstream $(git rev-parse --short "$base")"
+          # Upstream tags releases on release/* branches, never on master, so a master commit counts as
+          # released once some v* tag contains it. Until then the version base is one upstream has not
+          # shipped, and the build must not present itself as that release.
+          if [ -n "$(git tag --list 'v*' --contains "$base")" ]; then
+            state=""
+          else
+            state="-dev"
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "Based on upstream $(git rev-parse --short "$base")${state:+ (unreleased)}"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -82,13 +93,19 @@ jobs:
           else
             build="0"
           fi
+          # Only the assembly version has to be four bare numbers. The informational version says what
+          # the build really is: an upstream base this fork has not seen released, plus the Wine patches.
+          suffix="${{ steps.upstream.outputs.state }}-wine"
           echo "version=$vbase.$build" >> "$GITHUB_OUTPUT"
+          echo "version-text=$vbase.$build$suffix" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Building $vbase.$build at $(git rev-parse --short HEAD)"
+          # Read by Project.Publish.targets so the packaged file names match the informational version.
+          echo "ARTIFACT_BUILD_SUFFIX=$suffix" >> "$GITHUB_ENV"
+          echo "Building $vbase.$build$suffix at $(git rev-parse --short HEAD)"
 
       - name: Stamp version
         working-directory: eng
-        run: dotnet run set_version_to.cs -- -v "${{ steps.version.outputs.version }}" -t "${{ steps.version.outputs.version }}"
+        run: dotnet run set_version_to.cs -- -v "${{ steps.version.outputs.version }}" -t "${{ steps.version.outputs.version-text }}"
 
       - name: Build
         run: dotnet build GitExtensions.slnx -c Release -p:EnableWindowsTargeting=true -p:ContinuousIntegrationBuild=true --nologo -v q
@@ -116,7 +133,7 @@ jobs:
       - name: Name the archives
         id: names
         run: |
-          v="${{ steps.version.outputs.version }}-${{ steps.version.outputs.sha }}"
+          v="${{ steps.version.outputs.version-text }}-${{ steps.version.outputs.sha }}"
           zip=$(ls artifacts/Release/publish/GitExtensions-Portable-x64-*.zip)
           echo "app=$zip" >> "$GITHUB_OUTPUT"
           echo "linux=artifacts/wine/gitext-wine-linux-x64-$v.tar.gz" >> "$GITHUB_OUTPUT"
@@ -165,7 +182,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF#refs/tags/}" \
-            --title "Git Extensions for Wine ${{ steps.version.outputs.version }}" \
+            --title "Git Extensions for Wine ${{ steps.version.outputs.version-text }}" \
             --notes-file artifacts/wine/notes.md \
             "${{ steps.names.outputs.app }}" \
             "${{ steps.names.outputs.linux }}" \
