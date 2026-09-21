@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using GitCommands;
 using ResourceManager;
 
@@ -13,7 +14,8 @@ public partial class FormUpdates : GitExtensionsDialog
     private readonly TranslationString _notFromRelease = new("This copy was not installed from a release. The latest release is {0}.");
     private readonly TranslationString _updating = new("Closing Git Extensions to install {0}...");
     private readonly TranslationString _confirmHeading = new("Update and restart");
-    private readonly TranslationString _confirmMessage = new("Git Extensions will close, update to {0} and open again.\n\nClose any other Git Extensions windows now: the update waits for them, and gives up without changing anything if they stay open.");
+    private readonly TranslationString _confirmMessage = new("Git Extensions will close, update to {0} and open again.");
+    private readonly TranslationString _confirmMessageOthers = new("Git Extensions will close, update to {0} and open again.\n\n{1} other Git Extensions window(s) are open. Close them now: the update waits for them, and gives up after five minutes without changing anything.");
     private readonly TranslationString _updateFailedToStart = new("The update could not be started.");
     #endregion
 
@@ -169,7 +171,14 @@ public partial class FormUpdates : GitExtensionsDialog
     {
         await this.SwitchToMainThreadAsync();
 
-        if (!MessageBoxes.Confirm(this, string.Format(_confirmMessage.Text, _latestTag), _confirmHeading.Text))
+        // Say how many, or say nothing. The warning used to be unconditional, which is how a warning
+        // stops being read: it was there when it did not apply, so it was wallpaper when it did.
+        int others = CountOtherInstances();
+        string confirmation = others > 0
+            ? string.Format(_confirmMessageOthers.Text, _latestTag, others)
+            : string.Format(_confirmMessage.Text, _latestTag);
+
+        if (!MessageBoxes.Confirm(this, confirmation, _confirmHeading.Text))
         {
             return;
         }
@@ -197,6 +206,23 @@ public partial class FormUpdates : GitExtensionsDialog
         linkChangeLog.Visible = true;
         linkDirectDownload.Visible = true;
         UpdateLabel.Text = message.Length > 0 ? message : _updateFailedToStart.Text;
+    }
+
+    /// <summary>Other running copies of this application, which the update will have to wait for.</summary>
+    private static int CountOtherInstances()
+    {
+        try
+        {
+            // Wine implements process enumeration within the prefix, so this sees the sibling
+            // windows; verified under Wine before being relied on here.
+            using Process self = Process.GetCurrentProcess();
+            return Math.Max(Process.GetProcessesByName(self.ProcessName).Length - 1, 0);
+        }
+        catch (Exception)
+        {
+            // Never let counting them stop the update; the wait in the helper is the real guard.
+            return 0;
+        }
     }
 
     internal enum LaunchType

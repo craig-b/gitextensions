@@ -7739,9 +7739,13 @@ Therefore the Cancel button does NOT revert any changes made.</source>
         <target />
       </trans-unit>
       <trans-unit id="_confirmMessage.Text">
+        <source>Git Extensions will close, update to {0} and open again.</source>
+        <target />
+      </trans-unit>
+      <trans-unit id="_confirmMessageOthers.Text">
         <source>Git Extensions will close, update to {0} and open again.
 
-Close any other Git Extensions windows now: the update waits for them, and gives up without changing anything if they stay open.</source>
+{1} other Git Extensions window(s) are open. Close them now: the update waits for them, and gives up after five minutes without changing anything.</source>
         <target />
       </trans-unit>
       <trans-unit id="_newVersionAvailable.Text">
