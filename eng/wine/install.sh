@@ -27,6 +27,7 @@ Options
   --bin DIR         directory for the launcher symlink (default: ~/.local/bin)
   --no-desktop      do not write the menu entry and icons
   --force           reinstall even when this release is already installed
+  --yes             do not ask before restarting the Wine prefix when programs are running in it
   --purge           with uninstall: also delete the Wine prefix
 
 Needs: wine 10 or later, curl or wget, unzip or bsdtar, tar, fontconfig (fc-list), sha256sum.
@@ -43,6 +44,7 @@ TAG=
 FROM_DIR=
 DESKTOP=1
 FORCE=0
+ASSUME_YES=0
 PURGE=0
 COMMAND=install
 
@@ -106,6 +108,65 @@ app_running() {
   grep -lsF -- " $ROOT/" /proc/[0-9]*/maps >/dev/null 2>&1 && return 0
   ls -l /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/root 2>/dev/null | grep -qF " -> $ROOT/" && return 0
   return 1
+}
+
+# Programs running in this prefix, one "pid<tab>command" per line, excluding Wine's own services.
+# A matching WINEPREFIX is not enough on its own: every shell started from the launcher inherits it.
+# Requiring Wine's ntdll to be mapped as well is what distinguishes an actual client from a process
+# that merely has the variable set.
+prefix_clients() {
+  for d in /proc/[0-9]*; do
+    grep -qs "/wine/.*/ntdll\.so" "$d/maps" || continue
+    tr '\0' '\n' < "$d/environ" 2>/dev/null | grep -qx "WINEPREFIX=$PREFIX" || continue
+    # Wine pads the command line with spaces; trim them so the list reads cleanly.
+    cmd=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null | sed 's/ *$//')
+    case "$cmd" in
+      *services.exe*|*winedevice.exe*|*plugplay.exe*|*svchost.exe*|*rpcss.exe*|*lsass.exe*|\
+      *explorer.exe*|*winemenubuilder.exe*|*wineboot.exe*|*conhost.exe*|*start.exe*|\
+      *tabtip.exe*|*dllhost.exe*|*rundll32.exe*) continue ;;
+    esac
+    printf '%s\t%s\n' "${d#/proc/}" "$cmd"
+  done 2>/dev/null
+}
+
+# Font changes only take effect once the server restarts, and restarting it kills everything running
+# in the prefix. Kill without asking when there is nothing of the user's to lose; ask when there is;
+# and where there is nobody to ask -- the update helper runs with no terminal -- leave the prefix
+# alone and say so, because a choice that cannot be offered should not be made destructively. The
+# cost of not restarting is that the font settings apply the next time the prefix starts.
+restart_prefix() {
+  clients=$(prefix_clients)
+  if [ -z "$clients" ]; then
+    wineserver -k >/dev/null 2>&1 || true
+    wineserver -w
+    return
+  fi
+
+  say ""
+  say "These programs are running in the Wine prefix and would be closed:"
+  printf '%s\n' "$clients" | while IFS="$(printf '\t')" read -r pid cmd; do say "  $pid  $cmd"; done
+  say ""
+
+  if [ "$ASSUME_YES" = 1 ]; then
+    say "closing them (--yes)"
+  # Test by opening it, not by its permission bits: /dev/tty exists and looks readable even with no
+  # controlling terminal. The probe runs in a subshell because a redirection that fails on a compound
+  # command ends a non-interactive shell outright, which would abort the install where it most needs
+  # to continue -- the update helper, which has no terminal at all.
+  elif ( : < /dev/tty ) 2>/dev/null; then
+    printf 'Close them and apply the font settings now? [y/N] ' > /dev/tty
+    read -r answer < /dev/tty || answer=n
+    case "$answer" in
+      y|Y|yes|YES) ;;
+      *) say "left running; the font settings apply the next time the prefix starts"; return ;;
+    esac
+  else
+    say "nothing here can ask, so they are left running; the font settings apply the next time the prefix starts"
+    return
+  fi
+
+  wineserver -k >/dev/null 2>&1 || true
+  wineserver -w
 }
 
 # ---- release ----------------------------------------------------------------------------------
@@ -313,6 +374,19 @@ bootstrap_prefix() {
     wineserver -w
   fi
 
+  # A repeat run used to rewrite these and restart the server regardless, so every "already
+  # installed, checking the rest" invocation killed everything in the prefix to change nothing.
+  # Record what was applied and skip the whole step when it still matches.
+  mono=$(pick_mono_font)
+  link=$(pick_ui_font_link)
+  fonts_stamp="$PREFIX/.gitext-fonts"
+  fonts_want="$link|$mono"
+  if [ -f "$fonts_stamp" ] && [ "$(cat "$fonts_stamp" 2>/dev/null)" = "$fonts_want" ]; then
+    say "font registry already correct ($mono for code)"
+    install_dotnet
+    return
+  fi
+
   say "font registry: reset, Tahoma glyph link, Consolas substitute"
   # entries for fonts fontconfig no longer lists are never pruned by Wine; a prefix that ever saw the
   # full set keeps them and every process pays for loading them
@@ -320,13 +394,12 @@ bootstrap_prefix() {
   wine reg delete 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' /f >/dev/null 2>&1 || true
   wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Fonts' /f >/dev/null 2>&1 || true
   # the UI font is Wine's Tahoma, which lacks the arrows the app draws; borrow missing glyphs, keep the look
-  wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink' /v Tahoma /t REG_MULTI_SZ /d "$(pick_ui_font_link)" /f >/dev/null 2>&1
+  wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink' /v Tahoma /t REG_MULTI_SZ /d "$link" /f >/dev/null 2>&1
   # the app defaults its code fonts to Consolas, which is absent; a proportional stand-in wrecks ConEmu's cell width
-  mono=$(pick_mono_font)
   wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes' /v Consolas /t REG_SZ /d "$mono" /f >/dev/null 2>&1
   wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes' /v Consolas /t REG_SZ /d "$mono" /f /reg:32 >/dev/null 2>&1
-  wineserver -k >/dev/null 2>&1 || true
-  wineserver -w
+  printf '%s\n' "$fonts_want" > "$fonts_stamp"
+  restart_prefix
 
   install_dotnet
 }
@@ -337,9 +410,17 @@ install_dotnet() {
   channel=$(sed -n 's/.*"version": *"\([0-9]*\.[0-9]*\)\.[0-9]*".*/\1/p' "$INSTALL_DIR/app/GitExtensions.runtimeconfig.json" | head -1)
   [ -n "$channel" ] || channel=10.0
   dotnet_root="$PREFIX/drive_c/Program Files/dotnet"
-  if [ -d "$dotnet_root/shared/Microsoft.WindowsDesktop.App" ] && ls "$dotnet_root/shared/Microsoft.WindowsDesktop.App" | grep -q "^$channel\."; then
-    say ".NET desktop runtime $channel present"
+  # Presence is claimed by a stamp written after the unpacking, not by the directory existing. An
+  # extraction that ran out of disk or was interrupted leaves version directories behind that look
+  # complete to a name check, and the runtime is then reported as present for good: the application
+  # fails to start and re-running this script, which is the documented repair, cannot fix it.
+  stamp="$dotnet_root/.installed-$channel"
+  if [ -f "$stamp" ]; then
+    say ".NET desktop runtime $channel present ($(cat "$stamp"))"
     return
+  fi
+  if [ -d "$dotnet_root/shared/Microsoft.WindowsDesktop.App" ]; then
+    say "the .NET desktop runtime in the prefix is unstamped or incomplete; unpacking it again"
   fi
   version=${GITEXT_DOTNET_VERSION:-}
   if [ -z "$version" ]; then
@@ -355,6 +436,7 @@ install_dotnet() {
   fi
   mkdir -p "$dotnet_root"
   extract_zip "$zip" "$dotnet_root"
+  printf '%s\n' "$version" > "$stamp"
   say ".NET desktop runtime $version installed into the prefix"
 }
 
@@ -425,6 +507,7 @@ while [ $# -gt 0 ]; do
     --bin) BIN_DIR=$2; shift ;;
     --no-desktop) DESKTOP=0 ;;
     --force) FORCE=1 ;;
+    --yes|-y) ASSUME_YES=1 ;;
     --purge) PURGE=1 ;;
     install|prefix|uninstall) COMMAND=$1 ;;
     -h|--help) usage; exit 0 ;;
