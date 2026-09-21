@@ -1,7 +1,8 @@
 # Builds the Wine distribution of Git Extensions entirely on Linux: the portable app archive (own
 # executables, plugins, translations, ConEmu) and the Linux-side pieces (the native git bridge daemon,
 # the terminal relay, the launcher and helper scripts). A push to wine-support builds and keeps the
-# archives as workflow artifacts; a wine-v* tag publishes them as a GitHub release.
+# archives as workflow artifacts; a wine-v<build number> tag publishes them as a GitHub release,
+# stamped <upstream version base>.<build number>.
 # See docs/running-under-wine.md.
 name: Wine release
 
@@ -23,8 +24,9 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   NuGetAudit: false
-  # The version the build is stamped with. A tag wine-v<version>-<n> overrides it below.
-  GE_VERSION: 7.2.1.7
+  # Upstream's own single source of truth for the version base; the build number beside it is ours.
+  # Hard-coding the base here would go stale silently every time the branch is rebased onto upstream.
+  GE_VERSION_BASE_FILE: .github/workflows/_app-build-core.yml
 
 jobs:
   build:
@@ -57,14 +59,20 @@ jobs:
       - name: Resolve version
         id: version
         run: |
-          version="$GE_VERSION"
+          set -euo pipefail
+          # The first three components track upstream, so a rebase carries them forward on its own.
+          vbase=$(grep -oP 'BUILD_VERSION_BASE:\s*\K[0-9.]+' "$GE_VERSION_BASE_FILE")
+          [ -n "$vbase" ] || { echo "::error::no BUILD_VERSION_BASE in $GE_VERSION_BASE_FILE"; exit 1; }
+          # A tag wine-v<n> supplies the fourth: our build number, where upstream puts its run number.
           if [[ "$GITHUB_REF" == refs/tags/wine-v* ]]; then
-            tag="${GITHUB_REF#refs/tags/wine-v}"
-            version="${tag%%-*}"
+            build="${GITHUB_REF#refs/tags/wine-v}"
+            [[ "$build" =~ ^[0-9]+$ ]] || { echo "::error::tag must be wine-v<build number>, got $build"; exit 1; }
+          else
+            build="0"
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version=$vbase.$build" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Building $version at $(git rev-parse --short HEAD)"
+          echo "Building $vbase.$build at $(git rev-parse --short HEAD)"
 
       - name: Stamp version
         working-directory: eng
@@ -125,7 +133,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF#refs/tags/}" \
-            --title "Git Extensions for Wine ${GITHUB_REF#refs/tags/wine-v}" \
+            --title "Git Extensions for Wine ${{ steps.version.outputs.version }}" \
             --generate-notes \
             --notes "Built on Linux for running under Wine. Setup and background: docs/running-under-wine.md in the Linux tarball." \
             "${{ steps.names.outputs.app }}" \
