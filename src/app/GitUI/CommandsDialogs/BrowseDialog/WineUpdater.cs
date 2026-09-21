@@ -1,4 +1,5 @@
-﻿using GitCommands;
+﻿using System.Text;
+using GitCommands;
 using GitExtensions.Extensibility;
 
 namespace GitUI.CommandsDialogs.BrowseDialog;
@@ -76,14 +77,23 @@ internal static class WineUpdater
         {
             // A path with no Windows extension is routed to the Linux side by Executable; the daemon
             // translates it and the repository argument out of their Z: form on the way.
+            //
+            // The encoding is not optional. The bridge only captures standard error when it has one
+            // to decode with, and it takes that from here or from throwOnErrorExit; without either,
+            // reading StandardError throws instead of returning what the helper said.
             Executable executable = new(updateProgram, repository ?? "");
-            using IProcess process = executable.Start(arguments, createWindow: false, redirectOutput: true, throwOnErrorExit: false);
+            using IProcess process = executable.Start(
+                arguments, createWindow: false, redirectOutput: true, outputEncoding: Encoding.UTF8, throwOnErrorExit: false);
 
             string output = await process.StandardOutput.ReadToEndAsync();
             int exitCode = await process.WaitForExitAsync();
-            string error = process.StandardError;
 
-            string message = Trim(output, error);
+            // Whether the update is under way is decided by the exit code alone. By the time the
+            // handover returns, the worker has already been forked out of reach and is waiting for
+            // this process to go; letting a failure to read its output mean "not started" would
+            // leave the app running while an update waits for it, and report an error for something
+            // that in fact succeeded.
+            string message = Describe(process, output);
             return exitCode == 0
                 ? (true, message)
                 : (false, message.Length > 0 ? message : $"The update could not be started (exit code {exitCode}).");
@@ -93,10 +103,19 @@ internal static class WineUpdater
             return (false, ex.Message);
         }
 
-        static string Trim(string output, string error)
+        static string Describe(IProcess process, string output)
         {
-            string text = string.IsNullOrWhiteSpace(error) ? output : error;
-            return text.Trim();
+            string error;
+            try
+            {
+                error = process.StandardError;
+            }
+            catch (InvalidOperationException)
+            {
+                error = "";
+            }
+
+            return (string.IsNullOrWhiteSpace(error) ? output : error).Trim();
         }
     }
 }
