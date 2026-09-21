@@ -108,10 +108,20 @@ internal static class ForkRelease
     public static bool TryGetVersion(string? tag, [NotNullWhen(returnValue: true)] out Version? version)
     {
         version = null;
-        return tag is not null
-            && tag.StartsWith(TagPrefix, StringComparison.Ordinal)
-            && Version.TryParse(tag[TagPrefix.Length..], out version)
-            && version.Revision >= 0;
+
+        // Parse into a local: Version.TryParse assigns before the fourth component is checked, so
+        // writing straight into the out parameter would leave "7.3.0" behind on a false return, and
+        // the whole point of NotNullWhen is that the caller can rely on it being nothing.
+        if (tag is null
+            || !tag.StartsWith(TagPrefix, StringComparison.Ordinal)
+            || !Version.TryParse(tag[TagPrefix.Length..], out Version? parsed)
+            || parsed.Revision < 0)
+        {
+            return false;
+        }
+
+        version = parsed;
+        return true;
     }
 
     /// <summary>
