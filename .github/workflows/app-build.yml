@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - wine-support
       - release
       - 'release/**'
       - 'experimental/**'
