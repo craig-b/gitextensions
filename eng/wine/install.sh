@@ -4,26 +4,34 @@
 # helper scripts), a slim font configuration, a Wine prefix with the .NET desktop runtime and
 # the registry entries the app needs, a launcher on PATH, a menu entry and icons.
 #
-# Usage: sh install.sh [options] [command]
-#
-# Commands
-#   install       download the latest wine-v* release and install or update everything (default)
-#   prefix        only create or repair the Wine prefix (fonts, registry, .NET runtime)
-#   uninstall     remove the install, the launcher, the menu entry and icons; --purge removes the prefix too
-#
-# Options
-#   --tag TAG         install this release tag instead of the latest, e.g. wine-v3
-#   --from DIR        install from a directory holding the two release archives and SHA256SUMS (offline)
-#   --dir DIR         install directory      (default: ~/.local/opt/gitext-wine)
-#   --prefix DIR      Wine prefix            (default: ~/.local/share/wineprefixes/gitext)
-#   --bin DIR         directory for the launcher symlink (default: ~/.local/bin)
-#   --no-desktop      do not write the menu entry and icons
-#   --force           reinstall even when this release is already installed
-#   --purge           with uninstall: also delete the Wine prefix
-#
-# Needs: wine 10 or later, curl or wget, unzip or bsdtar, tar, fontconfig (fc-list), sha256sum.
 # Everything lives under the user's home; nothing needs root. Re-running updates or repairs.
+
 set -eu
+
+# Held here rather than read back out of the file with sed, because the documented way to run this
+# is `curl ... | sh -s -- --help`, where the script is a pipe and $0 is not a readable file.
+usage() {
+  cat <<'USAGE'
+Usage: sh install.sh [options] [command]
+
+Commands
+  install       download the latest wine-v* release and install or update everything (default)
+  prefix        only create or repair the Wine prefix (fonts, registry, .NET runtime)
+  uninstall     remove the install, the launcher, the menu entry and icons; --purge removes the prefix too
+
+Options
+  --tag TAG         install this release tag instead of the latest, e.g. wine-v3
+  --from DIR        install from a directory holding the two release archives and SHA256SUMS (offline)
+  --dir DIR         install directory      (default: ~/.local/opt/gitext-wine)
+  --prefix DIR      Wine prefix            (default: ~/.local/share/wineprefixes/gitext)
+  --bin DIR         directory for the launcher symlink (default: ~/.local/bin)
+  --no-desktop      do not write the menu entry and icons
+  --force           reinstall even when this release is already installed
+  --purge           with uninstall: also delete the Wine prefix
+
+Needs: wine 10 or later, curl or wget, unzip or bsdtar, tar, fontconfig (fc-list), sha256sum.
+USAGE
+}
 
 REPO=${GITEXT_REPO:-craig-b/gitextensions}
 INSTALL_DIR=${GITEXT_INSTALL_DIR:-$HOME/.local/opt/gitext-wine}
@@ -382,7 +390,7 @@ while [ $# -gt 0 ]; do
     --force) FORCE=1 ;;
     --purge) PURGE=1 ;;
     install|prefix|uninstall) COMMAND=$1 ;;
-    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     *) die "unknown argument '$1' (try --help)" ;;
   esac
   shift
