@@ -2986,6 +2986,10 @@ Do you want to continue?</source>
         <source>Copy &amp;full path(s) - native</source>
         <target />
       </trans-unit>
+      <trans-unit id="copyFullPathsWindowsToolStripMenuItem.Text">
+        <source>Copy full path(s) - &amp;Windows</source>
+        <target />
+      </trans-unit>
       <trans-unit id="copyFullPathsWslToolStripMenuItem.Text">
         <source>Copy full path(s) - &amp;WSL</source>
         <target />
