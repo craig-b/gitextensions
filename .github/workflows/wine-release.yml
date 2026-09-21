@@ -193,7 +193,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --repo is not optional here: locating the upstream base adds an "upstream" remote to the
+          # checkout, and without being told otherwise gh resolves the repository from the remotes and
+          # tries to publish the release to upstream, where the tag does not exist.
           gh release create "${GITHUB_REF#refs/tags/}" \
+            --repo "$GITHUB_REPOSITORY" \
             --title "Git Extensions for Wine ${{ steps.version.outputs.version-text }}" \
             --notes-file artifacts/wine/notes.md \
             "${{ steps.names.outputs.app }}" \
