@@ -112,6 +112,22 @@ jobs:
           echo "ARTIFACT_BUILD_SUFFIX=$suffix" >> "$GITHUB_ENV"
           echo "Building $version$suffix at $(git rev-parse --short HEAD)"
 
+      # Stamping rewrites tracked files, and GitInfo would then mark the build "(Dirty)" — which is a
+      # lie about a release built from a clean tag. Upstream solves this with eng/Mark-RepoClean.ps1
+      # before its release builds; that script is PowerShell and joins paths with backslashes, so do
+      # the same thing directly rather than carry a patch to a file upstream also edits.
+      - name: Mark the stamped files as clean
+        run: |
+          set -euo pipefail
+          git update-index --skip-worktree \
+            CommonAssemblyInfo.cs \
+            CommonAssemblyInfoExternals.cs \
+            externals/NetSpell.SpellChecker/Properties/AssemblyInfo.cs \
+            src/native/GitExtSshAskPass/SshAskPass.rc2 \
+            src/native/GitExtensionsShellEx/GitExtensionsShellEx.rc
+          git submodule --quiet foreach --recursive \
+            'git ls-files "*AssemblyInfo.cs" | while IFS= read -r f; do git update-index --skip-worktree "$f"; done'
+
       - name: Stamp version
         working-directory: eng
         run: dotnet run set_version_to.cs -- -v "${{ steps.version.outputs.version }}" -t "${{ steps.version.outputs.version-text }}"
