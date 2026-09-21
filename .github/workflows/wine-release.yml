@@ -165,8 +165,20 @@ jobs:
         run: |
           set -euo pipefail
           base="${{ steps.upstream.outputs.base }}"
+          tag="${GITHUB_REF#refs/tags/}"
           {
-            echo "Built on Linux for running under Wine. Setup and background: docs/running-under-wine.md in the Linux tarball."
+            echo "Built on Linux for running under Wine."
+            echo
+            echo "### Install"
+            echo
+            # Single quotes: the fence is backticks, which the shell would otherwise run.
+            echo '```'
+            echo "curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/wine-support/eng/wine/install.sh | sh"
+            echo '```'
+            echo
+            echo "Installs or updates everything: the app, a Wine prefix with the .NET desktop runtime, a launcher on PATH, a menu entry and icons. Needs wine 10 or later, nothing needs root, and re-running updates in place, keeping your settings."
+            echo
+            echo "Append \`-s -- --tag $tag\` to install this release rather than the latest, \`-s -- --help\` for the other options, and \`-s -- uninstall\` to remove it again. Setup and background: docs/running-under-wine.md, also in the Linux tarball."
             echo
             echo "Based on upstream [\`$(git rev-parse --short "$base")\`](https://github.com/gitextensions/gitextensions/commit/$base) ($(git log -1 --format=%cs "$base"))."
             echo
