@@ -114,6 +114,24 @@ partial class FormUpdates
         // 
         // tlpnlContent
         // 
+        tlpnlContent.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        tlpnlContent.ColumnStyles.Add(new ColumnStyle());
+        tlpnlContent.Controls.Add(UpdateLabel, 0, 0);
+        tlpnlContent.Controls.Add(progressBar1, 0, 1);
+        tlpnlContent.Controls.Add(linkChangeLog, 0, 3);
+        tlpnlContent.Dock = DockStyle.Fill;
+        tlpnlContent.Location = new Point(12, 12);
+        tlpnlContent.Margin = new Padding(0);
+        tlpnlContent.Name = "tlpnlContent";
+        tlpnlContent.RowCount = 5;
+        tlpnlContent.RowStyles.Add(new RowStyle());
+        tlpnlContent.RowStyles.Add(new RowStyle());
+        tlpnlContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 8F));
+        tlpnlContent.RowStyles.Add(new RowStyle());
+        tlpnlContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        tlpnlContent.Size = new Size(438, 79);
+        tlpnlContent.TabIndex = 3;
+        // 
         // FormUpdates
         // 
         AutoScaleDimensions = new SizeF(96F, 96F);

@@ -239,6 +239,14 @@ public partial class FormUpdates : GitExtensionsDialog
 
         public LinkLabel DirectDownloadLink => _form.linkDirectDownload;
 
+        // A control that was never added to the form still answers Visible and Text quite happily,
+        // so every other assertion here passes against a dialog that shows nothing at all.
+        public Control? LabelParent => _form.UpdateLabel.Parent;
+
+        public Control? ProgressBarParent => _form.progressBar1.Parent;
+
+        public Control? ChangeLogLinkParent => _form.linkChangeLog.Parent;
+
         public Task RenderAsync() => _form.DoneAsync();
     }
 }

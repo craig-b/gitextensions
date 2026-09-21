@@ -93,6 +93,25 @@ public class FormUpdatesTests
         });
     }
 
+    [Test]
+    public async Task Should_put_its_controls_on_the_form()
+    {
+        await RunFormTestAsync(async form =>
+        {
+            FormUpdates.TestAccessor accessor = form.GetTestAccessor();
+            accessor.State = UpdateState.UpToDate;
+            await accessor.RenderAsync();
+
+            // Deleting one control from the designer once took the whole panel's configuration with
+            // it, including the lines that add these to it. Every other test in this file still
+            // passed, because an orphaned control reports Visible and Text exactly as a placed one
+            // does, and the dialog shipped blank.
+            accessor.LabelParent.Should().NotBeNull();
+            accessor.ProgressBarParent.Should().NotBeNull();
+            accessor.ChangeLogLinkParent.Should().NotBeNull();
+        });
+    }
+
     private async Task RunFormTestAsync(Func<FormUpdates, Task> testDriverAsync)
     {
         await Task.CompletedTask;
